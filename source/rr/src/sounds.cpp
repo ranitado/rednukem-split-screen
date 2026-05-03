@@ -747,6 +747,16 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t *pos)
         return 0;
     }
 
+    if (g_fakeMultiMode >= 2 && (sndNum == DUKE_GET || (REALITY && sndNum == 167)))
+    {
+        for (int32_t playerNum = 0; playerNum < clamp<int32_t>(g_fakeMultiMode, 2, 4); ++playerNum)
+        {
+            DukePlayer_t const * const ps = g_player[playerNum].ps;
+            if (ps != nullptr && ps->i == spriteNum)
+                return S_PlaySound(sndNum);
+        }
+    }
+
     // Duke talk
     if (snd.m & SF_TALK)
     {

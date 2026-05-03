@@ -6252,6 +6252,7 @@ int Menu_Change(MenuID_t cm)
 
 #if !defined EDUKE32_TOUCH_DEVICES
     m_menuchange_watchpoint = 2;
+    m_mouselastactivity = (int32_t)totalclock;
 #endif
 
     return 0;

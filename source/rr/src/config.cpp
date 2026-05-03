@@ -269,7 +269,7 @@ void CONFIG_SetDefaults(void)
 #ifdef ASS_REVERSESTEREO
     ud.config.ReverseStereo = 0;
 #endif
-    ud.auto_run = 1;
+    ud.auto_run = 0;
     ud.config.ShowOpponentWeapons = 0;
     ud.config.SoundToggle = 1;
     ud.config.CheckForUpdates = 1;

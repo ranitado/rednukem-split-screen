@@ -4422,7 +4422,7 @@ void P_DHGetInput(int const playerNum)
     int const playerJump = BUTTON(gamefunc_Jump) && !(pPlayer->cursectnum >= 0 && sector[pPlayer->cursectnum].hitag == 2003);
     int const turnAmount = playerCrouch ? 2 : (playerRunning ? 16 : 8);
     constexpr int const analogTurnAmount = 16;
-    int const keyMove    = playerCrouch ? 3 : (playerRunning ? 24 : 12);
+    int const keyMove    = playerCrouch ? 3 : (playerRunning ? 24 : 14);
     constexpr int const analogExtent = 32767; // KEEPINSYNC sdlayer.cpp
 
     input_t input {};

@@ -1609,7 +1609,7 @@ int32_t g_redSplitLookSensitivityX[MAXPLAYERS] = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
 int32_t g_redSplitLookSensitivityY[MAXPLAYERS] = { 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };
 int32_t g_redSplitInvertAim[MAXPLAYERS] = {};
 int32_t g_redSplitViewCentering[MAXPLAYERS] = {};
-int32_t g_redSplitAutoRun[MAXPLAYERS] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+int32_t g_redSplitAutoRun[MAXPLAYERS] = {};
 int32_t g_redSplitWeaponWideOffsetX = -39;
 int32_t g_redSplitWeaponWideTopOffsetY = 15;
 int32_t g_redSplitWeaponWideScalePercent = 70;
@@ -1986,8 +1986,13 @@ static void RedSplit_DrawBlackRectangle(RedSplitViewport_t const &view, int32_t 
     int32_t const bottom = RedSplit_ToVirtualY(view.y2 + 1);
     int32_t const xscale = divscale16((right - left) << 16, tilesiz[0].x << 16);
     int32_t const yscale = divscale16((bottom - top) << 16, tilesiz[0].y << 16);
+    int32_t const x      = (left + right) << 15;
+    int32_t const y      = (top + bottom) << 15;
 
-    rotatesprite_(left << 16, top << 16, max(xscale, yscale), 0, 0, 127, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
+    // Draw twice with translucency to approximate a darker overlay while keeping the view readable.
+    rotatesprite_(x, y, max(xscale, yscale), 0, 0, 127, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
+                  0, 0, view.x1, view.y1, view.x2, view.y2);
+    rotatesprite_(x, y, max(xscale, yscale), 0, 0, 127, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
                   0, 0, view.x1, view.y1, view.x2, view.y2);
 }
 
@@ -2470,7 +2475,7 @@ static void RedSplit_ApplyDirectStartupDefaults(void)
     g_commandSetup = 0;
     ud.setup.forcesetup = 0;
     ud.setup.fullscreen = 1;
-    ud.auto_run = 1;
+    ud.auto_run = 0;
 
     if (ud.setup.xdim < 640 || ud.setup.ydim < 480)
     {
@@ -9554,7 +9559,7 @@ MAIN_LOOP_RESTART:
 
 //    ud.auto_run = ud.config.RunMode;
     if (REALITY)
-        ud.auto_run = 1;
+        ud.auto_run = 0;
     ud.showweapons = ud.config.ShowOpponentWeapons;
     P_SetupMiscInputSettings();
     g_player[myconnectindex].pteam = ud.team;

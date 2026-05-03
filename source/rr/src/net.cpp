@@ -1790,6 +1790,7 @@ enum
 {
     REDSPLIT_NORMALTURN = 15,
     REDSPLIT_NORMALKEYMOVE = 40,
+    REDSPLIT_WALKKEYMOVE = 48,
     REDSPLIT_MAXVEL = (REDSPLIT_NORMALKEYMOVE * 2) + 10,
     REDSPLIT_MAXSVEL = (REDSPLIT_NORMALKEYMOVE * 2) + 10,
     REDSPLIT_MAXANGVEL = 1024,
@@ -2137,13 +2138,13 @@ static void RedSplit_BuildGamepadInput(int32_t playerNum, int32_t padIndex, inpu
     int32_t const fireHeld = state.axes[GAMEPAD_AXIS_TRIGGERRIGHT] > 8000;
     int32_t const autoRun = g_redSplitAutoRun[playerNum];
     int32_t const playerRunning = (ud.runkey_mode) ? (runHeld | autoRun) : (autoRun ^ runHeld);
-    int32_t const keyMove = playerRunning ? (REDSPLIT_NORMALKEYMOVE << 1) : REDSPLIT_NORMALKEYMOVE;
+    int32_t const keyMove = playerRunning ? (REDSPLIT_NORMALKEYMOVE << 1) : REDSPLIT_WALKKEYMOVE;
 
     input_t input {};
     input.fvel = clamp(-(leftY * keyMove) / 32767, -REDSPLIT_MAXVEL, REDSPLIT_MAXVEL);
     input.svel = clamp(-(leftX * keyMove) / 32767, -REDSPLIT_MAXSVEL, REDSPLIT_MAXSVEL);
-    int32_t const lookXScale = (REDSPLIT_NORMALTURN << 1) * g_redSplitLookSensitivityX[playerNum] / 5;
-    int32_t const lookYScale = (REDSPLIT_NORMALTURN << 1) * g_redSplitLookSensitivityY[playerNum] / 5;
+    int32_t const lookXScale = runHeld ? (REDSPLIT_NORMALTURN << 1) / 5 : (REDSPLIT_NORMALTURN << 1) * g_redSplitLookSensitivityX[playerNum] / 5;
+    int32_t const lookYScale = runHeld ? (REDSPLIT_NORMALTURN << 1) / 5 : (REDSPLIT_NORMALTURN << 1) * g_redSplitLookSensitivityY[playerNum] / 5;
     int32_t const lookY = g_redSplitInvertAim[playerNum] ? rightY : -rightY;
     input.q16avel = fix16_clamp(fix16_from_int((rightX * lookXScale) / 16384), F16(-REDSPLIT_MAXANGVEL), F16(REDSPLIT_MAXANGVEL));
     input.q16horz = fix16_clamp(fix16_from_int((lookY * lookYScale) / 32767), F16(-REDSPLIT_MAXHORIZ), F16(REDSPLIT_MAXHORIZ));

@@ -1113,14 +1113,25 @@ void G_PrintGameQuotes(int32_t snum)
             pal = g_player[snum].pcolor;
             if (g_redSplitHudDrawingView >= 0)
             {
-                x = scale((g_redSplitHudX1 + g_redSplitHudX2 + 1) / 2, 320, xdim) << 16;
+                int32_t const viewWidth = g_redSplitHudX2 - g_redSplitHudX1 + 1;
+                if (viewWidth <= (xdim / 2))
+                    x = scale(g_redSplitHudX1 + 8, 320, xdim) << 16;
+                else
+                    x = scale((g_redSplitHudX1 + g_redSplitHudX2 + 1) / 2, 320, xdim) << 16;
                 y = (scale(g_redSplitHudY1, 200, ydim) << 16) + text_ypos() + (REALITY ? (6<<16) : 0);
             }
         }
 #endif
         if (REALITY)
             RT_RotateSpriteSetColor(64, 200, 200, 256 - texta(k));
-        height = gametext_(x, y, apStrings[ps->ftq], textsh(k), pal, texto(k), texta(k), TEXT_XCENTER | (REALITY ? TEXT_N64NOPAL : 0)).y + (1<<16);
+        int32_t const quoteFlags =
+#ifdef SPLITSCREEN_MOD_HACKS
+            (g_fakeMultiMode && g_redSplitHudDrawingView >= 0 && (g_redSplitHudX2 - g_redSplitHudX1 + 1) <= (xdim / 2))
+                ? (REALITY ? TEXT_N64NOPAL : 0)
+                :
+#endif
+                (TEXT_XCENTER | (REALITY ? TEXT_N64NOPAL : 0));
+        height = gametext_(x, y, apStrings[ps->ftq], textsh(k), pal, texto(k), texta(k), quoteFlags).y + (1<<16);
     }
     while (0);
 
