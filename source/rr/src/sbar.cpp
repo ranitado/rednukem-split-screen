@@ -956,16 +956,27 @@ void G_DrawStatusBar(int32_t snum)
 
             if (g_fakeMultiMode)
             {
-                const int32_t sidebyside = (ud.screen_size!=0);
-
-                if (sidebyside && snum==1)
+                if (g_redSplitDrawingView >= 0)
                 {
-                    orient |= RS_CENTERORIGIN;
+                    if (snum == 0)
+                    {
+                        yofs = -100;
+                        yofssh = yofs<<16;
+                    }
                 }
-                else if (!sidebyside && snum==0)
+                else
                 {
-                    yofs = -100;
-                    yofssh = yofs<<16;
+                    const int32_t sidebyside = (ud.screen_size!=0);
+
+                    if (sidebyside && snum==1)
+                    {
+                        orient |= RS_CENTERORIGIN;
+                    }
+                    else if (!sidebyside && snum==0)
+                    {
+                        yofs = -100;
+                        yofssh = yofs<<16;
+                    }
                 }
             }
 #endif

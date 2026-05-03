@@ -318,6 +318,10 @@ RPG2 = 14
 void RT_P_DisplayWeapon(void)
 {
     DukePlayer_t *const  pPlayer     = g_player[screenpeek].ps;
+
+    if (pPlayer == nullptr)
+        return;
+
     const int16_t *const weaponFrame = &pPlayer->kickback_pic;
 
     int currentWeapon, quickKickFrame;
@@ -328,6 +332,7 @@ void RT_P_DisplayWeapon(void)
 #endif
 
     if (pPlayer->newowner >= 0 || ud.camerasprite >= 0 || pPlayer->over_shoulder_on > 0
+        || (unsigned)pPlayer->i >= MAXSPRITES
         || (sprite[pPlayer->i].pal != 1 && sprite[pPlayer->i].extra <= 0))
         return;
 
@@ -493,6 +498,8 @@ void RT_P_DisplayWeapon(void)
         case SHOTGUN_WEAPON__STATIC:
         case MOTORCYCLE_WEAPON__STATIC:
             weaponX -= 8;
+            if (currentWeapon == SHOTGUN_WEAPON)
+                weaponYOffset += 15;
 
             if (*weaponFrame > 3 && *weaponFrame < 8)
             {

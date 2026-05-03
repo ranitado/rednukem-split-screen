@@ -1,3 +1,34 @@
+# Rednukem Split-Screen
+
+Rednukem Split-Screen is a source fork of Rednukem/NBlood adding experimental local split-screen support for Duke Nukem 64 on PC.
+
+Current release: `v0.1`
+
+## Features
+
+* Single player and local split-screen co-op modes.
+* Experimental 2, 3, and 4 player split-screen rendering.
+* Gamepad player assignment and basic join/disconnect support.
+* Per-player simplified in-game setup menus for extra players.
+* Split-screen HUD, weapon positioning, and audio/input work in progress.
+* In-game update check in `Game Setup`.
+
+## Installing
+
+1. Extract the release ZIP to a new folder.
+2. Copy your legally owned Duke Nukem 64 ROM into the same folder.
+3. Run `rednukem-split-screen.exe`.
+
+Do not redistribute the Duke Nukem 64 ROM or any commercial game data with this port.
+
+## Notes
+
+This is an early experimental release. Split-screen support is actively changing and may still have visual, input, audio, or gameplay bugs.
+
+The original Rednukem/NBlood project lives at [NBlood/NBlood](https://github.com/NBlood/NBlood).
+
+---
+
 # NBlood / Rednukem / PCExhumed
 Reverse-engineered ports of Build games using EDuke32 engine technology and development principles
 

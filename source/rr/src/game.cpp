@@ -42,6 +42,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "palette.h"
 #include "al_midi.h"
 #include "playmve.h"
+#include "n64/reality_render.h"
+#include "n64/reality_sbar.h"
 
 #ifdef __ANDROID__
 #include "android.h"
@@ -227,19 +229,7 @@ void G_HandleSpecialKeys(void)
 
 void G_GameQuit(void)
 {
-    if (numplayers < 2)
-        G_GameExit(" ");
-
-    if (g_gameQuit == 0)
-    {
-        g_gameQuit = 1;
-        g_quitDeadline = (int32_t) totalclock+120;
-        //g_netDisconnect = 1;
-    }
-
-    if ((totalclock > g_quitDeadline) && (g_gameQuit == 1))
-        g_netDisconnect = 1;
-        //G_GameExit("Timed out.");
+    G_GameExit("");
 }
 
 
@@ -1601,6 +1591,891 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
     {
         newaspect_enable = 0;
         renderSetAspect(viewingRange, tabledivide32_noinline(65536 * ydim * 8, xdim * 5));
+    }
+}
+
+int32_t g_redSplitDrawingView = -1;
+int32_t g_redSplitHudDrawingView = -1;
+int32_t g_redSplitHudX1 = 0;
+int32_t g_redSplitHudY1 = 0;
+int32_t g_redSplitHudX2 = 0;
+int32_t g_redSplitHudY2 = 0;
+int32_t g_redSplitExtraMenuPlayer = -1;
+int32_t g_redSplitExtraMenuPage = 0;
+int32_t g_redSplitExtraMenuSelection = 0;
+int32_t g_redSplitDeferHud = 0;
+int32_t g_redSplitSuppressMenuDraw = 0;
+int32_t g_redSplitLookSensitivityX[MAXPLAYERS] = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
+int32_t g_redSplitLookSensitivityY[MAXPLAYERS] = { 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };
+int32_t g_redSplitInvertAim[MAXPLAYERS] = {};
+int32_t g_redSplitViewCentering[MAXPLAYERS] = {};
+int32_t g_redSplitAutoRun[MAXPLAYERS] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+int32_t g_redSplitWeaponWideOffsetX = -39;
+int32_t g_redSplitWeaponWideTopOffsetY = 15;
+int32_t g_redSplitWeaponWideScalePercent = 70;
+int32_t g_redSplitWeaponQuarterLeftOffsetX = 14;
+int32_t g_redSplitWeaponQuarterRightOffsetX = -10;
+int32_t g_redSplitWeaponQuarterOffsetY = 0;
+int32_t g_redSplitWeaponQuarterScalePercent = 55;
+int32_t g_redSplitWeaponFlashWideOffsetX = 26;
+int32_t g_redSplitWeaponFlashWideOffsetY = -15;
+int32_t g_redSplitWeaponFlashWideTopOffsetX = 0;
+int32_t g_redSplitWeaponFlashWideTopOffsetY = 0;
+int32_t g_redSplitWeaponFlashWideBottomOffsetX = 0;
+int32_t g_redSplitWeaponFlashWideBottomOffsetY = 0;
+int32_t g_redSplitWeaponFlashQuarterLeftOffsetX = 16;
+int32_t g_redSplitWeaponFlashQuarterRightOffsetX = 0;
+int32_t g_redSplitWeaponFlashDualLeftOffsetX = 0;
+int32_t g_redSplitWeaponFlashDualRightOffsetX = 0;
+int32_t g_redSplitWeaponAnchor = 1;
+
+enum RedSplitExtraMenuPage_t
+{
+    REDSPLIT_EXTRA_MENU_MAIN,
+    REDSPLIT_EXTRA_MENU_PLAYER,
+    REDSPLIT_EXTRA_MENU_CONTROLLER,
+};
+
+static char const * const RedSplitColorNames[] = { "Auto", "Blue", "Red", "Green", "Gray", "Dark Gray", "Dark Green", "Brown", "Dark Blue", "Bright Red", "Yellow" };
+static int32_t const RedSplitColorValues[] = { 0, 9, 10, 11, 12, 13, 14, 15, 16, 21, 23 };
+static char const * const RedSplitViewCenteringNames[] = { "Off", "Slow", "Med", "Fast" };
+
+static int32_t g_redSplitHudTuningOpen = 0;
+static int32_t g_redSplitHudTuningSelection = 0;
+static int32_t g_redSplitWeaponTuningOpen = 0;
+static int32_t g_redSplitWeaponTuningSelection = 0;
+static int32_t g_redSplitWeaponDebugWeapon = PISTOL_WEAPON;
+static int32_t g_redSplitHudHealthIconTile = 3;
+static int32_t g_redSplitHudHealthIconX = -48;
+static int32_t g_redSplitHudHealthIconY = 87;
+static int32_t g_redSplitHudHealthIconScale = 58;
+static int32_t g_redSplitHudHealthTextX = -31;
+static int32_t g_redSplitHudHealthTextY = 88;
+static int32_t g_redSplitHudHealthTextScale = 66;
+static int32_t g_redSplitHudArmorIconX = 27;
+static int32_t g_redSplitHudArmorIconY = 85;
+static int32_t g_redSplitHudArmorIconScale = 45;
+static int32_t g_redSplitHudArmorTextX = 43;
+static int32_t g_redSplitHudArmorTextY = 88;
+static int32_t g_redSplitHudArmorTextScale = 66;
+static int32_t g_redSplitHudAmmoIconX = 336;
+static int32_t g_redSplitHudAmmoIconY = 87;
+static int32_t g_redSplitHudAmmoIconScale = 19;
+static int32_t g_redSplitHudAmmoTextX = 369;
+static int32_t g_redSplitHudAmmoTextY = 88;
+static int32_t g_redSplitHudAmmoTextScale = 66;
+
+static int32_t const g_redSplitHudHealthIconTiles[] = { FIRSTAID, FIRSTAID_ICON, SIXPAK, COLA, ATOMICHEALTH };
+
+struct RedSplitHudTuningParam_t
+{
+    char const *name;
+    int32_t *value;
+    int32_t minValue;
+    int32_t maxValue;
+};
+
+static RedSplitHudTuningParam_t g_redSplitHudTuningParams[] = {
+    { "Health icon tile", &g_redSplitHudHealthIconTile, 0, (int32_t)ARRAY_SIZE(g_redSplitHudHealthIconTiles) - 1 },
+    { "Health icon X", &g_redSplitHudHealthIconX, -220, 560 },
+    { "Health icon Y", &g_redSplitHudHealthIconY, -40, 140 },
+    { "Health icon scale", &g_redSplitHudHealthIconScale, 1, 140 },
+    { "Health text X", &g_redSplitHudHealthTextX, -220, 560 },
+    { "Health text Y", &g_redSplitHudHealthTextY, -40, 140 },
+    { "Health text scale", &g_redSplitHudHealthTextScale, 1, 140 },
+    { "Armor icon X", &g_redSplitHudArmorIconX, -220, 560 },
+    { "Armor icon Y", &g_redSplitHudArmorIconY, -40, 140 },
+    { "Armor icon scale", &g_redSplitHudArmorIconScale, 1, 140 },
+    { "Armor text X", &g_redSplitHudArmorTextX, -220, 560 },
+    { "Armor text Y", &g_redSplitHudArmorTextY, -40, 140 },
+    { "Armor text scale", &g_redSplitHudArmorTextScale, 1, 140 },
+    { "Ammo icon X", &g_redSplitHudAmmoIconX, -220, 560 },
+    { "Ammo icon Y", &g_redSplitHudAmmoIconY, -40, 140 },
+    { "Ammo icon scale", &g_redSplitHudAmmoIconScale, 1, 140 },
+    { "Ammo text X", &g_redSplitHudAmmoTextX, -220, 560 },
+    { "Ammo text Y", &g_redSplitHudAmmoTextY, -40, 140 },
+    { "Ammo text scale", &g_redSplitHudAmmoTextScale, 1, 140 },
+};
+
+static RedSplitHudTuningParam_t g_redSplitWeaponTuningParams[] = {
+    { "Weapon", &g_redSplitWeaponDebugWeapon, 0, MAX_WEAPONS - 1 },
+    { "Wide X", &g_redSplitWeaponWideOffsetX, -180, 180 },
+    { "Wide top Y", &g_redSplitWeaponWideTopOffsetY, -120, 160 },
+    { "Wide scale", &g_redSplitWeaponWideScalePercent, 20, 140 },
+    { "Quarter left X", &g_redSplitWeaponQuarterLeftOffsetX, -180, 180 },
+    { "Quarter right X", &g_redSplitWeaponQuarterRightOffsetX, -180, 180 },
+    { "Quarter Y", &g_redSplitWeaponQuarterOffsetY, -120, 160 },
+    { "Quarter scale", &g_redSplitWeaponQuarterScalePercent, 20, 140 },
+    { "Flash wide X", &g_redSplitWeaponFlashWideOffsetX, -180, 180 },
+    { "Flash wide Y", &g_redSplitWeaponFlashWideOffsetY, -120, 160 },
+    { "Flash wide top X", &g_redSplitWeaponFlashWideTopOffsetX, -180, 180 },
+    { "Flash wide top Y", &g_redSplitWeaponFlashWideTopOffsetY, -120, 160 },
+    { "Flash wide bottom X", &g_redSplitWeaponFlashWideBottomOffsetX, -180, 180 },
+    { "Flash wide bottom Y", &g_redSplitWeaponFlashWideBottomOffsetY, -120, 160 },
+    { "Flash quarter left X", &g_redSplitWeaponFlashQuarterLeftOffsetX, -180, 180 },
+    { "Flash quarter right X", &g_redSplitWeaponFlashQuarterRightOffsetX, -180, 180 },
+    { "Flash dual left X", &g_redSplitWeaponFlashDualLeftOffsetX, -180, 180 },
+    { "Flash dual right X", &g_redSplitWeaponFlashDualRightOffsetX, -180, 180 },
+    { "Anchor 0L 1S 2R", &g_redSplitWeaponAnchor, 0, 2 },
+};
+
+void RedSplit_OpenExtraMenu(int32_t const playerNum)
+{
+    if (playerNum <= 0 || playerNum >= MAXPLAYERS)
+        return;
+
+    g_redSplitExtraMenuPlayer = playerNum;
+    g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_MAIN;
+    g_redSplitExtraMenuSelection = 0;
+}
+
+void RedSplit_CloseExtraMenu(void)
+{
+    g_redSplitExtraMenuPlayer = -1;
+    g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_MAIN;
+    g_redSplitExtraMenuSelection = 0;
+}
+
+int32_t RedSplit_IsExtraMenuOpenForPlayer(int32_t const playerNum)
+{
+    return g_redSplitExtraMenuPlayer == playerNum;
+}
+
+static void RedSplit_OpenSharedPauseMenu(MenuID_t const menuId)
+{
+    RedSplit_CloseExtraMenu();
+    S_PauseSounds(true);
+    Menu_Open(myconnectindex);
+
+    if ((!g_netServer && ud.multimode < 2) && ud.recstat != 2)
+        ready2send = 0;
+
+    Menu_Change(menuId);
+    screenpeek = myconnectindex;
+    S_MenuSound();
+}
+
+void RedSplit_OpenPauseMenuFromExtra(void)
+{
+    RedSplit_OpenSharedPauseMenu(MENU_MAIN_INGAME);
+}
+
+static int32_t RedSplit_ExtraMenuMaxSelection(void)
+{
+    switch (g_redSplitExtraMenuPage)
+    {
+    case REDSPLIT_EXTRA_MENU_PLAYER:
+        return 1;
+    case REDSPLIT_EXTRA_MENU_CONTROLLER:
+        return 3;
+    default:
+        return 3;
+    }
+}
+
+void RedSplit_MoveExtraMenuSelection(int32_t const direction)
+{
+    int32_t const maxSelection = RedSplit_ExtraMenuMaxSelection();
+    int32_t const oldSelection = g_redSplitExtraMenuSelection;
+    g_redSplitExtraMenuSelection = clamp(g_redSplitExtraMenuSelection + direction, 0, maxSelection);
+    if (g_redSplitExtraMenuSelection != oldSelection)
+        S_MenuSound();
+}
+
+static int32_t RedSplit_CurrentColorIndex(int32_t const playerNum)
+{
+    int32_t const currentColor = g_player[playerNum].pcolor;
+    for (int32_t i = 0; i < (int32_t)ARRAY_SIZE(RedSplitColorValues); ++i)
+        if (RedSplitColorValues[i] == currentColor)
+            return i;
+
+    return 0;
+}
+
+static void RedSplit_SetPlayerColor(int32_t const playerNum, int32_t const colorIndex)
+{
+    if ((unsigned)playerNum >= MAXPLAYERS || g_player[playerNum].ps == nullptr)
+        return;
+
+    int32_t const color = RedSplitColorValues[clamp(colorIndex, 0, (int32_t)ARRAY_SIZE(RedSplitColorValues) - 1)];
+    g_player[playerNum].pcolor = color;
+    g_player[playerNum].ps->palookup = color;
+
+    if ((unsigned)g_player[playerNum].ps->i < MAXSPRITES && sprite[g_player[playerNum].ps->i].picnum == APLAYER && sprite[g_player[playerNum].ps->i].pal != 1)
+        sprite[g_player[playerNum].ps->i].pal = color;
+}
+
+void RedSplit_ChangeExtraMenuOption(int32_t const direction)
+{
+    int32_t const playerNum = g_redSplitExtraMenuPlayer;
+    if (playerNum <= 0 || playerNum >= MAXPLAYERS)
+        return;
+
+    switch (g_redSplitExtraMenuPage)
+    {
+    case REDSPLIT_EXTRA_MENU_PLAYER:
+        switch (g_redSplitExtraMenuSelection)
+        {
+        case 0:
+        {
+            int32_t const colorIndex = (RedSplit_CurrentColorIndex(playerNum) + direction + ARRAY_SIZE(RedSplitColorValues)) % ARRAY_SIZE(RedSplitColorValues);
+            RedSplit_SetPlayerColor(playerNum, colorIndex);
+            break;
+        }
+        case 1:
+            g_redSplitAutoRun[playerNum] = !g_redSplitAutoRun[playerNum];
+            break;
+        }
+        break;
+    case REDSPLIT_EXTRA_MENU_CONTROLLER:
+        switch (g_redSplitExtraMenuSelection)
+        {
+        case 0:
+            g_redSplitLookSensitivityX[playerNum] = clamp(g_redSplitLookSensitivityX[playerNum] + direction, 1, 10);
+            break;
+        case 1:
+            g_redSplitLookSensitivityY[playerNum] = clamp(g_redSplitLookSensitivityY[playerNum] + direction, 1, 10);
+            break;
+        case 2:
+            g_redSplitInvertAim[playerNum] = !g_redSplitInvertAim[playerNum];
+            break;
+        case 3:
+            g_redSplitViewCentering[playerNum] = (g_redSplitViewCentering[playerNum] + direction + 4) % 4;
+            break;
+        }
+        break;
+    }
+
+    S_MenuSound();
+}
+
+void RedSplit_BackExtraMenu(void)
+{
+    if (g_redSplitExtraMenuPage == REDSPLIT_EXTRA_MENU_MAIN)
+        RedSplit_CloseExtraMenu();
+    else
+    {
+        g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_MAIN;
+        g_redSplitExtraMenuSelection = 0;
+    }
+
+    S_MenuSound();
+}
+
+void RedSplit_ActivateExtraMenuSelection(void)
+{
+    int32_t const playerNum = g_redSplitExtraMenuPlayer;
+
+    if (g_redSplitExtraMenuPage != REDSPLIT_EXTRA_MENU_MAIN)
+    {
+        RedSplit_ChangeExtraMenuOption(1);
+        return;
+    }
+
+    switch (g_redSplitExtraMenuSelection)
+    {
+    case 0:
+        RedSplit_OpenSharedPauseMenu(MENU_MAIN_INGAME);
+        break;
+    case 1:
+        g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_PLAYER;
+        g_redSplitExtraMenuSelection = 0;
+        break;
+    case 2:
+        g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_CONTROLLER;
+        g_redSplitExtraMenuSelection = 0;
+        break;
+    case 3:
+        RedSplit_CloseExtraMenu();
+        RedSplit_DisconnectPlayer(playerNum);
+        break;
+    }
+
+    if (g_redSplitExtraMenuPlayer >= 0)
+        S_MenuSound();
+}
+
+struct RedSplitViewport_t
+{
+    int32_t x1, y1, x2, y2;
+};
+
+static int32_t RedSplit_ViewWidth(RedSplitViewport_t const &view)
+{
+    return view.x2 - view.x1 + 1;
+}
+
+static int32_t RedSplit_ViewHeight(RedSplitViewport_t const &view)
+{
+    return view.y2 - view.y1 + 1;
+}
+
+static int32_t RedSplit_ToVirtualX(int32_t const absoluteX)
+{
+    return scale(absoluteX, 320, xdim);
+}
+
+static int32_t RedSplit_ToVirtualY(int32_t const absoluteY)
+{
+    return scale(absoluteY, 200, ydim);
+}
+
+static int32_t RedSplit_ViewXFrom320(RedSplitViewport_t const &view, int32_t const x)
+{
+    return RedSplit_ToVirtualX(view.x1 + scale(x, RedSplit_ViewWidth(view), 320));
+}
+
+static int32_t RedSplit_ViewYFrom100(RedSplitViewport_t const &view, int32_t const y)
+{
+    return RedSplit_ToVirtualY(view.y1 + scale(y, RedSplit_ViewHeight(view), 100));
+}
+
+static int32_t RedSplit_ViewScalePercent(RedSplitViewport_t const &view, int32_t const basePercent)
+{
+    int32_t const widthPercent  = scale(RedSplit_ViewWidth(view), 100, xdim);
+    int32_t const heightPercent = scale(RedSplit_ViewHeight(view), 200, ydim);
+    return scale(basePercent, min(widthPercent, heightPercent), 100);
+}
+
+static void RedSplit_GetViewport(int32_t const viewIndex, int32_t const playerCount, RedSplitViewport_t * const view)
+{
+    int32_t const halfW = xdim / 2;
+    int32_t const halfH = ydim / 2;
+
+    switch (playerCount)
+    {
+    default:
+    case 2:
+        view->x1 = 0;
+        view->x2 = xdim - 1;
+        view->y1 = viewIndex == 0 ? 0 : halfH;
+        view->y2 = viewIndex == 0 ? halfH - 1 : ydim - 1;
+        break;
+
+    case 3:
+        if (viewIndex == 0)
+        {
+            view->x1 = 0;
+            view->x2 = xdim - 1;
+            view->y1 = 0;
+            view->y2 = halfH - 1;
+        }
+        else
+        {
+            view->x1 = viewIndex == 1 ? 0 : halfW;
+            view->x2 = viewIndex == 1 ? halfW - 1 : xdim - 1;
+            view->y1 = halfH;
+            view->y2 = ydim - 1;
+        }
+        break;
+
+    case 4:
+        view->x1 = (viewIndex & 1) ? halfW : 0;
+        view->x2 = (viewIndex & 1) ? xdim - 1 : halfW - 1;
+        view->y1 = (viewIndex >= 2) ? halfH : 0;
+        view->y2 = (viewIndex >= 2) ? ydim - 1 : halfH - 1;
+        break;
+    }
+}
+
+static void RedSplit_DrawBlackRectangle(RedSplitViewport_t const &view, int32_t const, int32_t const, int32_t const, int32_t const)
+{
+    int32_t const left   = RedSplit_ToVirtualX(view.x1);
+    int32_t const top    = RedSplit_ToVirtualY(view.y1);
+    int32_t const right  = RedSplit_ToVirtualX(view.x2 + 1);
+    int32_t const bottom = RedSplit_ToVirtualY(view.y2 + 1);
+    int32_t const xscale = divscale16((right - left) << 16, tilesiz[0].x << 16);
+    int32_t const yscale = divscale16((bottom - top) << 16, tilesiz[0].y << 16);
+
+    rotatesprite_(left << 16, top << 16, max(xscale, yscale), 0, 0, 127, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
+                  0, 0, view.x1, view.y1, view.x2, view.y2);
+}
+
+static void RedSplit_DrawExtraMenuText(RedSplitViewport_t const &view, int32_t const y, char const * const text, int32_t const selected)
+{
+    int32_t shade = selected ? (sintable[((int32_t)totalclock << 5) & 2047] >> 12) : MF_Redfont.shade_deselected;
+    int32_t pal = selected ? MF_Redfont.pal_selected : MF_Redfont.pal_deselected;
+    int32_t const scalePercent = max<int32_t>(RedSplit_ViewScalePercent(view, 95), RedSplit_ViewWidth(view) <= xdim / 2 ? 60 : 50);
+    int32_t const zoom = scale(MF_Redfont.zoom, scalePercent, 100);
+
+    G_ScreenText(MF_Redfont.tilenum, RedSplit_ViewXFrom320(view, 160) << 16, RedSplit_ViewYFrom100(view, y) << 16, zoom, 0, 0, text, shade, pal,
+        2 | 8 | 16 | ROTATESPRITE_FULL16, 0, scale(MF_Redfont.emptychar.x, scalePercent, 100), scale(MF_Redfont.emptychar.y, scalePercent, 100),
+        scale(MF_Redfont.between.x, scalePercent, 100), scale(MF_Redfont.between.y, scalePercent, 100),
+        MF_Redfont.textflags | TEXT_XCENTER | TEXT_LITERALESCAPE | TEXT_RRMENUTEXTHACK,
+          view.x1, view.y1, view.x2, view.y2);
+}
+
+static void RedSplit_DrawMinimalHudText(RedSplitViewport_t const &view, int32_t const x, int32_t const y, char const * const text, int32_t const flags = 0, int32_t const baseScalePercent = 66)
+{
+    int32_t const scalePercent = RedSplit_ViewScalePercent(view, baseScalePercent);
+    int32_t const zoom = scale(MF_Redfont.zoom, scalePercent, 100);
+
+    G_ScreenText(MF_Redfont.tilenum, RedSplit_ViewXFrom320(view, x) << 16, RedSplit_ViewYFrom100(view, y) << 16, zoom, 0, 0, text, 0, MF_Redfont.pal_deselected,
+        2 | 8 | 16 | ROTATESPRITE_FULL16, 0,
+        scale(MF_Redfont.emptychar.x, scalePercent, 100), scale(MF_Redfont.emptychar.y, scalePercent, 100),
+        scale(MF_Redfont.between.x, scalePercent, 100), scale(MF_Redfont.between.y, scalePercent, 100),
+        MF_Redfont.textflags | TEXT_LITERALESCAPE | TEXT_RRMENUTEXTHACK | flags,
+        view.x1, view.y1, view.x2, view.y2);
+}
+
+static void RedSplit_DrawMinimalHudTile(RedSplitViewport_t const &view, int32_t const x, int32_t const y, int32_t const tile, int32_t const scalePercent)
+{
+    if (tile < 0 || tilesiz[tile].x == 0 || tilesiz[tile].y == 0)
+        return;
+
+    rotatesprite_(RedSplit_ViewXFrom320(view, x) << 16, RedSplit_ViewYFrom100(view, y) << 16,
+        scale(65536, RedSplit_ViewScalePercent(view, scalePercent), 100), 0, tile, 0, 0,
+        2 | 8 | 16 | ROTATESPRITE_FULL16, 0, 0, view.x1, view.y1, view.x2, view.y2);
+}
+
+static int32_t RedSplit_HudAmmoIconScaleForWeapon(int32_t const weaponNum)
+{
+    if (weaponNum == PISTOL_WEAPON)
+        return g_redSplitHudAmmoIconScale;
+
+    return scale(g_redSplitHudAmmoIconScale, 160, 100);
+}
+
+static int32_t RedSplit_HudAmmoIconForWeapon(int32_t const weaponNum)
+{
+    static int32_t const ammoIcon[MAX_WEAPONS] = {
+        BOOTS, AMMO, SHOTGUNAMMO, BATTERYAMMO, RPGAMMO, HBOMBAMMO, CRYSTALAMMO, GROWAMMO,
+        DEVISTATORAMMO, TRIPBOMBSPRITE, FREEZEAMMO, HBOMBAMMO, 34, 50, 43
+    };
+
+    if ((unsigned)weaponNum >= MAX_WEAPONS)
+        return AMMO;
+
+    return ammoIcon[weaponNum];
+}
+
+static int32_t RedSplit_HudHealthIconTile(void)
+{
+    return g_redSplitHudHealthIconTiles[clamp<int32_t>(g_redSplitHudHealthIconTile, 0, (int32_t)ARRAY_SIZE(g_redSplitHudHealthIconTiles) - 1)];
+}
+
+static void RedSplit_DrawMinimalHudForPlayer(int32_t const playerNum, RedSplitViewport_t const &view)
+{
+    DukePlayer_t const * const p = g_player[playerNum].ps;
+
+    if (p == nullptr)
+        return;
+
+    if ((unsigned)p->i >= MAXSPRITES || sprite[p->i].extra <= 0)
+        return;
+
+    int32_t weaponNum = p->dn64_372;
+    if (weaponNum == HANDREMOTE_WEAPON)
+        weaponNum = HANDBOMB_WEAPON;
+    if (weaponNum < 0 || weaponNum >= MAX_WEAPONS)
+        weaponNum = p->curr_weapon;
+
+    int32_t const hasAmmoHud = weaponNum != KNEE_WEAPON && weaponNum >= 0 && weaponNum < MAX_WEAPONS;
+    int32_t const ammo = hasAmmoHud ? p->ammo_amount[weaponNum] : 0;
+    char value[16];
+
+    RedSplit_DrawMinimalHudTile(view, g_redSplitHudHealthIconX, g_redSplitHudHealthIconY, RedSplit_HudHealthIconTile(), g_redSplitHudHealthIconScale);
+    RedSplit_DrawMinimalHudTile(view, g_redSplitHudArmorIconX, g_redSplitHudArmorIconY, SHIELD, g_redSplitHudArmorIconScale);
+    if (hasAmmoHud)
+        RedSplit_DrawMinimalHudTile(view, g_redSplitHudAmmoIconX, g_redSplitHudAmmoIconY, RedSplit_HudAmmoIconForWeapon(weaponNum), RedSplit_HudAmmoIconScaleForWeapon(weaponNum));
+
+    Bsprintf(value, "%d", p->last_extra);
+    RedSplit_DrawMinimalHudText(view, g_redSplitHudHealthTextX, g_redSplitHudHealthTextY, value, 0, g_redSplitHudHealthTextScale);
+
+    Bsprintf(value, "%d", p->inv_amount[GET_SHIELD]);
+    RedSplit_DrawMinimalHudText(view, g_redSplitHudArmorTextX, g_redSplitHudArmorTextY, value, 0, g_redSplitHudArmorTextScale);
+
+    if (hasAmmoHud)
+    {
+        Bsprintf(value, "%d", ammo);
+        RedSplit_DrawMinimalHudText(view, g_redSplitHudAmmoTextX, g_redSplitHudAmmoTextY, value, TEXT_XRIGHT, g_redSplitHudAmmoTextScale);
+    }
+}
+
+static void RedSplit_HandleHudTuningInput(void)
+{
+    if (KB_KeyPressed(sc_Period))
+    {
+        g_redSplitHudTuningOpen = !g_redSplitHudTuningOpen;
+        KB_ClearKeyDown(sc_Period);
+    }
+
+    if (!g_redSplitHudTuningOpen)
+        return;
+
+    int32_t const paramCount = ARRAY_SIZE(g_redSplitHudTuningParams);
+
+    if (KB_KeyPressed(sc_UpArrow) || KB_KeyPressed(sc_kpad_8))
+    {
+        g_redSplitHudTuningSelection = (g_redSplitHudTuningSelection + paramCount - 1) % paramCount;
+        KB_ClearKeyDown(sc_UpArrow);
+        KB_ClearKeyDown(sc_kpad_8);
+    }
+    else if (KB_KeyPressed(sc_DownArrow) || KB_KeyPressed(sc_kpad_2))
+    {
+        g_redSplitHudTuningSelection = (g_redSplitHudTuningSelection + 1) % paramCount;
+        KB_ClearKeyDown(sc_DownArrow);
+        KB_ClearKeyDown(sc_kpad_2);
+    }
+
+    int32_t delta = 0;
+    if (KB_KeyPressed(sc_LeftArrow) || KB_KeyPressed(sc_kpad_4))
+        delta = -1;
+    else if (KB_KeyPressed(sc_RightArrow) || KB_KeyPressed(sc_kpad_6))
+        delta = 1;
+
+    if (delta != 0)
+    {
+        if ((KB_KeyPressed(sc_LeftShift) || KB_KeyPressed(sc_RightShift)) && g_redSplitHudTuningSelection != 0)
+            delta *= 5;
+
+        RedSplitHudTuningParam_t &param = g_redSplitHudTuningParams[g_redSplitHudTuningSelection];
+        *param.value = clamp(*param.value + delta, param.minValue, param.maxValue);
+        KB_ClearKeyDown(sc_LeftArrow);
+        KB_ClearKeyDown(sc_RightArrow);
+        KB_ClearKeyDown(sc_kpad_4);
+        KB_ClearKeyDown(sc_kpad_6);
+    }
+}
+
+static void RedSplit_DrawHudTuningPanel(void)
+{
+    if (!g_redSplitHudTuningOpen)
+        return;
+
+    rotatesprite_(4 << 16, 4 << 16, divscale16(150 << 16, tilesiz[0].x << 16), 0, 0, 95, ud.shadow_pal, 2 | 8 | 16 | 32,
+                  0, 0, 0, 0, xdim - 1, ydim - 1);
+
+    char line[96];
+    minitext(8, 8, "HUD TUNE  . closes  arrows adjust  shift=5", 0, 2 | 8 | 16);
+
+    for (int32_t i = 0; i < (int32_t)ARRAY_SIZE(g_redSplitHudTuningParams); ++i)
+    {
+        RedSplitHudTuningParam_t const &param = g_redSplitHudTuningParams[i];
+        Bsprintf(line, "%c %s: %d", i == g_redSplitHudTuningSelection ? '>' : ' ', param.name, *param.value);
+        minitext(8, 18 + (i * 6), line, i == g_redSplitHudTuningSelection ? 10 : 0, 2 | 8 | 16);
+    }
+}
+
+static void RedSplit_ApplyDebugWeaponToPlayers(void)
+{
+    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode > 1 ? g_fakeMultiMode : ud.multimode, 1, 4);
+    int32_t const weaponNum = clamp<int32_t>(g_redSplitWeaponDebugWeapon, 0, MAX_WEAPONS - 1);
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        DukePlayer_t * const p = g_player[playerNum].ps;
+        if (p == nullptr)
+            continue;
+
+        p->gotweapon |= 1 << weaponNum;
+        p->curr_weapon = weaponNum;
+        p->last_weapon = weaponNum;
+        p->dn64_372 = weaponNum;
+
+        if (weaponNum != KNEE_WEAPON)
+            p->ammo_amount[weaponNum] = max<int16_t>(p->ammo_amount[weaponNum], p->max_ammo_amount[weaponNum] > 0 ? p->max_ammo_amount[weaponNum] : 50);
+    }
+}
+
+static void RedSplit_HandleWeaponTuningInput(void)
+{
+    if (KB_KeyPressed(sc_Comma))
+    {
+        g_redSplitWeaponTuningOpen = !g_redSplitWeaponTuningOpen;
+        KB_ClearKeyDown(sc_Comma);
+    }
+
+    if (!g_redSplitWeaponTuningOpen)
+        return;
+
+    int32_t const paramCount = ARRAY_SIZE(g_redSplitWeaponTuningParams);
+
+    if (KB_KeyPressed(sc_OpenBracket))
+    {
+        g_redSplitWeaponDebugWeapon = (g_redSplitWeaponDebugWeapon + MAX_WEAPONS - 1) % MAX_WEAPONS;
+        RedSplit_ApplyDebugWeaponToPlayers();
+        KB_ClearKeyDown(sc_OpenBracket);
+    }
+    else if (KB_KeyPressed(sc_CloseBracket))
+    {
+        g_redSplitWeaponDebugWeapon = (g_redSplitWeaponDebugWeapon + 1) % MAX_WEAPONS;
+        RedSplit_ApplyDebugWeaponToPlayers();
+        KB_ClearKeyDown(sc_CloseBracket);
+    }
+
+    if (KB_KeyPressed(sc_UpArrow) || KB_KeyPressed(sc_kpad_8))
+    {
+        g_redSplitWeaponTuningSelection = (g_redSplitWeaponTuningSelection + paramCount - 1) % paramCount;
+        KB_ClearKeyDown(sc_UpArrow);
+        KB_ClearKeyDown(sc_kpad_8);
+    }
+    else if (KB_KeyPressed(sc_DownArrow) || KB_KeyPressed(sc_kpad_2))
+    {
+        g_redSplitWeaponTuningSelection = (g_redSplitWeaponTuningSelection + 1) % paramCount;
+        KB_ClearKeyDown(sc_DownArrow);
+        KB_ClearKeyDown(sc_kpad_2);
+    }
+
+    int32_t delta = 0;
+    if (KB_KeyPressed(sc_LeftArrow) || KB_KeyPressed(sc_kpad_4))
+        delta = -1;
+    else if (KB_KeyPressed(sc_RightArrow) || KB_KeyPressed(sc_kpad_6))
+        delta = 1;
+
+    if (delta != 0)
+    {
+        if (KB_KeyPressed(sc_LeftShift) || KB_KeyPressed(sc_RightShift))
+            delta *= 5;
+
+        RedSplitHudTuningParam_t &param = g_redSplitWeaponTuningParams[g_redSplitWeaponTuningSelection];
+        *param.value = clamp(*param.value + delta, param.minValue, param.maxValue);
+
+        if (param.value == &g_redSplitWeaponDebugWeapon)
+            RedSplit_ApplyDebugWeaponToPlayers();
+
+        KB_ClearKeyDown(sc_LeftArrow);
+        KB_ClearKeyDown(sc_RightArrow);
+        KB_ClearKeyDown(sc_kpad_4);
+        KB_ClearKeyDown(sc_kpad_6);
+    }
+}
+
+static void RedSplit_DrawWeaponTuningPanel(void)
+{
+    if (!g_redSplitWeaponTuningOpen)
+        return;
+
+    rotatesprite_(166 << 16, 4 << 16, divscale16(150 << 16, tilesiz[0].x << 16), 0, 0, 95, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
+                  0, 0, 0, 0, xdim - 1, ydim - 1);
+
+    char line[96];
+    minitext(170, 8, "WEAPON TUNE  , closes  [] weapon", 0, 2 | 8 | 16);
+
+    for (int32_t i = 0; i < (int32_t)ARRAY_SIZE(g_redSplitWeaponTuningParams); ++i)
+    {
+        RedSplitHudTuningParam_t const &param = g_redSplitWeaponTuningParams[i];
+        Bsprintf(line, "%c %s: %d", i == g_redSplitWeaponTuningSelection ? '>' : ' ', param.name, *param.value);
+        minitext(170, 18 + (i * 6), line, i == g_redSplitWeaponTuningSelection ? 10 : 0, 2 | 8 | 16);
+    }
+}
+
+static void RedSplit_DrawExtraMenuForPlayer(int32_t const playerNum, RedSplitViewport_t const &view)
+{
+    if (!RedSplit_IsExtraMenuOpenForPlayer(playerNum))
+        return;
+
+    RedSplit_DrawBlackRectangle(view, 0, 0, 320, 100);
+
+    char title[32];
+    char const *options[4] = {};
+    int32_t optionCount = 0;
+
+    Bsprintf(title, "Player %d", playerNum + 1);
+
+    switch (g_redSplitExtraMenuPage)
+    {
+    case REDSPLIT_EXTRA_MENU_PLAYER:
+    {
+        static char color[32], autorun[32];
+        int32_t const colorIndex = RedSplit_CurrentColorIndex(playerNum);
+        Bsprintf(color, "Color: %s", RedSplitColorNames[colorIndex]);
+        Bsprintf(autorun, "Auto Run: %s", g_redSplitAutoRun[playerNum] ? "On" : "Off");
+        options[optionCount++] = color;
+        options[optionCount++] = autorun;
+        break;
+    }
+    case REDSPLIT_EXTRA_MENU_CONTROLLER:
+    {
+        static char sensX[32], sensY[32], invert[32], centering[32];
+        Bsprintf(sensX, "X Sens: %d", g_redSplitLookSensitivityX[playerNum]);
+        Bsprintf(sensY, "Y Sens: %d", g_redSplitLookSensitivityY[playerNum]);
+        Bsprintf(invert, "Inverted: %s", g_redSplitInvertAim[playerNum] ? "On" : "Off");
+        Bsprintf(centering, "View Centering: %s", RedSplitViewCenteringNames[g_redSplitViewCentering[playerNum]]);
+        options[optionCount++] = sensX;
+        options[optionCount++] = sensY;
+        options[optionCount++] = invert;
+        options[optionCount++] = centering;
+        break;
+    }
+    default:
+        options[optionCount++] = "Pause Menu";
+        options[optionCount++] = "Player Setup";
+        options[optionCount++] = "Controller";
+        options[optionCount++] = "Disconnect Player";
+        break;
+    }
+
+    RedSplit_DrawExtraMenuText(view, 20, title, 1);
+
+    for (int32_t i = 0; i < optionCount; ++i)
+    {
+        RedSplit_DrawExtraMenuText(view, 42 + (i * 14), options[i], i == g_redSplitExtraMenuSelection);
+    }
+}
+
+static void RedSplit_SetOpenGLViewportForView(RedSplitViewport_t const &view)
+{
+#ifdef USE_OPENGL
+    if (videoGetRenderMode() >= REND_POLYMOST)
+    {
+        int32_t const glY = ydim - (view.y2 + 1);
+        int32_t const glW = RedSplit_ViewWidth(view);
+        int32_t const glH = RedSplit_ViewHeight(view);
+
+        buildgl_setViewport(view.x1, glY, glW, glH);
+        glViewport(view.x1, glY, glW, glH);
+        glScissor(view.x1, glY, glW, glH);
+        buildgl_setEnabled(GL_SCISSOR_TEST);
+    }
+#endif
+}
+
+static void RedSplit_SetFullOpenGLViewportWithViewScissor(RedSplitViewport_t const &view)
+{
+#ifdef USE_OPENGL
+    if (videoGetRenderMode() >= REND_POLYMOST)
+    {
+        int32_t const glY = ydim - (view.y2 + 1);
+        int32_t const glW = RedSplit_ViewWidth(view);
+        int32_t const glH = RedSplit_ViewHeight(view);
+
+        buildgl_setViewport(0, 0, xdim, ydim);
+        glViewport(0, 0, xdim, ydim);
+        glScissor(view.x1, glY, glW, glH);
+        buildgl_setEnabled(GL_SCISSOR_TEST);
+    }
+#endif
+}
+
+static void RedSplit_DrawLevelTitleOnce(void)
+{
+    if (!(ud.show_level_text && hud_showmapname && g_levelTextTime > 1))
+        return;
+
+    if (g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name == nullptr)
+        return;
+
+    int32_t o = 10 | 16;
+
+    if (g_levelTextTime < 3)
+        o |= 1 | 32;
+    else if (g_levelTextTime < 5)
+        o |= 1;
+
+    char const * const fn = currentboardfilename[0] != 0 &&
+        ud.volume_number == 0 && ud.level_number == 7
+            ? currentboardfilename
+            : g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name;
+
+    if (REALITY)
+    {
+        RT_DisablePolymost(0);
+        RT_RotateSpriteSetColor(255, 128, 128, clamp(g_levelTextTime * 8, 0, 256));
+        menutext_(160 << 16, (90 + 16 + 8) << 16, 0, fn, 0, TEXT_XCENTER | TEXT_N64NOPAL);
+        RT_EnablePolymost();
+    }
+    else
+        menutext_(160 << 16, (90 + 16 + 8) << 16, -g_levelTextTime + 22, fn, o, TEXT_XCENTER);
+}
+
+static bool G_DrawMvpLocalSplitScreen(int32_t const smoothRatio)
+{
+    if (g_fakeMultiMode < 2 || ud.multimode < 2)
+        return false;
+
+    RedSplit_HandleHudTuningInput();
+    RedSplit_HandleWeaponTuningInput();
+
+    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4);
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+        if (g_player[playerNum].ps == nullptr)
+            return false;
+
+    int32_t const savedScreenPeek = screenpeek;
+    vec2_t const  savedWindowXY1  = windowxy1;
+    vec2_t const  savedWindowXY2  = windowxy2;
+
+    for (int32_t viewIndex = 0; viewIndex < playerCount; ++viewIndex)
+    {
+        int32_t const playerNum = viewIndex;
+        RedSplitViewport_t view;
+        RedSplit_GetViewport(viewIndex, playerCount, &view);
+
+        screenpeek = playerNum;
+        g_redSplitDrawingView = playerNum;
+        videoSetViewableArea(view.x1, view.y1, view.x2, view.y2);
+        RedSplit_SetOpenGLViewportForView(view);
+        G_DrawRooms(playerNum, smoothRatio);
+        RedSplit_SetFullOpenGLViewportWithViewScissor(view);
+        g_redSplitHudDrawingView = playerNum;
+        g_redSplitHudX1 = view.x1;
+        g_redSplitHudY1 = view.y1;
+        g_redSplitHudX2 = view.x2;
+        g_redSplitHudY2 = view.y2;
+        g_redSplitDeferHud = 1;
+        g_redSplitSuppressMenuDraw = 1;
+        G_DisplayRest(smoothRatio);
+        g_redSplitSuppressMenuDraw = 0;
+        g_redSplitDeferHud = 0;
+        g_redSplitHudDrawingView = -1;
+    }
+
+    for (int32_t viewIndex = 0; viewIndex < playerCount; ++viewIndex)
+    {
+        int32_t const playerNum = viewIndex;
+        RedSplitViewport_t view;
+        RedSplit_GetViewport(viewIndex, playerCount, &view);
+
+        screenpeek = playerNum;
+        g_redSplitDrawingView = playerNum;
+        videoSetViewableArea(view.x1, view.y1, view.x2, view.y2);
+        RedSplit_SetFullOpenGLViewportWithViewScissor(view);
+        g_redSplitHudDrawingView = playerNum;
+        g_redSplitHudX1 = view.x1;
+        g_redSplitHudY1 = view.y1;
+        g_redSplitHudX2 = view.x2;
+        g_redSplitHudY2 = view.y2;
+        RT_DrawWeaponWheelForPlayer(playerNum, false);
+        g_redSplitHudDrawingView = -1;
+        RedSplit_DrawMinimalHudForPlayer(playerNum, view);
+        RedSplit_DrawExtraMenuForPlayer(playerNum, view);
+    }
+
+    g_redSplitDrawingView = -1;
+    g_redSplitHudDrawingView = -1;
+    screenpeek = savedScreenPeek;
+    videoSetViewableArea(savedWindowXY1.x, savedWindowXY1.y, savedWindowXY2.x, savedWindowXY2.y);
+#ifdef USE_OPENGL
+    if (videoGetRenderMode() >= REND_POLYMOST)
+    {
+        buildgl_setViewport(0, 0, xdim, ydim);
+        glViewport(0, 0, xdim, ydim);
+        glScissor(0, 0, xdim, ydim);
+        buildgl_setDisabled(GL_SCISSOR_TEST);
+    }
+#endif
+    RedSplit_DrawLevelTitleOnce();
+    M_DisplayMenus();
+    RedSplit_DrawHudTuningPanel();
+    RedSplit_DrawWeaponTuningPanel();
+
+    return true;
+}
+
+static void RedSplit_ApplyDirectStartupDefaults(void)
+{
+    g_noSetup = 1;
+    g_commandSetup = 0;
+    ud.setup.forcesetup = 0;
+    ud.setup.fullscreen = 1;
+    ud.auto_run = 1;
+
+    if (ud.setup.xdim < 640 || ud.setup.ydim < 480)
+    {
+        ud.setup.xdim = 1280;
+        ud.setup.ydim = 720;
     }
 }
 
@@ -8245,6 +9120,7 @@ int app_main(int argc, char const * const * argv)
     int const readSetup =
 #endif
     CONFIG_ReadSetup();
+    RedSplit_ApplyDirectStartupDefaults();
 
 //#if defined(_WIN32)
 #if 0
@@ -8304,7 +9180,7 @@ int app_main(int argc, char const * const * argv)
     G_ScanGroups();
 
 #ifdef STARTUP_SETUP_WINDOW
-    if (readSetup < 0 || (!g_noSetup && (ud.configversion != BYTEVERSION_EDUKE32 || ud.setup.forcesetup)) || g_commandSetup)
+    if (!g_noSetup && (readSetup < 0 || ud.configversion != BYTEVERSION_EDUKE32 || ud.setup.forcesetup || g_commandSetup))
     {
         if (quitevent || !startwin_run())
         {
@@ -8450,6 +9326,7 @@ int app_main(int argc, char const * const * argv)
     ++ud.executions;
     CONFIG_WriteSetup(1);
     CONFIG_ReadSetup();
+    RedSplit_ApplyDirectStartupDefaults();
 
     char const * rtsname = g_rtsNamePtr ? g_rtsNamePtr : ud.rtsname;
     RTS_Init(rtsname);
@@ -8676,6 +9553,8 @@ MAIN_LOOP_RESTART:
 //    G_GameExit(" "); ///
 
 //    ud.auto_run = ud.config.RunMode;
+    if (REALITY)
+        ud.auto_run = 1;
     ud.showweapons = ud.config.ShowOpponentWeapons;
     P_SetupMiscInputSettings();
     g_player[myconnectindex].pteam = ud.team;
@@ -8693,10 +9572,10 @@ MAIN_LOOP_RESTART:
 
     do //main loop
     {
-        if (handleevents() && quitevent)
+        handleevents();
+        if (quitevent)
         {
-            KB_KeyDown[sc_Escape] = 1;
-            quitevent = 0;
+            app_exit(EXIT_SUCCESS);
         }
 
         Net_GetPackets();
@@ -8822,10 +9701,14 @@ MAIN_LOOP_RESTART:
         {
             int const smoothRatio = calc_smoothratio(totalclock, ototalclock);
 
-            G_DrawRooms(screenpeek, smoothRatio);
-            if (videoGetRenderMode() >= REND_POLYMOST)
-                G_DrawBackground();
-            G_DisplayRest(smoothRatio);
+            bool const splitScreenRendered = G_DrawMvpLocalSplitScreen(smoothRatio);
+            if (!splitScreenRendered)
+            {
+                G_DrawRooms(screenpeek, smoothRatio);
+                if (videoGetRenderMode() >= REND_POLYMOST)
+                    G_DrawBackground();
+                G_DisplayRest(smoothRatio);
+            }
             videoNextPage();
 
             if (gameUpdate)

@@ -3724,7 +3724,9 @@ void P_HandleKeys(int playerNum)
 
     int weaponBits = (playerBits>>SK_WEAPON_BITS)&15;
 
-    if (weaponBits != 11 && weaponBits != 12 && !(pPlayer->dn64_376 == 12 && pPlayer->dn64_378 < 30))
+    int const weaponSelectHoldTime = REALITY ? 4 : 12;
+
+    if (weaponBits != 11 && weaponBits != 12 && !(pPlayer->dn64_376 == weaponSelectHoldTime && pPlayer->dn64_378 < 30))
     {
         if (--pPlayer->dn64_376 <= 0)
         {
@@ -3744,7 +3746,7 @@ void P_HandleKeys(int playerNum)
     }
     else
     {
-        pPlayer->dn64_376 = 12;
+        pPlayer->dn64_376 = weaponSelectHoldTime;
         pPlayer->dn64_378 = min(pPlayer->dn64_378+15, 30);
     }
 

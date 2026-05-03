@@ -907,7 +907,7 @@ void G_DisplayRest(int32_t smoothratio)
 
     DukePlayer_t *const pp = g_player[screenpeek].ps;
 #ifdef SPLITSCREEN_MOD_HACKS
-    DukePlayer_t *const pp2 = g_fakeMultiMode==2 ? g_player[1].ps : NULL;
+    DukePlayer_t *const pp2 = (g_fakeMultiMode==2 && g_redSplitDrawingView < 0) ? g_player[1].ps : NULL;
 #endif
     int32_t cposx, cposy, cang;
 
@@ -1155,11 +1155,12 @@ void G_DisplayRest(int32_t smoothratio)
 
     if (!REALITY && pp->invdisptime > 0) G_DrawInventory(pp);
 
-    G_DrawStatusBar(screenpeek);
+    if (!g_redSplitDeferHud)
+        G_DrawStatusBar(screenpeek);
 
 #ifdef SPLITSCREEN_MOD_HACKS
     // HACK
-    if (g_fakeMultiMode==2)
+    if (g_fakeMultiMode==2 && g_redSplitDrawingView < 0)
     {
         G_DrawStatusBar(1);
         G_PrintGameQuotes(1);
@@ -1168,7 +1169,7 @@ void G_DisplayRest(int32_t smoothratio)
 
     G_PrintGameQuotes(screenpeek);
 
-    if (ud.show_level_text && hud_showmapname && g_levelTextTime > 1)
+    if (ud.show_level_text && hud_showmapname && g_levelTextTime > 1 && g_redSplitDrawingView < 0)
     {
         int32_t o = 10|16;
 
@@ -1196,6 +1197,8 @@ void G_DisplayRest(int32_t smoothratio)
         }
     }
 
+    RedSplit_PollExtraMenuInputs();
+
     if (I_EscapeTrigger() && ud.overhead_on == 0
         && ud.show_help == 0
         && g_player[myconnectindex].ps->newowner == -1)
@@ -1213,6 +1216,7 @@ void G_DisplayRest(int32_t smoothratio)
             (g_player[myconnectindex].ps->gm&MODE_TYPE) != MODE_TYPE)
         {
             I_EscapeTriggerClear();
+            RedSplit_CloseExtraMenu();
             S_PauseSounds(true);
 
             Menu_Open(myconnectindex);
@@ -1227,12 +1231,15 @@ void G_DisplayRest(int32_t smoothratio)
         }
     }
 
-    if (!DEER && g_player[myconnectindex].ps->newowner == -1 && ud.overhead_on == 0 && ud.crosshair && ud.camerasprite == -1)
+    int32_t const crosshairPlayer = (g_redSplitDrawingView >= 0) ? screenpeek : myconnectindex;
+    DukePlayer_t const * const crosshairPs = g_player[crosshairPlayer].ps;
+
+    if (!DEER && crosshairPs != nullptr && crosshairPs->newowner == -1 && ud.overhead_on == 0 && ud.crosshair && ud.camerasprite == -1)
     {
         int32_t a = CROSSHAIR;
         if ((unsigned) a < MAXTILES)
         {
-            vec2_t crosshairpos = { (160<<16) - (g_player[myconnectindex].ps->look_ang<<15), 100<<16 };
+            vec2_t crosshairpos = { (160<<16) - (crosshairPs->look_ang<<15), 100<<16 };
             uint8_t crosshair_pal = CROSSHAIR_PAL;
             uint32_t crosshair_o = 1|2;
             uint32_t crosshair_scale = divscale16(ud.crosshairscale, 100);
@@ -1390,7 +1397,7 @@ void G_DisplayRest(int32_t smoothratio)
     {
         if (g_player[myconnectindex].ps->gm&MODE_TYPE)
             Net_SendMessage();
-        else
+        else if (!g_redSplitSuppressMenuDraw)
             M_DisplayMenus();
     }
 

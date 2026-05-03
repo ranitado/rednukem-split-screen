@@ -4,3 +4,4 @@
 
 void RT_ResetBarScroll(void);
 int RT_DrawStatusBar(int snum);
+void RT_DrawWeaponWheelForPlayer(int snum, bool drawhud);

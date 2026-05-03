@@ -1070,7 +1070,7 @@ void G_PrintGameQuotes(int32_t snum)
     const int32_t reserved_quote = (ps->ftq >= QUOTE_RESERVED && ps->ftq <= QUOTE_RESERVED3);
     // NOTE: QUOTE_RESERVED4 is not included.
 
-    int32_t const ybase = (fragbarheight()<<16) + text_ypos();
+    int32_t const ybase = (fragbarheight()<<16) + text_ypos() + (REALITY ? (4<<16) : 0);
     int32_t height = 0;
     int32_t k = ps->fta;
 
@@ -1111,12 +1111,11 @@ void G_PrintGameQuotes(int32_t snum)
         if (g_fakeMultiMode)
         {
             pal = g_player[snum].pcolor;
-            const int32_t sidebyside = ud.screen_size != 0;
-
-            if (sidebyside)
-                x = snum == 1 ? 240<<16 : 80<<16;
-            else if (snum == 1)
-                y += 100<<16;
+            if (g_redSplitHudDrawingView >= 0)
+            {
+                x = scale((g_redSplitHudX1 + g_redSplitHudX2 + 1) / 2, 320, xdim) << 16;
+                y = (scale(g_redSplitHudY1, 200, ydim) << 16) + text_ypos() + (REALITY ? (6<<16) : 0);
+            }
         }
 #endif
         if (REALITY)

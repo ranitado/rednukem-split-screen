@@ -554,7 +554,8 @@ int main(int argc, char *argv[])
 #ifdef EDUKE32_OSX
     osx_preopen();
 #endif
-    startwin_open();
+    if (Bstrcasecmp(AppTechnicalName, "rednukem") != 0)
+        startwin_open();
 #ifdef EDUKE32_OSX
     osx_postopen();
 #endif
@@ -827,6 +828,11 @@ int debugprintf(const char *f, ...)
 static SDL_Joystick *joydev = NULL;
 #if SDL_MAJOR_VERSION >= 2
 static SDL_GameController *controller = NULL;
+static constexpr int MAX_LOCAL_GAMEPADS = 5;
+static SDL_GameController *gameControllers[MAX_LOCAL_GAMEPADS];
+static SDL_JoystickID gameControllerInstanceIds[MAX_LOCAL_GAMEPADS];
+static int32_t numGameControllers;
+static int32_t primaryGameControllerIndex;
 static bool gameControllerDBLoaded;
 
 static void LoadSDLControllerDB()
@@ -891,11 +897,20 @@ void joyScanDevices()
     inputdevices &= ~DEV_JOYSTICK;
 
 #if SDL_MAJOR_VERSION >= 2
-    if (controller)
+    for (int i = 0; i < MAX_LOCAL_GAMEPADS; ++i)
     {
-        SDL_GameControllerClose(controller);
-        controller = nullptr;
+        if (gameControllers[i])
+        {
+            SDL_GameControllerClose(gameControllers[i]);
+            gameControllers[i] = nullptr;
+        }
+
+        gameControllerInstanceIds[i] = -1;
     }
+
+    controller = nullptr;
+    numGameControllers = 0;
+    primaryGameControllerIndex = 0;
 #endif
     if (joydev)
     {
@@ -927,72 +942,89 @@ void joyScanDevices()
 #if SDL_MAJOR_VERSION >= 2
         for (int i = 0; i < numjoysticks; i++)
         {
-            if ((controller = SDL_GameControllerOpen(i)))
+            SDL_GameController *openedController = SDL_GameControllerOpen(i);
+
+            if (!openedController)
+                continue;
+
+            if (numGameControllers >= MAX_LOCAL_GAMEPADS)
             {
+                SDL_GameControllerClose(openedController);
+                continue;
+            }
+
+            gameControllers[numGameControllers] = openedController;
+            gameControllerInstanceIds[numGameControllers] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(openedController));
+
 #if SDL_VERSION_ATLEAST(2, 0, 14)
-                if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 14))
-                    Bsnprintf(name, sizeof(name), "%s [%s]", SDL_GameControllerName(controller), SDL_GameControllerGetSerial(controller));
-                else
+            if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 14))
+                Bsnprintf(name, sizeof(name), "%s [%s]", SDL_GameControllerName(openedController), SDL_GameControllerGetSerial(openedController));
+            else
 #endif
-                    Bsnprintf(name, sizeof(name), "%s", SDL_GameControllerName(controller));
+                Bsnprintf(name, sizeof(name), "%s", SDL_GameControllerName(openedController));
 
-                VLOG_F(LOG_INPUT, "Using controller: %s.", name);
+            VLOG_F(LOG_INPUT, "Using controller %d: %s.", numGameControllers + 1, name);
+            ++numGameControllers;
+        }
 
-                joystick.flags      = 0;
-                joystick.numBalls   = 0;
-                joystick.numHats    = 0;
-                joystick.numAxes    = SDL_CONTROLLER_AXIS_MAX;
-                joystick.numButtons = SDL_CONTROLLER_BUTTON_MAX;
+        if (numGameControllers > 0)
+        {
+            controller = gameControllers[0];
 
-                joystick.validButtons = UINT32_MAX;
+            joystick.flags      = 0;
+            joystick.numBalls   = 0;
+            joystick.numHats    = 0;
+            joystick.numAxes    = SDL_CONTROLLER_AXIS_MAX;
+            joystick.numButtons = SDL_CONTROLLER_BUTTON_MAX;
+
+            joystick.validButtons = UINT32_MAX;
 #if SDL_VERSION_ATLEAST(2, 0, 14)
-                if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 14))
-                {
-                    joystick.numAxes = 0;
-                    for (int j = 0; j < SDL_CONTROLLER_AXIS_MAX; ++j)
-                        if (SDL_GameControllerHasAxis(controller, (SDL_GameControllerAxis)j))
-                            joystick.numAxes = j + 1;
+            if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 14))
+            {
+                joystick.numAxes = 0;
+                for (int j = 0; j < SDL_CONTROLLER_AXIS_MAX; ++j)
+                    if (SDL_GameControllerHasAxis(controller, (SDL_GameControllerAxis)j))
+                        joystick.numAxes = j + 1;
 
-                    joystick.validButtons = 0;
-                    joystick.numButtons = 0;
-                    for (int j = 0; j < SDL_CONTROLLER_BUTTON_MAX; ++j)
-                        if (SDL_GameControllerHasButton(controller, (SDL_GameControllerButton)j))
-                        {
-                            joystick.numButtons = j + 1;
-                            joystick.validButtons |= (1 << j);
-                        }
-                }
+                joystick.validButtons = 0;
+                joystick.numButtons = 0;
+                for (int j = 0; j < SDL_CONTROLLER_BUTTON_MAX; ++j)
+                    if (SDL_GameControllerHasButton(controller, (SDL_GameControllerButton)j))
+                    {
+                        joystick.numButtons = j + 1;
+                        joystick.validButtons |= (1 << j);
+                    }
+            }
 #endif
-                joystick.isGameController = 1;
+            joystick.isGameController = 1;
 
-                if (gameControllerDBLoaded == false)
-                    LoadSDLControllerDB();
+            if (gameControllerDBLoaded == false)
+                LoadSDLControllerDB();
 
-                Xfree(joystick.pAxis);
-                joystick.pAxis = (int32_t *)Xcalloc(joystick.numAxes, sizeof(int32_t));
-                DO_FREE_AND_NULL(joystick.pHat);
+            Xfree(joystick.pAxis);
+            joystick.pAxis = (int32_t *)Xcalloc(joystick.numAxes, sizeof(int32_t));
+            DO_FREE_AND_NULL(joystick.pHat);
 
-                inputdevices |= DEV_JOYSTICK;
+            inputdevices |= DEV_JOYSTICK;
 
 #if SDL_VERSION_ATLEAST(2, 0, 18)
-                if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 18))
-                {
-                    if (SDL_GameControllerHasRumble(controller))
-                        joystick.hasRumble = 1;
-                    else DVLOG_F(LOG_INPUT, "Couldn't init controller rumble: %s.", SDL_GetError());
-                }
-                else
+            if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 18))
+            {
+                if (SDL_GameControllerHasRumble(controller))
+                    joystick.hasRumble = 1;
+                else DVLOG_F(LOG_INPUT, "Couldn't init controller rumble: %s.", SDL_GetError());
+            }
+            else
 #endif
 #if SDL_VERSION_ATLEAST(2, 0, 9)
-                if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
-                {
-                    if (!SDL_GameControllerRumble(controller, 1, 1, 1))
-                        joystick.hasRumble = 1;
-                    else DVLOG_F(LOG_INPUT, "Couldn't init controller rumble: %s.", SDL_GetError());
-                }
-#endif
-                return;
+            if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
+            {
+                if (!SDL_GameControllerRumble(controller, 1, 1, 1))
+                    joystick.hasRumble = 1;
+                else DVLOG_F(LOG_INPUT, "Couldn't init controller rumble: %s.", SDL_GetError());
             }
+#endif
+            return;
         }
 #endif
 
@@ -1142,11 +1174,20 @@ void uninitinput(void)
     mouseUninit();
 
 #if SDL_MAJOR_VERSION >= 2
-    if (controller)
+    for (int i = 0; i < MAX_LOCAL_GAMEPADS; ++i)
     {
-        SDL_GameControllerClose(controller);
-        controller = nullptr;
+        if (gameControllers[i])
+        {
+            SDL_GameControllerClose(gameControllers[i]);
+            gameControllers[i] = nullptr;
+        }
+
+        gameControllerInstanceIds[i] = -1;
     }
+
+    controller = nullptr;
+    numGameControllers = 0;
+    primaryGameControllerIndex = 0;
 #endif
 
     if (joydev)
@@ -1157,6 +1198,91 @@ void uninitinput(void)
 }
 
 #ifndef GEKKO
+int32_t joyGetConnectedGamepadCount(void)
+{
+#if SDL_MAJOR_VERSION >= 2
+    return numGameControllers;
+#else
+    return 0;
+#endif
+}
+
+int32_t joyGetPrimaryGamepadIndex(void)
+{
+#if SDL_MAJOR_VERSION >= 2
+    return primaryGameControllerIndex;
+#else
+    return 0;
+#endif
+}
+
+void joySetPrimaryGamepadIndex(int32_t gamepadIndex)
+{
+#if SDL_MAJOR_VERSION >= 2
+    if (gamepadIndex < 0)
+    {
+        primaryGameControllerIndex = -1;
+        controller = nullptr;
+
+        joystick.bits = 0;
+        if (joystick.pAxis)
+            Bmemset(joystick.pAxis, 0, joystick.numAxes * sizeof(int32_t));
+
+        return;
+    }
+
+    if (gamepadIndex < 0 || gamepadIndex >= numGameControllers || gameControllers[gamepadIndex] == nullptr)
+        return;
+
+    if (primaryGameControllerIndex == gamepadIndex && controller == gameControllers[gamepadIndex])
+        return;
+
+    primaryGameControllerIndex = gamepadIndex;
+    controller = gameControllers[gamepadIndex];
+
+    joystick.bits = 0;
+    if (joystick.pAxis)
+        Bmemset(joystick.pAxis, 0, joystick.numAxes * sizeof(int32_t));
+#else
+    UNREFERENCED_PARAMETER(gamepadIndex);
+#endif
+}
+
+int32_t joyGetGamepadState(int32_t gamepadIndex, gamepadstate_t *state)
+{
+    if (state == nullptr)
+        return -1;
+
+    Bmemset(state, 0, sizeof(gamepadstate_t));
+
+#if SDL_MAJOR_VERSION >= 2
+    if (gamepadIndex < 0 || gamepadIndex >= numGameControllers || gameControllers[gamepadIndex] == nullptr)
+        return -1;
+
+    SDL_GameController *pad = gameControllers[gamepadIndex];
+    state->connected = SDL_GameControllerGetAttached(pad) ? 1 : 0;
+
+    if (!state->connected)
+        return -1;
+
+    state->axes[GAMEPAD_AXIS_LEFTX] = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);
+    state->axes[GAMEPAD_AXIS_LEFTY] = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);
+    state->axes[GAMEPAD_AXIS_RIGHTX] = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_RIGHTX);
+    state->axes[GAMEPAD_AXIS_RIGHTY] = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_RIGHTY);
+    state->axes[GAMEPAD_AXIS_TRIGGERLEFT] = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
+    state->axes[GAMEPAD_AXIS_TRIGGERRIGHT] = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+
+    for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX && i < 32; ++i)
+        if (SDL_GameControllerGetButton(pad, (SDL_GameControllerButton)i))
+            state->buttons |= 1u << i;
+
+    return 0;
+#else
+    UNREFERENCED_PARAMETER(gamepadIndex);
+    return -1;
+#endif
+}
+
 const char *joyGetName(int32_t what, int32_t num)
 {
     static char tmp[64];
@@ -2452,6 +2578,8 @@ int32_t handleevents_sdlcommon(SDL_Event *ev)
                 break;
             fallthrough__;
         case SDL_CONTROLLERAXISMOTION:
+            if (joystick.isGameController && (primaryGameControllerIndex < 0 || ev->caxis.which != gameControllerInstanceIds[primaryGameControllerIndex]))
+                break;
 #endif
             if (appactive && ev->jaxis.axis < joystick.numAxes)
             {
@@ -2492,6 +2620,8 @@ int32_t handleevents_sdlcommon(SDL_Event *ev)
             fallthrough__;
         case SDL_CONTROLLERBUTTONDOWN:
         case SDL_CONTROLLERBUTTONUP:
+            if (joystick.isGameController && (primaryGameControllerIndex < 0 || ev->cbutton.which != gameControllerInstanceIds[primaryGameControllerIndex]))
+                break;
 #endif
             if (appactive && ev->jbutton.button < joystick.numButtons)
             {

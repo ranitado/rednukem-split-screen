@@ -304,6 +304,29 @@ const char *keyGetName(int32_t num);
 const char *joyGetName(int32_t what, int32_t num); // what: 0=axis, 1=button, 2=hat
 void joyScanDevices(void);
 
+enum
+{
+    GAMEPAD_AXIS_LEFTX = 0,
+    GAMEPAD_AXIS_LEFTY,
+    GAMEPAD_AXIS_RIGHTX,
+    GAMEPAD_AXIS_RIGHTY,
+    GAMEPAD_AXIS_TRIGGERLEFT,
+    GAMEPAD_AXIS_TRIGGERRIGHT,
+    GAMEPAD_AXIS_COUNT,
+};
+
+typedef struct
+{
+    int32_t connected;
+    uint32_t buttons;
+    int16_t axes[GAMEPAD_AXIS_COUNT];
+} gamepadstate_t;
+
+int32_t joyGetConnectedGamepadCount(void);
+int32_t joyGetPrimaryGamepadIndex(void);
+void joySetPrimaryGamepadIndex(int32_t gamepadIndex);
+int32_t joyGetGamepadState(int32_t gamepadIndex, gamepadstate_t *state);
+
 char keyGetScan(void);
 char keyGetChar(void);
 #define keyBufferWaiting() (g_keyAsciiPos != g_keyAsciiEnd)

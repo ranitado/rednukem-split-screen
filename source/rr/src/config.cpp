@@ -323,7 +323,7 @@ void CONFIG_SetDefaults(void)
     ud.weaponswitch = 3;	// new+empty
     ud.angleinterpolation = 0;
     ud.setup.usejoystick = 1;
-    ud.setup.forcesetup = 1;
+    ud.setup.forcesetup = 0;
     ud.setup.noautoload = 1;
     ud.setup.fullscreen = 1;
     ud.setup.usemouse = 1;
@@ -383,18 +383,24 @@ void CONFIG_SetDefaults(void)
 
     if (RR)
     {
-        Bstrcpy((char*)keydefaults[gamefunc_Holo_Duke<<1], "B");
-        Bstrcpy((char*)keydefaults[gamefunc_Jetpack<<1], "C");
-        Bstrcpy((char*)keydefaults[gamefunc_NightVision<<1], "Y");
-        Bstrcpy((char*)keydefaults[gamefunc_MedKit<<1], "R");
-        Bstrcpy((char*)keydefaults[gamefunc_Steroids<<1], "M");
+        Bstrcpy((char*)keydefaults[gamefunc_Inventory<<1], "R");
+        Bstrcpy((char*)keydefaults[gamefunc_Inventory_Left<<1], "F");
+        Bstrcpy((char*)keydefaults[gamefunc_Inventory_Right<<1], "G");
+        Bstrcpy((char*)keydefaults[gamefunc_Holo_Duke<<1], "");
+        Bstrcpy((char*)keydefaults[gamefunc_Jetpack<<1], "");
+        Bstrcpy((char*)keydefaults[gamefunc_NightVision<<1], "");
+        Bstrcpy((char*)keydefaults[gamefunc_MedKit<<1], "");
+        Bstrcpy((char*)keydefaults[gamefunc_Steroids<<1], "");
         Bstrcpy((char*)keydefaults[gamefunc_Show_Opponents_Weapon<<1], "V");
 
-        Bstrcpy((char*)oldkeydefaults[gamefunc_Holo_Duke<<1], "B");
-        Bstrcpy((char*)oldkeydefaults[gamefunc_Jetpack<<1], "C");
-        Bstrcpy((char*)oldkeydefaults[gamefunc_NightVision<<1], "Y");
-        Bstrcpy((char*)oldkeydefaults[gamefunc_MedKit<<1], "W");
-        Bstrcpy((char*)oldkeydefaults[gamefunc_Steroids<<1], "M");
+        Bstrcpy((char*)oldkeydefaults[gamefunc_Inventory<<1], "R");
+        Bstrcpy((char*)oldkeydefaults[gamefunc_Inventory_Left<<1], "F");
+        Bstrcpy((char*)oldkeydefaults[gamefunc_Inventory_Right<<1], "G");
+        Bstrcpy((char*)oldkeydefaults[gamefunc_Holo_Duke<<1], "");
+        Bstrcpy((char*)oldkeydefaults[gamefunc_Jetpack<<1], "");
+        Bstrcpy((char*)oldkeydefaults[gamefunc_NightVision<<1], "");
+        Bstrcpy((char*)oldkeydefaults[gamefunc_MedKit<<1], "");
+        Bstrcpy((char*)oldkeydefaults[gamefunc_Steroids<<1], "");
         Bstrcpy((char*)oldkeydefaults[gamefunc_Show_Opponents_Weapon<<1], "E");
         Bstrcpy((char*)oldkeydefaults[gamefunc_Show_Console<<1], "V");
     }

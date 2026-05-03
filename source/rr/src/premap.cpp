@@ -797,11 +797,34 @@ void P_RandomSpawnPoint(int playerNum)
         }
     }
 
+    if (g_fakeMultiMode && playerNum > 0)
+        i = 0;
+
     pPlayer->pos        = g_playerSpawnPoints[i].pos;
     pPlayer->opos       = pPlayer->pos;
     pPlayer->bobpos     = *(vec2_t *)&pPlayer->pos;
     pPlayer->q16ang       = fix16_from_int(g_playerSpawnPoints[i].ang);
     pPlayer->cursectnum = g_playerSpawnPoints[i].sect;
+
+    if (g_fakeMultiMode && playerNum > 0)
+    {
+        int16_t const spawnAng = g_playerSpawnPoints[i].ang & 2047;
+        vec3_t const  oldPos   = pPlayer->pos;
+        int16_t       oldSect  = pPlayer->cursectnum;
+
+        pPlayer->pos.x += sintable[(spawnAng + 512) & 2047] >> 9;
+        pPlayer->pos.y += sintable[spawnAng & 2047] >> 9;
+        updatesector(pPlayer->pos.x, pPlayer->pos.y, &pPlayer->cursectnum);
+
+        if (pPlayer->cursectnum < 0)
+        {
+            pPlayer->pos        = oldPos;
+            pPlayer->cursectnum = oldSect;
+        }
+
+        pPlayer->opos   = pPlayer->pos;
+        pPlayer->bobpos = *(vec2_t *)&pPlayer->pos;
+    }
 
     sprite[pPlayer->i].cstat = 1 + 256;
 }
@@ -930,7 +953,7 @@ void P_ResetStatus(int playerNum)
     pPlayer->rapid_fire_hold   = 0;
     pPlayer->toggle_key_flag   = 0;
     pPlayer->access_spritenum  = -1;
-    pPlayer->got_access        = ((g_netServer || ud.multimode > 1) && (g_gametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART)) ? 7 : 0;
+    pPlayer->got_access        = ((g_netServer || (ud.multimode > 1 && !g_fakeMultiMode)) && (g_gametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART)) ? 7 : 0;
     pPlayer->random_club_frame = 0;
     pus                        = 1;
     pPlayer->on_warping_sector = 0;
@@ -994,7 +1017,7 @@ void P_ResetStatus(int playerNum)
         pPlayer->noise_y = 0;
         pPlayer->make_noise = 0;
         pPlayer->noise_radius = 0;
-        if ((g_netServer || ud.multimode > 1) && (g_gametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
+        if ((g_netServer || (ud.multimode > 1 && !g_fakeMultiMode)) && (g_gametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
         {
             pPlayer->keys[0] = 1;
             pPlayer->keys[1] = 1;
@@ -1126,7 +1149,7 @@ void P_ResetInventory(int playerNum)
 
     if (RR)
     {
-        if ((g_netServer || ud.multimode > 1) && (g_gametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
+        if ((g_netServer || (ud.multimode > 1 && !g_fakeMultiMode)) && (g_gametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
         {
             pPlayer->keys[0] = 1;
             pPlayer->keys[1] = 1;
@@ -1255,7 +1278,7 @@ static void resetprestat(int playerNum, int gameMode)
         pPlayer->noise_y = 131072;
         pPlayer->make_noise = 0;
         pPlayer->noise_radius = 0;
-        if ((g_netServer || ud.multimode > 1) && (g_gametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
+        if ((g_netServer || (ud.multimode > 1 && !g_fakeMultiMode)) && (g_gametypeFlags[ud.coop] & GAMETYPE_ACCESSATSTART))
         {
             pPlayer->keys[0] = 1;
             pPlayer->keys[1] = 1;
@@ -2235,12 +2258,43 @@ static void resetpspritevars(char gameMode)
                 g_player[j].ps->autostep = (20L<<8);
                 g_player[j].ps->autostep_sbw = (4L<<8);
 
-                actor[i].bpos.x = g_player[j].ps->bobpos.x = g_player[j].ps->opos.x = g_player[j].ps->pos.x =        s->x;
-                actor[i].bpos.y = g_player[j].ps->bobpos.y = g_player[j].ps->opos.y = g_player[j].ps->pos.y =        s->y;
-                actor[i].bpos.z = g_player[j].ps->opos.z = g_player[j].ps->pos.z =        s->z;
-                g_player[j].ps->oq16ang = g_player[j].ps->q16ang = fix16_from_int(s->ang);
+                vec3_t  spawnPos  = { s->x, s->y, s->z };
+                int16_t spawnSect = s->sectnum;
+                int16_t spawnAng  = s->ang;
 
-                updatesector(s->x,s->y,&g_player[j].ps->cursectnum);
+                if (g_fakeMultiMode && j > 0 && g_playerSpawnCnt > 0)
+                {
+                    spawnPos  = g_playerSpawnPoints[0].pos;
+                    spawnSect = g_playerSpawnPoints[0].sect;
+                    spawnAng  = g_playerSpawnPoints[0].ang;
+
+                    vec3_t const oldPos  = spawnPos;
+                    int16_t const oldSect = spawnSect;
+
+                    spawnPos.x += sintable[(spawnAng + 512) & 2047] >> 9;
+                    spawnPos.y += sintable[spawnAng & 2047] >> 9;
+                    updatesector(spawnPos.x, spawnPos.y, &spawnSect);
+
+                    if (spawnSect < 0)
+                    {
+                        spawnPos  = oldPos;
+                        spawnSect = oldSect;
+                    }
+
+                    s->x = spawnPos.x;
+                    s->y = spawnPos.y;
+                    s->z = spawnPos.z;
+                    s->ang = spawnAng;
+                    if (spawnSect >= 0 && spawnSect != s->sectnum)
+                        changespritesect(i, spawnSect);
+                }
+
+                actor[i].bpos.x = g_player[j].ps->bobpos.x = g_player[j].ps->opos.x = g_player[j].ps->pos.x = spawnPos.x;
+                actor[i].bpos.y = g_player[j].ps->bobpos.y = g_player[j].ps->opos.y = g_player[j].ps->pos.y = spawnPos.y;
+                actor[i].bpos.z = g_player[j].ps->opos.z = g_player[j].ps->pos.z = spawnPos.z;
+                g_player[j].ps->oq16ang = g_player[j].ps->q16ang = fix16_from_int(spawnAng);
+
+                updatesector(spawnPos.x,spawnPos.y,&g_player[j].ps->cursectnum);
             }
 
             j++;

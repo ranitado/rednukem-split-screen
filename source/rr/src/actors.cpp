@@ -6249,6 +6249,11 @@ DETONATEB:
                         if (RR)
                             P_AddAmmo(pPlayer, RPG_WEAPON, 1);
                         A_PlaySound(REALITY ? 167 : DUKE_GET, pPlayer->i);
+                        if (REALITY)
+                        {
+                            Bstrcpy(apStrings[QUOTE_RESERVED4], "Picked up pipe bombs");
+                            P_DoQuote(QUOTE_RESERVED4, pPlayer);
+                        }
 
                         if ((pPlayer->gotweapon & (1<<HANDBOMB_WEAPON)) == 0 || pSprite->owner == pPlayer->i)
                             P_AddWeapon(pPlayer, HANDBOMB_WEAPON);

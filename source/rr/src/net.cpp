@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "premap.h"
 #include "savegame.h"
 #include "input.h"
+#include "cmdline.h"
 
 #include "enet.h"
 #include "lz4.h"
@@ -38,6 +39,14 @@ ENetHost *g_netServer = NULL;
 ENetHost *g_netClient = NULL;
 ENetPeer *g_netClientPeer = NULL;
 ENetPeer* g_netPlayerPeer[MAXPLAYERS];
+int32_t g_redSplitPlayerInput[MAXPLAYERS] = {
+    RN_SPLIT_INPUT_KBM,
+    RN_SPLIT_INPUT_PAD1,
+    RN_SPLIT_INPUT_PAD2,
+    RN_SPLIT_INPUT_PAD3,
+    RN_SPLIT_INPUT_PAD4,
+    RN_SPLIT_INPUT_PAD5,
+};
 enet_uint16 g_netPort = 23513;
 int32_t g_netDisconnect = 0;
 char g_netPassword[32];
@@ -1777,9 +1786,457 @@ void Net_ClearFIFO(void)
     }
 }
 
+enum
+{
+    REDSPLIT_NORMALTURN = 15,
+    REDSPLIT_NORMALKEYMOVE = 40,
+    REDSPLIT_MAXVEL = (REDSPLIT_NORMALKEYMOVE * 2) + 10,
+    REDSPLIT_MAXSVEL = (REDSPLIT_NORMALKEYMOVE * 2) + 10,
+    REDSPLIT_MAXANGVEL = 1024,
+    REDSPLIT_MAXHORIZ = 256,
+};
+
+enum RedSplitPadButton_t
+{
+    RN_PAD_A = 0,
+    RN_PAD_B,
+    RN_PAD_X,
+    RN_PAD_Y,
+    RN_PAD_BACK,
+    RN_PAD_GUIDE,
+    RN_PAD_START,
+    RN_PAD_LEFTSTICK,
+    RN_PAD_RIGHTSTICK,
+    RN_PAD_LEFTSHOULDER,
+    RN_PAD_RIGHTSHOULDER,
+    RN_PAD_DPAD_UP,
+    RN_PAD_DPAD_DOWN,
+    RN_PAD_DPAD_LEFT,
+    RN_PAD_DPAD_RIGHT,
+};
+
+enum RedSplitMenuButton_t
+{
+    RN_MENU_UP = 16,
+    RN_MENU_DOWN,
+    RN_MENU_LEFT,
+    RN_MENU_RIGHT,
+};
+
+static uint32_t s_redSplitPrevMenuBits[MAXPLAYERS];
+static uint32_t s_redSplitPrevGameplayBits[MAXPLAYERS];
+static uint32_t s_redSplitPrevJoinPadBits[5];
+static int32_t s_redSplitSuppressEscapeTicks;
+
+static inline int32_t RedSplit_InputSourceToPad(int32_t inputSource)
+{
+    return (inputSource >= RN_SPLIT_INPUT_PAD1 && inputSource <= RN_SPLIT_INPUT_PAD5) ? inputSource - RN_SPLIT_INPUT_PAD1 : -1;
+}
+
+static inline int32_t RedSplit_CurrentPlayerCount(void)
+{
+    return g_fakeMultiMode > 1 ? clamp<int32_t>(g_fakeMultiMode, 2, 4) : 1;
+}
+
+static inline int32_t RedSplit_PadToInputSource(int32_t const padIndex)
+{
+    return RN_SPLIT_INPUT_PAD1 + padIndex;
+}
+
+static int32_t RedSplit_PlayerForPad(int32_t const padIndex)
+{
+    int32_t const inputSource = RedSplit_PadToInputSource(padIndex);
+
+    for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
+        if (g_redSplitPlayerInput[playerNum] == inputSource)
+            return playerNum;
+
+    return -1;
+}
+
+void RedSplit_ResetInputLatches(void)
+{
+    Bmemset(s_redSplitPrevMenuBits, 0, sizeof(s_redSplitPrevMenuBits));
+    Bmemset(s_redSplitPrevGameplayBits, 0, sizeof(s_redSplitPrevGameplayBits));
+    Bmemset(s_redSplitPrevJoinPadBits, 0, sizeof(s_redSplitPrevJoinPadBits));
+
+    int32_t const padCount = min<int32_t>(joyGetConnectedGamepadCount(), (int32_t)ARRAY_SIZE(s_redSplitPrevJoinPadBits));
+    for (int32_t padIndex = 0; padIndex < padCount; ++padIndex)
+    {
+        gamepadstate_t state;
+        if (joyGetGamepadState(padIndex, &state) < 0)
+            continue;
+
+        s_redSplitPrevJoinPadBits[padIndex] = state.buttons;
+
+        int32_t const inputSource = RedSplit_PadToInputSource(padIndex);
+        for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
+            if (g_redSplitPlayerInput[playerNum] == inputSource)
+            {
+                s_redSplitPrevMenuBits[playerNum] = state.buttons;
+                s_redSplitPrevGameplayBits[playerNum] = state.buttons;
+            }
+    }
+
+    I_ClearAllInput();
+}
+
+void RedSplit_ResetInputQueues(void)
+{
+    clearbufbyte(&inputfifo, sizeof(input_t) * MOVEFIFOSIZ * MAXPLAYERS, 0L);
+    avgfvel = avgsvel = avgavel = avghorz = avgbits = avgextbits = 0;
+    movefifoplc = movefifosendplc = predictfifoplc = g_player[myconnectindex].movefifoend;
+
+    for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
+    {
+        g_player[playerNum].movefifoend = g_player[myconnectindex].movefifoend;
+        g_player[playerNum].myminlag = 0;
+    }
+}
+
+static int32_t RedSplit_PlayerNeedsConnectedInput(int32_t const playerNum)
+{
+    int32_t const inputSource = g_redSplitPlayerInput[playerNum];
+    int32_t const padIndex = RedSplit_InputSourceToPad(inputSource);
+
+    if (inputSource == RN_SPLIT_INPUT_NONE)
+        return 1;
+
+    if (padIndex >= 0)
+    {
+        gamepadstate_t state;
+        return joyGetGamepadState(padIndex, &state) < 0;
+    }
+
+    return 0;
+}
+
+static int32_t RedSplit_AssignPadToPlayerNeedingInput(int32_t const padIndex)
+{
+    int32_t const playerCount = RedSplit_CurrentPlayerCount();
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        if (!RedSplit_PlayerNeedsConnectedInput(playerNum))
+            continue;
+
+        g_redSplitPlayerInput[playerNum] = RedSplit_PadToInputSource(padIndex);
+        s_redSplitPrevMenuBits[playerNum] |= BIT(RN_PAD_START);
+        s_redSplitPrevGameplayBits[playerNum] |= BIT(RN_PAD_START);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int32_t RedSplit_JoinPlayerWithPad(int32_t const padIndex)
+{
+    int32_t const playerCount = RedSplit_CurrentPlayerCount();
+
+    if (playerCount >= 4)
+        return 0;
+
+    int32_t const newPlayer = playerCount;
+    g_redSplitPlayerInput[newPlayer] = RedSplit_PadToInputSource(padIndex);
+    RedSplit_SetPlayerCount(playerCount + 1);
+    s_redSplitPrevMenuBits[newPlayer] |= BIT(RN_PAD_START);
+    s_redSplitPrevGameplayBits[newPlayer] |= BIT(RN_PAD_START);
+    s_redSplitSuppressEscapeTicks = 2;
+    I_EscapeTriggerClear();
+    return 1;
+}
+
+static int32_t RedSplit_PollUnassignedPadJoins(void)
+{
+    int32_t const padCount = min<int32_t>(joyGetConnectedGamepadCount(), (int32_t)ARRAY_SIZE(s_redSplitPrevJoinPadBits));
+
+    for (int32_t padIndex = 0; padIndex < padCount; ++padIndex)
+    {
+        gamepadstate_t state;
+        if (joyGetGamepadState(padIndex, &state) < 0)
+            continue;
+
+        uint32_t const menuBits = state.buttons;
+        uint32_t const menuPressed = menuBits & ~s_redSplitPrevJoinPadBits[padIndex];
+        s_redSplitPrevJoinPadBits[padIndex] = menuBits;
+
+        if (!(menuPressed & BIT(RN_PAD_START)))
+            continue;
+
+        int32_t const assignedPlayer = RedSplit_PlayerForPad(padIndex);
+        int32_t const playerCount = RedSplit_CurrentPlayerCount();
+
+        if (assignedPlayer >= 0 && assignedPlayer < playerCount)
+            continue;
+
+        if (assignedPlayer >= playerCount && assignedPlayer < 4)
+        {
+            RedSplit_SetPlayerCount(assignedPlayer + 1);
+            s_redSplitPrevMenuBits[assignedPlayer] |= BIT(RN_PAD_START);
+            s_redSplitPrevGameplayBits[assignedPlayer] |= BIT(RN_PAD_START);
+            s_redSplitSuppressEscapeTicks = 2;
+            I_EscapeTriggerClear();
+            return 1;
+        }
+
+        if (RedSplit_AssignPadToPlayerNeedingInput(padIndex))
+            return 1;
+
+        if (RedSplit_JoinPlayerWithPad(padIndex))
+            return 1;
+    }
+
+    return 0;
+}
+
+static inline int32_t RedSplit_Button(gamepadstate_t const &state, int32_t button)
+{
+    return (state.buttons & BIT(button)) != 0;
+}
+
+static inline int32_t RedSplit_AxisAfterDeadzone(int16_t value)
+{
+    constexpr int32_t deadzone = 8000;
+    return klabs(value) > deadzone ? value : 0;
+}
+
+static uint32_t RedSplit_BuildMenuBits(gamepadstate_t const &state, int32_t const leftX, int32_t const leftY)
+{
+    uint32_t menuBits = state.buttons;
+    if (leftY < -16000 || RedSplit_Button(state, RN_PAD_DPAD_UP))
+        menuBits |= BIT(RN_MENU_UP);
+    if (leftY > 16000 || RedSplit_Button(state, RN_PAD_DPAD_DOWN))
+        menuBits |= BIT(RN_MENU_DOWN);
+    if (leftX < -16000 || RedSplit_Button(state, RN_PAD_DPAD_LEFT))
+        menuBits |= BIT(RN_MENU_LEFT);
+    if (leftX > 16000 || RedSplit_Button(state, RN_PAD_DPAD_RIGHT))
+        menuBits |= BIT(RN_MENU_RIGHT);
+    return menuBits;
+}
+
+static int32_t RedSplit_HandleExtraMenuPressed(int32_t const playerNum, uint32_t const menuPressed)
+{
+    if (playerNum <= 0)
+        return 0;
+
+    if (RedSplit_IsExtraMenuOpenForPlayer(playerNum))
+    {
+        if (menuPressed & BIT(RN_MENU_UP))
+            RedSplit_MoveExtraMenuSelection(-1);
+        if (menuPressed & BIT(RN_MENU_DOWN))
+            RedSplit_MoveExtraMenuSelection(1);
+        if (menuPressed & BIT(RN_MENU_LEFT))
+            RedSplit_ChangeExtraMenuOption(-1);
+        if (menuPressed & BIT(RN_MENU_RIGHT))
+            RedSplit_ChangeExtraMenuOption(1);
+
+        if (menuPressed & BIT(RN_PAD_B))
+            RedSplit_BackExtraMenu();
+        else if (menuPressed & BIT(RN_PAD_START))
+            RedSplit_CloseExtraMenu();
+        else if (menuPressed & BIT(RN_PAD_A))
+            RedSplit_ActivateExtraMenuSelection();
+
+        I_EscapeTriggerClear();
+        return 1;
+    }
+
+    if (menuPressed & BIT(RN_PAD_START))
+    {
+        RedSplit_OpenExtraMenu(playerNum);
+        I_EscapeTriggerClear();
+        return 1;
+    }
+
+    return 0;
+}
+
+int32_t RedSplit_PollExtraMenuInputs(void)
+{
+    if (g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME) && RedSplit_PollUnassignedPadJoins())
+        return 1;
+
+    if (g_fakeMultiMode < 2 || ud.multimode < 2)
+        return 0;
+
+    if (g_redSplitExtraMenuPlayer > 0)
+    {
+        int32_t const playerOnePad = RedSplit_InputSourceToPad(g_redSplitPlayerInput[0]);
+        if (playerOnePad >= 0)
+        {
+            gamepadstate_t state;
+            if (joyGetGamepadState(playerOnePad, &state) >= 0)
+            {
+                int32_t const leftX = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTX]);
+                int32_t const leftY = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTY]);
+                uint32_t const menuBits = RedSplit_BuildMenuBits(state, leftX, leftY);
+                uint32_t const menuPressed = menuBits & ~s_redSplitPrevMenuBits[0];
+                s_redSplitPrevMenuBits[0] = menuBits;
+
+                if (menuPressed & BIT(RN_PAD_START))
+                {
+                    RedSplit_OpenPauseMenuFromExtra();
+                    I_EscapeTriggerClear();
+                    return 1;
+                }
+            }
+        }
+    }
+
+    for (int32_t playerNum = 1; playerNum < g_fakeMultiMode; ++playerNum)
+    {
+        int32_t const padIndex = RedSplit_InputSourceToPad(g_redSplitPlayerInput[playerNum]);
+        if (padIndex < 0)
+            continue;
+
+        gamepadstate_t state;
+        if (joyGetGamepadState(padIndex, &state) < 0)
+            continue;
+
+        int32_t const leftX = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTX]);
+        int32_t const leftY = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTY]);
+        uint32_t const menuBits = RedSplit_BuildMenuBits(state, leftX, leftY);
+        uint32_t const menuPressed = menuBits & ~s_redSplitPrevMenuBits[playerNum];
+
+        s_redSplitPrevMenuBits[playerNum] = menuBits;
+
+        if (RedSplit_HandleExtraMenuPressed(playerNum, menuPressed))
+            return 1;
+    }
+
+    return 0;
+}
+
+static void RedSplit_BuildGamepadInput(int32_t playerNum, int32_t padIndex, input_t *out)
+{
+    Bmemset(out, 0, sizeof(input_t));
+
+    gamepadstate_t state;
+    if (joyGetGamepadState(padIndex, &state) < 0)
+        return;
+
+    DukePlayer_t *const pPlayer = g_player[playerNum].ps;
+    if (pPlayer == nullptr)
+        return;
+
+    int32_t const leftX  = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTX]);
+    int32_t const leftY  = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTY]);
+    int32_t const rightX = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_RIGHTX]);
+    int32_t const rightY = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_RIGHTY]);
+
+    uint32_t const menuBits = RedSplit_BuildMenuBits(state, leftX, leftY);
+    uint32_t const menuPressed = menuBits & ~s_redSplitPrevMenuBits[playerNum];
+    uint32_t const gameplayPressed = menuBits & ~s_redSplitPrevGameplayBits[playerNum];
+    s_redSplitPrevMenuBits[playerNum] = menuBits;
+    s_redSplitPrevGameplayBits[playerNum] = menuBits;
+
+    if (RedSplit_HandleExtraMenuPressed(playerNum, menuPressed))
+        return;
+
+    int32_t const runHeld = state.axes[GAMEPAD_AXIS_TRIGGERLEFT] > 16000;
+    int32_t const fireHeld = state.axes[GAMEPAD_AXIS_TRIGGERRIGHT] > 8000;
+    int32_t const autoRun = g_redSplitAutoRun[playerNum];
+    int32_t const playerRunning = (ud.runkey_mode) ? (runHeld | autoRun) : (autoRun ^ runHeld);
+    int32_t const keyMove = playerRunning ? (REDSPLIT_NORMALKEYMOVE << 1) : REDSPLIT_NORMALKEYMOVE;
+
+    input_t input {};
+    input.fvel = clamp(-(leftY * keyMove) / 32767, -REDSPLIT_MAXVEL, REDSPLIT_MAXVEL);
+    input.svel = clamp(-(leftX * keyMove) / 32767, -REDSPLIT_MAXSVEL, REDSPLIT_MAXSVEL);
+    int32_t const lookXScale = (REDSPLIT_NORMALTURN << 1) * g_redSplitLookSensitivityX[playerNum] / 5;
+    int32_t const lookYScale = (REDSPLIT_NORMALTURN << 1) * g_redSplitLookSensitivityY[playerNum] / 5;
+    int32_t const lookY = g_redSplitInvertAim[playerNum] ? rightY : -rightY;
+    input.q16avel = fix16_clamp(fix16_from_int((rightX * lookXScale) / 16384), F16(-REDSPLIT_MAXANGVEL), F16(REDSPLIT_MAXANGVEL));
+    input.q16horz = fix16_clamp(fix16_from_int((lookY * lookYScale) / 32767), F16(-REDSPLIT_MAXHORIZ), F16(REDSPLIT_MAXHORIZ));
+
+    if (g_redSplitViewCentering[playerNum] > 0 && rightY == 0)
+    {
+        static int32_t const centerRates[] = { 0, 4, 2, 1 };
+        int32_t const centerRate = centerRates[clamp(g_redSplitViewCentering[playerNum], 0, 3)];
+        if (centerRate <= 1 || ((int32_t)totalclock % centerRate) == 0)
+            pPlayer->return_to_center = 3;
+    }
+
+    int32_t weaponSelection = 0;
+    if (gameplayPressed & BIT(RN_PAD_RIGHTSHOULDER))
+        weaponSelection = 12;
+    else if (gameplayPressed & BIT(RN_PAD_LEFTSHOULDER))
+        weaponSelection = 11;
+
+    out->bits = (weaponSelection << SK_WEAPON_BITS);
+    out->bits |= fireHeld << SK_FIRE;
+    out->bits |= RedSplit_Button(state, RN_PAD_X) << SK_OPEN;
+    out->bits |= RedSplit_Button(state, RN_PAD_A) << SK_JUMP;
+    out->bits |= RedSplit_Button(state, RN_PAD_B) << SK_CROUCH;
+    out->bits |= playerRunning << SK_RUN;
+    out->bits |= RedSplit_Button(state, RN_PAD_DPAD_LEFT) << SK_INV_LEFT;
+    out->bits |= RedSplit_Button(state, RN_PAD_DPAD_RIGHT) << SK_INV_RIGHT;
+    out->bits |= RedSplit_Button(state, RN_PAD_Y) << SK_INVENTORY;
+    out->bits |= RedSplit_Button(state, RN_PAD_START) << SK_ESCAPE;
+
+    if (s_redSplitSuppressEscapeTicks > 0)
+        out->bits &= ~BIT(SK_ESCAPE);
+
+    out->extbits = (input.fvel > 0);
+    out->extbits |= (input.fvel < 0) << 1;
+    out->extbits |= (input.svel > 0) << 2;
+    out->extbits |= (input.svel < 0) << 3;
+
+    int16_t const q16ang = fix16_to_int(pPlayer->q16ang);
+    out->fvel = mulscale9(input.fvel, sintable[(q16ang + 2560) & 2047]) +
+                mulscale9(input.svel, sintable[(q16ang + 2048) & 2047]) +
+                pPlayer->fric.x;
+    out->svel = mulscale9(input.fvel, sintable[(q16ang + 2048) & 2047]) +
+                mulscale9(input.svel, sintable[(q16ang + 1536) & 2047]) +
+                pPlayer->fric.y;
+    out->q16avel = input.q16avel;
+    out->q16horz = input.q16horz;
+}
+
+static void RedSplit_GetInputForPlayer(int32_t playerNum, input_t *out)
+{
+    if (g_player[playerNum].ps == nullptr)
+    {
+        Bmemset(out, 0, sizeof(input_t));
+        return;
+    }
+
+    int32_t const inputSource = g_redSplitPlayerInput[playerNum];
+    int32_t const padIndex = RedSplit_InputSourceToPad(inputSource);
+
+    if (padIndex >= 0)
+    {
+        RedSplit_BuildGamepadInput(playerNum, padIndex, out);
+        return;
+    }
+
+    if (inputSource == RN_SPLIT_INPUT_KBM)
+    {
+        int32_t const previousPrimaryPad = joyGetPrimaryGamepadIndex();
+        joySetPrimaryGamepadIndex(-1);
+
+        if (RRRA && g_player[playerNum].ps->on_motorcycle)
+            P_GetInputMotorcycle(playerNum);
+        else if (RRRA && g_player[playerNum].ps->on_boat)
+            P_GetInputBoat(playerNum);
+        else if (DEER)
+            P_DHGetInput(playerNum);
+        else
+            P_GetInput(playerNum);
+
+        *out = localInput;
+        if (s_redSplitSuppressEscapeTicks > 0)
+            out->bits &= ~BIT(SK_ESCAPE);
+        joySetPrimaryGamepadIndex(previousPrimaryPad);
+        return;
+    }
+
+    Bmemset(out, 0, sizeof(input_t));
+}
+
 void Net_GetInput(void)
 {
     input_t* osyn, * nsyn;
+    input_t playerInput;
 
     if (numplayers > 1)
         Net_GetPackets();
@@ -1787,14 +2244,10 @@ void Net_GetInput(void)
     if (g_player[myconnectindex].movefifoend - movefifoplc >= 100)
         return;
 
-    if (RRRA && g_player[myconnectindex].ps->on_motorcycle)
-        P_GetInputMotorcycle(myconnectindex);
-    else if (RRRA && g_player[myconnectindex].ps->on_boat)
-        P_GetInputBoat(myconnectindex);
-    else if (DEER)
-        P_DHGetInput(myconnectindex);
-    else
-        P_GetInput(myconnectindex);
+    RedSplit_PollUnassignedPadJoins();
+
+    RedSplit_GetInputForPlayer(myconnectindex, &playerInput);
+    localInput = playerInput;
 
     avgfvel += localInput.fvel;
     avgsvel += localInput.svel;
@@ -1818,7 +2271,25 @@ void Net_GetInput(void)
     nsyn[0].bits = avgbits;
     nsyn[0].extbits = avgextbits;
     avgfvel = avgsvel = avgavel = avghorz = avgbits = avgextbits = 0;
+    if (s_redSplitSuppressEscapeTicks > 0)
+        --s_redSplitSuppressEscapeTicks;
     g_player[myconnectindex].movefifoend++;
+
+    if (g_fakeMultiMode > 1 && numplayers < 2)
+    {
+        for (int TRAVERSE_CONNECT(i))
+        {
+            if (i == myconnectindex)
+                continue;
+
+            input_t remoteInput;
+            RedSplit_GetInputForPlayer(i, &remoteInput);
+            inputfifo[g_player[i].movefifoend & (MOVEFIFOSIZ - 1)][i] = remoteInput;
+            g_player[i].movefifoend++;
+        }
+
+        return;
+    }
 
 #if 0
     if (numplayers < 2)

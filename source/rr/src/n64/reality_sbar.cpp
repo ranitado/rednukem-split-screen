@@ -4,6 +4,7 @@
 #include "reality.h"
 #include "reality_sbar.h"
 #include "../duke3d.h"
+#include "../cmdline.h"
 
 float borderx1 = 16.f * 4.f / 3.f;
 float bordery1 = 16;
@@ -334,6 +335,18 @@ void RT_DrawWeaponWheel(DukePlayer_t *const pPlayer, bool drawhud)
 {
     if (pPlayer->dn64_378 > 0)
     {
+        auto weaponIconTile = [](int weaponNum)
+        {
+            if (weaponNum == BOWLINGBALL_WEAPON)
+                weaponNum = PISTOL_WEAPON;
+            else if (weaponNum == MOTORCYCLE_WEAPON)
+                weaponNum = SHOTGUN_WEAPON;
+            else if (weaponNum == BOAT_WEAPON)
+                weaponNum = RPG_WEAPON;
+
+            return (unsigned)weaponNum < MAX_WEAPONS ? WeaponPickupSprites[weaponNum] : KNEE;
+        };
+
         float x = (borderx1 + borderx2) / 2.f;
         float y = bordery2;
         float yfactor = drawhud ? 1.f : 1.5f;
@@ -349,12 +362,26 @@ void RT_DrawWeaponWheel(DukePlayer_t *const pPlayer, bool drawhud)
         int wl2 = P_NextWeapon(pPlayer, wl1, -1);
         int wr2 = P_NextWeapon(pPlayer, wr1, 1);
 
-        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -120 - pPlayer->dn64_374, WeaponPickupSprites[wl2]);
-        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, 120 - pPlayer->dn64_374, WeaponPickupSprites[wr2]);
-        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -60 - pPlayer->dn64_374, WeaponPickupSprites[wl1]);
-        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, 60 - pPlayer->dn64_374, WeaponPickupSprites[wr1]);
-        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -pPlayer->dn64_374, WeaponPickupSprites[weaponNum]);
+        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -120 - pPlayer->dn64_374, weaponIconTile(wl2));
+        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, 120 - pPlayer->dn64_374, weaponIconTile(wr2));
+        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -60 - pPlayer->dn64_374, weaponIconTile(wl1));
+        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, 60 - pPlayer->dn64_374, weaponIconTile(wr1));
+        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -pPlayer->dn64_374, weaponIconTile(weaponNum));
     }
+}
+
+void RT_DrawWeaponWheelForPlayer(int snum, bool drawhud)
+{
+    if ((unsigned)snum >= MAXPLAYERS || g_player[snum].ps == nullptr)
+        return;
+
+    if ((unsigned)g_player[snum].ps->i >= MAXSPRITES || sprite[g_player[snum].ps->i].extra <= 0)
+        return;
+
+    int32_t const savedUniqueHudId = guniqhudid;
+    guniqhudid = 0;
+    RT_DrawWeaponWheel(g_player[snum].ps, drawhud);
+    guniqhudid = savedUniqueHudId;
 }
 
 
@@ -362,6 +389,18 @@ int RT_DrawStatusBar(int snum)
 {
     RT_DisablePolymost(0);
     DukePlayer_t *const p = g_player[snum].ps;
+
+    float const savedBordery2 = bordery2;
+    float const savedBartilescroll = bartilescroll;
+    int const savedBarscrolldir = barscrolldir;
+    float const savedBartilescrollspeed = bartilescrollspeed;
+
+    if (g_fakeMultiMode == 2)
+    {
+        barscrolldir = 1;
+        bartilescroll = 56.f;
+        bartilescrollspeed = 0.f;
+    }
 
     bool drawhud = ud.screen_size == 4 && !ud.althud;
 
@@ -372,6 +411,14 @@ int RT_DrawStatusBar(int snum)
     RT_DrawBar(p, drawhud);
 
     RT_DrawBarOverlay(drawhud);
+
+    bordery2 = savedBordery2;
+    if (g_fakeMultiMode == 2)
+    {
+        bartilescroll = savedBartilescroll;
+        barscrolldir = savedBarscrolldir;
+        bartilescrollspeed = savedBartilescrollspeed;
+    }
 
     RT_EnablePolymost();
 

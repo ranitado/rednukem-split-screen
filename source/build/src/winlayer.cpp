@@ -3,6 +3,7 @@
 
 #include "compat.h"
 
+#include "baselayer.h"
 #include "build.h"
 
 #ifdef USE_OPENGL
@@ -388,7 +389,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE /*hPrevInst*/, LPSTR /*lpCmdLine*/
                MB_OK|MB_ICONINFORMATION);
 #endif
 
-    startwin_open();
+    if (Bstrcasecmp(AppTechnicalName, "rednukem") != 0)
+        startwin_open();
 
     r = app_main(_buildargc, _buildargv);
 
@@ -3234,6 +3236,13 @@ static LRESULT CALLBACK WndProcCallback(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
     POINT pt;
     HRESULT result; */
 
+    if (uMsg == WM_CLOSE || (uMsg == WM_SYSCOMMAND && ((wParam & 0xfff0) == SC_CLOSE)))
+    {
+        quitevent = 1;
+        PostQuitMessage(0);
+        return 0;
+    }
+
 #ifdef USE_OPENGL
     if (hWnd == hGLWindow) return DefWindowProc(hWnd,uMsg,wParam,lParam);
 #endif
@@ -3355,10 +3364,6 @@ static LRESULT CALLBACK WndProcCallback(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
         g_windowPosValid = true;
         return 0;
     }
-    case WM_CLOSE:
-        quitevent = 1;
-        return 0;
-
     case WM_ENTERMENULOOP:
     case WM_ENTERSIZEMOVE:
         AcquireInputDevices(0);

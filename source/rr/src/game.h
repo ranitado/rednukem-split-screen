@@ -55,6 +55,66 @@ extern "C" {
 # define VIEWSCREENFACTOR 2
 #endif
 
+enum RedSplitInputSource_t
+{
+    RN_SPLIT_INPUT_NONE = -1,
+    RN_SPLIT_INPUT_KBM = 0,
+    RN_SPLIT_INPUT_PAD1 = 1,
+    RN_SPLIT_INPUT_PAD2 = 2,
+    RN_SPLIT_INPUT_PAD3 = 3,
+    RN_SPLIT_INPUT_PAD4 = 4,
+    RN_SPLIT_INPUT_PAD5 = 5,
+};
+
+extern int32_t g_redSplitPlayerInput[MAXPLAYERS];
+extern int32_t g_redSplitLookSensitivityX[MAXPLAYERS];
+extern int32_t g_redSplitLookSensitivityY[MAXPLAYERS];
+extern int32_t g_redSplitInvertAim[MAXPLAYERS];
+extern int32_t g_redSplitViewCentering[MAXPLAYERS];
+extern int32_t g_redSplitAutoRun[MAXPLAYERS];
+extern int32_t g_redSplitDrawingView;
+extern int32_t g_redSplitHudDrawingView;
+extern int32_t g_redSplitHudX1;
+extern int32_t g_redSplitHudY1;
+extern int32_t g_redSplitHudX2;
+extern int32_t g_redSplitHudY2;
+extern int32_t g_redSplitDeferHud;
+extern int32_t g_redSplitSuppressMenuDraw;
+extern int32_t g_redSplitExtraMenuPlayer;
+extern int32_t g_redSplitExtraMenuPage;
+extern int32_t g_redSplitExtraMenuSelection;
+extern int32_t g_redSplitWeaponWideOffsetX;
+extern int32_t g_redSplitWeaponWideTopOffsetY;
+extern int32_t g_redSplitWeaponWideScalePercent;
+extern int32_t g_redSplitWeaponQuarterLeftOffsetX;
+extern int32_t g_redSplitWeaponQuarterRightOffsetX;
+extern int32_t g_redSplitWeaponQuarterOffsetY;
+extern int32_t g_redSplitWeaponQuarterScalePercent;
+extern int32_t g_redSplitWeaponFlashWideOffsetX;
+extern int32_t g_redSplitWeaponFlashWideOffsetY;
+extern int32_t g_redSplitWeaponFlashWideTopOffsetX;
+extern int32_t g_redSplitWeaponFlashWideTopOffsetY;
+extern int32_t g_redSplitWeaponFlashWideBottomOffsetX;
+extern int32_t g_redSplitWeaponFlashWideBottomOffsetY;
+extern int32_t g_redSplitWeaponFlashQuarterLeftOffsetX;
+extern int32_t g_redSplitWeaponFlashQuarterRightOffsetX;
+extern int32_t g_redSplitWeaponFlashDualLeftOffsetX;
+extern int32_t g_redSplitWeaponFlashDualRightOffsetX;
+extern int32_t g_redSplitWeaponAnchor;
+void RedSplit_SetPlayerCount(int32_t playerCount);
+void RedSplit_DisconnectPlayer(int32_t playerNum);
+void RedSplit_OpenExtraMenu(int32_t playerNum);
+void RedSplit_CloseExtraMenu(void);
+int32_t RedSplit_IsExtraMenuOpenForPlayer(int32_t playerNum);
+void RedSplit_OpenPauseMenuFromExtra(void);
+void RedSplit_ActivateExtraMenuSelection(void);
+void RedSplit_MoveExtraMenuSelection(int32_t direction);
+void RedSplit_ChangeExtraMenuOption(int32_t direction);
+void RedSplit_BackExtraMenu(void);
+int32_t RedSplit_PollExtraMenuInputs(void);
+void RedSplit_ResetInputLatches(void);
+void RedSplit_ResetInputQueues(void);
+
 enum GametypeFlags_t {
     GAMETYPE_COOP                   = 0x00000001,
     GAMETYPE_WEAPSTAY               = 0x00000002,

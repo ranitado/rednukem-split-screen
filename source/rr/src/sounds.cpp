@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "compat.h"
 
 #include "duke3d.h"
+#include "cmdline.h"
 #include "renderlayer.h" // for win_gethwnd()
 #include "al_midi.h"
 #include <atomic>
@@ -591,12 +592,64 @@ static inline int S_GetAngle(int ang, const vec3_t *cam, const vec3_t *pos)
     return (2048 + ang - getangle(cam->x - pos->x, cam->y - pos->y)) & 2047;
 }
 
+static int32_t S_GetSplitSoundPlayer(int32_t const spriteNum, vec3_t const * const pos)
+{
+    if (g_fakeMultiMode < 2)
+        return screenpeek;
+
+    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4);
+
+    if ((unsigned)spriteNum < MAXSPRITES)
+    {
+        for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+            if (g_player[playerNum].ps != nullptr && g_player[playerNum].ps->i == spriteNum)
+                return playerNum;
+    }
+
+    int32_t bestPlayer = clamp<int32_t>(screenpeek, 0, playerCount - 1);
+    int32_t bestDist = INT32_MAX;
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        DukePlayer_t const * const ps = g_player[playerNum].ps;
+
+        if (ps == nullptr)
+            continue;
+
+        int32_t const dist = FindDistance3D(ps->pos.x - pos->x, ps->pos.y - pos->y, ps->pos.z - pos->z);
+
+        if (dist < bestDist)
+        {
+            bestDist = dist;
+            bestPlayer = playerNum;
+        }
+    }
+
+    return bestPlayer;
+}
+
 static bool S_CalcDistAndAng(int32_t spriteNum, int32_t soundNum, int32_t sectNum, int32_t angle,
                                 const vec3_t *cam, const vec3_t *pos,
                                 int32_t *distPtr, int32_t *angPtr)
 {
     int32_t sndang = 0, sndist = 0;
     bool explosion = false;
+
+    if (g_fakeMultiMode >= 2)
+    {
+        int32_t const soundPlayer = S_GetSplitSoundPlayer(spriteNum, pos);
+        DukePlayer_t const * const ps = g_player[soundPlayer].ps;
+
+        if (ps != nullptr)
+        {
+            cam = &ps->pos;
+            sectNum = ps->cursectnum;
+            angle = fix16_to_int(ps->q16ang);
+
+            if ((unsigned)spriteNum < MAXSPRITES && g_player[soundPlayer].ps->i == spriteNum)
+                goto sound_further_processing;
+        }
+    }
 
     if (PN(spriteNum) == APLAYER && P_Get(spriteNum) == screenpeek)
         goto sound_further_processing;
@@ -712,9 +765,16 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t *pos)
     }
 
     int32_t    sndist, sndang;
+    int32_t const soundPlayer = S_GetSplitSoundPlayer(spriteNum, pos);
     int const  explosionp = S_CalcDistAndAng(spriteNum, sndNum, CAMERA(sect), fix16_to_int(CAMERA(q16ang)), &CAMERA(pos), pos, &sndist, &sndang);
     int        pitch      = S_GetPitch(sndNum);
-    auto const pOther     = g_player[screenpeek].ps;
+    DukePlayer_t const * pOther = g_player[soundPlayer].ps != nullptr ? g_player[soundPlayer].ps : g_player[screenpeek].ps;
+
+    if (g_fakeMultiMode >= 2 && pOther != nullptr && pOther->i == spriteNum)
+    {
+        sndist = 0;
+        sndang = 0;
+    }
 
 #ifdef SPLITSCREEN_MOD_HACKS
     if (g_fakeMultiMode==2)

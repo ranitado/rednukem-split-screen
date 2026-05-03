@@ -28,6 +28,46 @@ static float rt_boss2_sin, rt_boss2_cos;
 
 static int rt_renderactive = 0;
 
+static inline float RT_RedSplitHudY(float y, bool projectionCorrected)
+{
+    if (g_redSplitHudDrawingView < 0)
+        return y;
+
+    float mappedY = y * 0.5f + (g_redSplitHudDrawingView == 0 ? 0.f : ydim * 0.5f);
+
+    // RT_ProjectionCorrect() scales N64 2D coordinates after our mapping.
+    // Compensate here so split HUD coordinates land in the intended half.
+    if (projectionCorrected)
+        mappedY *= (240.f - 32.f) / 240.f;
+
+    return mappedY;
+}
+
+static inline bool RT_RedSplitHudViewport(float *x1, float *y1, float *x2, float *y2)
+{
+    if (g_redSplitHudDrawingView < 0)
+        return false;
+
+    *x1 = (float)g_redSplitHudX1;
+    *y1 = (float)g_redSplitHudY1;
+    *x2 = (float)g_redSplitHudX2;
+    *y2 = (float)g_redSplitHudY2;
+    return *x2 > *x1 && *y2 > *y1;
+}
+
+static inline float RT_RedSplitWeaponAnchorX(float scaledX, float viewX1, float viewX2, float centerX)
+{
+    switch (g_redSplitWeaponAnchor)
+    {
+    case 0:
+        return viewX1 + centerX;
+    case 2:
+        return viewX2 - ((float)xdim - centerX);
+    default:
+        return scaledX;
+    }
+}
+
 struct maskdraw_t {
     int dist;
     uint16_t index;
@@ -898,14 +938,17 @@ void RT_DisplayTileWorld(float x, float y, float sx, float sy, int16_t picnum, i
     if (sizx < 1.f && sizy < 1.f)
         return;
 
-    float xdim43 = ydim * (4.f / 3.f);
-    float scly = ydim / 240.f;
+    bool const splitWorldSprite = g_redSplitDrawingView >= 0 && g_redSplitHudDrawingView < 0 && !aspectCorrection;
+    float const viewW = splitWorldSprite ? (float)(windowxy2.x - windowxy1.x + 1) : (float)xdim;
+    float const viewH = splitWorldSprite ? (float)(windowxy2.y - windowxy1.y + 1) : (float)ydim;
+    float xdim43 = viewH * (4.f / 3.f);
+    float scly = viewH / 240.f;
     float sclx = scly;
-    float xo = (xdim - xdim43) * 0.5f;
+    float xo = (viewW - xdim43) * 0.5f;
     if (!aspectCorrection)
     {
         xo = 0;
-        x *= ((float)xdim / (float)ydim) * (240.f / 320.f);
+        x *= (viewW / viewH) * (240.f / 320.f);
     }
 
     float x1 = x - sizx;
@@ -966,12 +1009,76 @@ void RT_DisplayTileWorld(float x, float y, float sx, float sy, int16_t picnum, i
     if (aspectCorrection)
         RT_ProjectionCorrect();
     RT_SetTexClamp(1+2);
-    glOrtho(0, xdim, ydim, 0, -1.f, 1.f);
+    glOrtho(0, viewW, viewH, 0, -1.f, 1.f);
+    float vx1, vx2, vy1, vy2;
+    float viewX1, viewY1, viewX2, viewY2;
+    if (RT_RedSplitHudViewport(&viewX1, &viewY1, &viewX2, &viewY2) && (guniqhudid != 0 || rt_fxtile))
+    {
+        float const viewW = viewX2 - viewX1 + 1.f;
+        float const viewH = viewY2 - viewY1 + 1.f;
+        float const centerX = x * sclx + xo;
+        float const centerY = y * scly;
+        bool const wideHalfView = viewW >= ((float)xdim * 0.90f) && viewH < ((float)ydim * 0.75f);
+        bool const quarterView = viewW < ((float)xdim * 0.75f) && viewH < ((float)ydim * 0.75f);
+        float const splitScale = (quarterView ? g_redSplitWeaponQuarterScalePercent : g_redSplitWeaponWideScalePercent) / 100.f;
+        float const halfW = sizx * sclx * splitScale;
+        float const halfH = sizy * scly * splitScale;
+        float mappedCenterX = RT_RedSplitWeaponAnchorX(viewX1 + (centerX / (float)xdim) * viewW, viewX1, viewX2, centerX);
+        float mappedCenterY = viewY1 + (centerY / (float)ydim) * viewH;
+
+        if (wideHalfView)
+        {
+            mappedCenterX += g_redSplitWeaponWideOffsetX * sclx;
+            mappedCenterY += 30.f;
+
+            if (g_redSplitHudDrawingView == 0)
+                mappedCenterY += g_redSplitWeaponWideTopOffsetY * scly;
+
+            if (rt_fxtile)
+            {
+                if (picnum == 0xf4f)
+                {
+                    mappedCenterX += g_redSplitWeaponFlashWideOffsetX * sclx;
+                    mappedCenterX += (centerX < ((float)xdim * 0.5f) ? g_redSplitWeaponFlashDualLeftOffsetX : g_redSplitWeaponFlashDualRightOffsetX) * sclx;
+                    if (g_redSplitHudDrawingView == 0)
+                    {
+                        mappedCenterX += g_redSplitWeaponFlashWideTopOffsetX * sclx;
+                        mappedCenterY += g_redSplitWeaponFlashWideTopOffsetY * scly;
+                    }
+                    else
+                    {
+                        mappedCenterX += g_redSplitWeaponFlashWideBottomOffsetX * sclx;
+                        mappedCenterY += g_redSplitWeaponFlashWideBottomOffsetY * scly;
+                    }
+                }
+                mappedCenterY += g_redSplitWeaponFlashWideOffsetY * scly;
+            }
+        }
+
+        if (quarterView && guniqhudid != 0)
+        {
+            mappedCenterX += (viewX1 < (float)xdim * 0.25f ? g_redSplitWeaponQuarterLeftOffsetX : g_redSplitWeaponQuarterRightOffsetX) * sclx;
+            mappedCenterY += g_redSplitWeaponQuarterOffsetY * scly;
+        }
+
+        vx1 = mappedCenterX - halfW;
+        vx2 = mappedCenterX + halfW;
+        vy1 = mappedCenterY - halfH;
+        vy2 = mappedCenterY + halfH;
+    }
+    else
+    {
+        vx1 = x1 * sclx + xo;
+        vx2 = x2 * sclx + xo;
+        vy1 = y1 * scly;
+        vy2 = y2 * scly;
+    }
+
     glBegin(GL_QUADS);
-    glTexCoord2f(u1, v1); glVertex3f(x1 * sclx + xo, y1 * scly, -rt_globaldepth);
-    glTexCoord2f(u2, v1); glVertex3f(x2 * sclx + xo, y1 * scly, -rt_globaldepth);
-    glTexCoord2f(u2, v2); glVertex3f(x2 * sclx + xo, y2 * scly, -rt_globaldepth);
-    glTexCoord2f(u1, v2); glVertex3f(x1 * sclx + xo, y2 * scly, -rt_globaldepth);
+    glTexCoord2f(u1, v1); glVertex3f(vx1, vy1, -rt_globaldepth);
+    glTexCoord2f(u2, v1); glVertex3f(vx2, vy1, -rt_globaldepth);
+    glTexCoord2f(u2, v2); glVertex3f(vx2, vy2, -rt_globaldepth);
+    glTexCoord2f(u1, v2); glVertex3f(vx1, vy2, -rt_globaldepth);
     glEnd();
     glPopMatrix();
     glMatrixMode(GL_PROJECTION);
@@ -1108,7 +1215,13 @@ void RT_SetupMatrix(void)
     glLoadIdentity();
     float fovy = atanf(tanf((float)ud.fov * (fPI / 180.f) / 2.f) * (3.f / 4.f)) * 2.f * (180.f/fPI);
     rt_worldspritefactor = tanf(60.f * (fPI / 180.f) / 2.f) / tanf(fovy * (fPI / 180.f) / 2.f);
-    buildgl_setPerspective(fovy, (float)xdim/(float)ydim, 5.f, 16384.f);
+    int32_t viewWidth = windowxy2.x - windowxy1.x + 1;
+    int32_t viewHeight = windowxy2.y - windowxy1.y + 1;
+    if (viewWidth <= 0)
+        viewWidth = xdim;
+    if (viewHeight <= 0)
+        viewHeight = ydim;
+    buildgl_setPerspective(fovy, (float)viewWidth/(float)viewHeight, 5.f, 16384.f);
 
     vec3f_t v_eye = {rt_globalposx * 0.5f, rt_globalposy * 0.5f, rt_globalposz * 0.5f};
     vec3f_t v_center = {rt_globalposx * 0.5f + dx, rt_globalposy * 0.5f + dy, rt_globalposz * 0.5f + dz};
@@ -4118,11 +4231,87 @@ void RT_RotateSprite(float x, float y, float sx, float sy, int tilenum, int orie
             xo *= 2.f;
     }
     glOrtho(0, xdim, ydim, 0, -1.f, 1.f);
+
+    float vx1, vx2, vy1, vy2;
+    float viewX1, viewY1, viewX2, viewY2;
+    if (RT_RedSplitHudViewport(&viewX1, &viewY1, &viewX2, &viewY2))
+    {
+        float const viewW = viewX2 - viewX1 + 1.f;
+        float const viewH = viewY2 - viewY1 + 1.f;
+        float const centerX = x * scl + xo;
+        float const centerY = y * scl;
+        bool const wideHalfView = viewW >= ((float)xdim * 0.90f) && viewH < ((float)ydim * 0.75f);
+        bool const quarterView = viewW < ((float)xdim * 0.75f) && viewH < ((float)ydim * 0.75f);
+        bool const weaponTile = guniqhudid != 0;
+        bool const pipebombTile = guniqhudid == HANDBOMB_WEAPON ||
+            (otilenum >= HANDTHROW && otilenum <= HANDTHROW + 2);
+        bool const weaponFlash = otilenum == 0xf4f;
+        float const splitScale = (quarterView ? g_redSplitWeaponQuarterScalePercent : g_redSplitWeaponWideScalePercent) / 100.f;
+        float const halfW = sizx * scl * splitScale;
+        float const halfH = sizy * scl * splitScale;
+        float mappedCenterX = RT_RedSplitWeaponAnchorX(viewX1 + (centerX / (float)xdim) * viewW, viewX1, viewX2, centerX);
+        float mappedCenterY = viewY1 + (centerY / (float)ydim) * viewH;
+
+        if (wideHalfView && weaponTile && !pipebombTile)
+        {
+            if (guniqhudid == CHAINGUN_WEAPON)
+                mappedCenterX += (g_redSplitWeaponWideOffsetX + 10.f) * scl;
+            else if (guniqhudid == (CHAINGUN_WEAPON << 1))
+                mappedCenterX += (g_redSplitWeaponWideOffsetX + 60.f) * scl;
+            else
+                mappedCenterX += g_redSplitWeaponWideOffsetX * scl;
+        }
+
+        if (wideHalfView && weaponTile && g_redSplitHudDrawingView == 0)
+            mappedCenterY += g_redSplitWeaponWideTopOffsetY * scl;
+
+        if (wideHalfView && weaponFlash)
+        {
+            mappedCenterX += g_redSplitWeaponFlashWideOffsetX * scl;
+            mappedCenterX += (centerX < ((float)xdim * 0.5f) ? g_redSplitWeaponFlashDualLeftOffsetX : g_redSplitWeaponFlashDualRightOffsetX) * scl;
+            if (g_redSplitHudDrawingView == 0)
+            {
+                mappedCenterX += g_redSplitWeaponFlashWideTopOffsetX * scl;
+                mappedCenterY += g_redSplitWeaponFlashWideTopOffsetY * scl;
+            }
+            else
+            {
+                mappedCenterX += g_redSplitWeaponFlashWideBottomOffsetX * scl;
+                mappedCenterY += g_redSplitWeaponFlashWideBottomOffsetY * scl;
+            }
+            mappedCenterY += g_redSplitWeaponFlashWideOffsetY * scl;
+        }
+
+        if (quarterView && weaponTile && !pipebombTile)
+        {
+            mappedCenterX += (viewX1 < (float)xdim * 0.25f ? g_redSplitWeaponQuarterLeftOffsetX : g_redSplitWeaponQuarterRightOffsetX) * scl;
+            mappedCenterY += g_redSplitWeaponQuarterOffsetY * scl;
+        }
+
+        if (quarterView && weaponFlash)
+        {
+            mappedCenterX += (viewX1 < (float)xdim * 0.25f ? g_redSplitWeaponFlashQuarterLeftOffsetX : g_redSplitWeaponFlashQuarterRightOffsetX) * scl;
+            mappedCenterX += (centerX < ((float)xdim * 0.5f) ? g_redSplitWeaponFlashDualLeftOffsetX : g_redSplitWeaponFlashDualRightOffsetX) * scl;
+        }
+
+        vx1 = mappedCenterX - halfW;
+        vx2 = mappedCenterX + halfW;
+        vy1 = mappedCenterY - halfH;
+        vy2 = mappedCenterY + halfH;
+    }
+    else
+    {
+        vx1 = x1 * scl + xo;
+        vx2 = x2 * scl + xo;
+        vy1 = RT_RedSplitHudY(y1 * scl, screenCorrection);
+        vy2 = RT_RedSplitHudY(y2 * scl, screenCorrection);
+    }
+
     glBegin(GL_QUADS);
-    glTexCoord2f(u1, v1); glVertex2f(x1 * scl + xo, y1 * scl);
-    glTexCoord2f(u2, v1); glVertex2f(x2 * scl + xo, y1 * scl);
-    glTexCoord2f(u2, v2); glVertex2f(x2 * scl + xo, y2 * scl);
-    glTexCoord2f(u1, v2); glVertex2f(x1 * scl + xo, y2 * scl);
+    glTexCoord2f(u1, v1); glVertex2f(vx1, vy1);
+    glTexCoord2f(u2, v1); glVertex2f(vx2, vy1);
+    glTexCoord2f(u2, v2); glVertex2f(vx2, vy2);
+    glTexCoord2f(u1, v2); glVertex2f(vx1, vy2);
     glEnd();
 #endif
 }
@@ -4225,11 +4414,16 @@ void RT_RotateSpriteText(float x, float y, float sx, float sy, int tilenum, int 
             xo *= 2.f;
     }
     glOrtho(0, xdim, ydim, 0, -1.f, 1.f);
+    float const vx1 = x1 * scl + xo;
+    float const vx2 = x2 * scl + xo;
+    float const vy1 = RT_RedSplitHudY(y1 * scl, !buildcoords);
+    float const vy2 = RT_RedSplitHudY(y2 * scl, !buildcoords);
+
     glBegin(GL_QUADS);
-    glTexCoord2f(u1, v1); glVertex2f(x1 * scl + xo, y1 * scl);
-    glTexCoord2f(u2, v1); glVertex2f(x2 * scl + xo, y1 * scl);
-    glTexCoord2f(u2, v2); glVertex2f(x2 * scl + xo, y2 * scl);
-    glTexCoord2f(u1, v2); glVertex2f(x1 * scl + xo, y2 * scl);
+    glTexCoord2f(u1, v1); glVertex2f(vx1, vy1);
+    glTexCoord2f(u2, v1); glVertex2f(vx2, vy1);
+    glTexCoord2f(u2, v2); glVertex2f(vx2, vy2);
+    glTexCoord2f(u1, v2); glVertex2f(vx1, vy2);
     glEnd();
 #endif
 }

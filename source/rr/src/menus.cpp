@@ -30,6 +30,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "input.h"
 #include "menus.h"
 #include "cheats.h"
+#include "cmdline.h"
+#include "premap.h"
 
 #include "in_android.h"
 #ifndef __ANDROID__
@@ -42,9 +44,34 @@ droidinput_t droidinput;
 #define MENU_MARGIN_CENTER  160
 #define MENU_HEIGHT_CENTER  100
 
+#define REDNUKEM_SPLITSCREEN_VERSION "v0.1"
+
 int32_t g_skillSoundVoice = -1;
 
 #define USERMAPENTRYLENGTH 25
+
+void RedSplit_SetPlayerCount(int32_t const playerCount);
+extern void app_exit(int returnCode);
+
+#ifdef _WIN32
+enum RednukemUpdateInstallMode_t
+{
+    RED_UPDATE_INSTALL_NONE,
+    RED_UPDATE_INSTALL_NEW_VERSION,
+    RED_UPDATE_INSTALL_REINSTALL_LATEST,
+};
+
+static char g_redUpdateStatus[128] = "";
+static char g_redUpdateLatestVersion[64] = "";
+static char g_redUpdateDownloadUrl[1024] = "";
+static HANDLE g_redUpdateCheckThread = nullptr;
+static LONG g_redUpdateCheckResult = 0;
+static int32_t g_redUpdateInstallAvailable = RED_UPDATE_INSTALL_NONE;
+
+static void Menu_StartRednukemUpdateCheck(void);
+static void Menu_InstallRednukemUpdate(void);
+static void Menu_UpdateRednukemUpdateCheck(void);
+#endif
 
 static FORCE_INLINE void Menu_StartTextInput()
 {
@@ -68,6 +95,17 @@ static FORCE_INLINE void Menu_StopTextInput()
     SDL_StopTextInput();
 # endif
 #endif
+}
+
+static void Menu_EndGameToTitle(void)
+{
+    g_player[myconnectindex].ps->gm = MODE_DEMO;
+    if (ud.recstat == 1)
+        G_CloseDemoWrite();
+    artClearMapArt();
+
+    if (REALITY)
+        RedSplit_SetPlayerCount(1);
 }
 
 static FORCE_INLINE void rotatesprite_ybounds(int32_t sx, int32_t sy, int32_t z, int16_t a, int16_t picnum, int8_t dashade, char dapalnum, int32_t dastat, int32_t ydim_upper, int32_t ydim_lower)
@@ -364,6 +402,7 @@ static MenuEntryFormat_t MEF_SmallOptions =     { 1<<16,      0, -(260<<16) };
 static MenuEntryFormat_t MEF_BigCheats =        { 3<<16,      0, -(260<<16) };
 static MenuEntryFormat_t MEF_Cheats =           { 2<<16,      0, -(260<<16) };
 static MenuEntryFormat_t MEF_PlayerNarrow =     { 1<<16,      0,     90<<16 };
+static MenuEntryFormat_t MEF_PlayerNarrowWide = { 1<<16,      0,    116<<16 };
 static MenuEntryFormat_t MEF_Macros =           { 2<<16,     -1,    268<<16 };
 static MenuEntryFormat_t MEF_VideoSetup =       { 4<<16,      0,    168<<16 };
 static MenuEntryFormat_t MEF_VideoSetup_Apply = { 4<<16, 16<<16,    168<<16 };
@@ -444,7 +483,7 @@ static char const s_Continue[] = "Continue";
 static char const s_Options[] = "Options";
 static char const s_Credits[] = "Credits";
 
-MAKE_MENU_TOP_ENTRYLINK( s_NewGame, MEF_MainMenu, MAIN_NEWGAME, MENU_EPISODE );
+MAKE_MENU_TOP_ENTRYLINK( s_NewGame, MEF_MainMenu, MAIN_NEWGAME, MENU_NEWGAMEMODE );
 //#ifdef EDUKE32_SIMPLE_MENU
 MAKE_MENU_TOP_ENTRYLINK( "Resume Game", MEF_MainMenu, MAIN_RESUMEGAME, MENU_CLOSE );
 //#endif
@@ -495,6 +534,25 @@ static MenuEntry_t *MEL_MAIN_INGAME[] = {
 };
 
 // Episode and Skill will be dynamically generated after CONs are parsed
+static MenuLink_t MEO_NEWGAMEMODE_SINGLE = { MENU_EPISODE, MA_Advance, };
+static MenuEntry_t ME_NEWGAMEMODE_SINGLE = MAKE_MENUENTRY( "Single Player", &MF_Redfont, &MEF_CenterMenu, &MEO_NEWGAMEMODE_SINGLE, Link );
+static MenuLink_t MEO_NEWGAMEMODE_COOP = { MENU_COOPPLAYERS, MA_Advance, };
+static MenuEntry_t ME_NEWGAMEMODE_COOP = MAKE_MENUENTRY( "Coop", &MF_Redfont, &MEF_CenterMenu, &MEO_NEWGAMEMODE_COOP, Link );
+static MenuEntry_t *MEL_NEWGAMEMODE[] = {
+    &ME_NEWGAMEMODE_SINGLE,
+    &ME_NEWGAMEMODE_COOP,
+};
+
+static MenuLink_t MEO_COOPPLAYERS = { MENU_EPISODE, MA_Advance, };
+static MenuEntry_t ME_COOPPLAYERS_2 = MAKE_MENUENTRY( "2 Players", &MF_Redfont, &MEF_CenterMenu, &MEO_COOPPLAYERS, Link );
+static MenuEntry_t ME_COOPPLAYERS_3 = MAKE_MENUENTRY( "3 Players", &MF_Redfont, &MEF_CenterMenu, &MEO_COOPPLAYERS, Link );
+static MenuEntry_t ME_COOPPLAYERS_4 = MAKE_MENUENTRY( "4 Players", &MF_Redfont, &MEF_CenterMenu, &MEO_COOPPLAYERS, Link );
+static MenuEntry_t *MEL_COOPPLAYERS[] = {
+    &ME_COOPPLAYERS_2,
+    &ME_COOPPLAYERS_3,
+    &ME_COOPPLAYERS_4,
+};
+
 static MenuLink_t MEO_EPISODE = { MENU_SKILL, MA_Advance, };
 static MenuLink_t MEO_EPISODE_SHAREWARE = { MENU_BUYDUKE, MA_Advance, };
 static MenuEntry_t ME_EPISODE_TEMPLATE = MAKE_MENUENTRY( NULL, &MF_Redfont, &MEF_CenterMenu, &MEO_EPISODE, Link );
@@ -543,6 +601,10 @@ static char const *MEOSN_GAMESETUP_WEAPSWITCH_PICKUP[] = { "Never", "If new", "B
 static MenuOptionSet_t MEOS_GAMESETUP_WEAPSWITCH_PICKUP = MAKE_MENUOPTIONSET( MEOSN_GAMESETUP_WEAPSWITCH_PICKUP, NULL, 0x2 );
 static MenuOption_t MEO_GAMESETUP_WEAPSWITCH_PICKUP = MAKE_MENUOPTION( &MF_Redfont, &MEOS_GAMESETUP_WEAPSWITCH_PICKUP, NULL );
 static MenuEntry_t ME_GAMESETUP_WEAPSWITCH_PICKUP = MAKE_MENUENTRY( "Equip pickups:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_GAMESETUP_WEAPSWITCH_PICKUP, Option );
+static char const *MEOSN_PLAYER_WEAPSWITCH_PICKUP[] = { "Never", "If new" };
+static MenuOptionSet_t MEOS_PLAYER_WEAPSWITCH_PICKUP = MAKE_MENUOPTIONSET( MEOSN_PLAYER_WEAPSWITCH_PICKUP, NULL, 0x2 );
+static MenuOption_t MEO_PLAYER_WEAPSWITCH_PICKUP = MAKE_MENUOPTION( &MF_Bluefont, &MEOS_PLAYER_WEAPSWITCH_PICKUP, NULL );
+static MenuEntry_t ME_PLAYER_WEAPSWITCH_PICKUP = MAKE_MENUENTRY( "Equip pickups", &MF_Bluefont, &MEF_PlayerNarrowWide, &MEO_PLAYER_WEAPSWITCH_PICKUP, Option );
 
 static char const *MEOSN_DemoRec[] = { "Off", "Running", };
 static MenuOptionSet_t MEOS_DemoRec = MAKE_MENUOPTIONSET( MEOSN_DemoRec, NULL, 0x3 );
@@ -552,6 +614,10 @@ static MenuEntry_t ME_GAMESETUP_DEMOREC = MAKE_MENUENTRY( "Record demo:", &MF_Re
 #ifdef _WIN32
 static MenuOption_t MEO_GAMESETUP_UPDATES = MAKE_MENUOPTION( &MF_Redfont, &MEOS_NoYes, &ud.config.CheckForUpdates );
 static MenuEntry_t ME_GAMESETUP_UPDATES = MAKE_MENUENTRY( "Online updates:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_GAMESETUP_UPDATES, Option );
+static MenuLink_t MEO_GAMESETUP_CHECKUPDATES = { MENU_UPDATECHECK, MA_None, };
+static MenuEntry_t ME_GAMESETUP_CHECKUPDATES = MAKE_MENUENTRY( "Check updates", &MF_Redfont, &MEF_BigOptionsRt, &MEO_GAMESETUP_CHECKUPDATES, Link );
+static MenuLink_t MEO_GAMESETUP_INSTALLUPDATE = { MENU_UPDATECHECK, MA_None, };
+static MenuEntry_t ME_GAMESETUP_INSTALLUPDATE = MAKE_MENUENTRY( "Install update", &MF_Redfont, &MEF_BigOptionsRt, &MEO_GAMESETUP_INSTALLUPDATE, Link );
 #endif
 
 static MenuOption_t MEO_ADULTMODE = MAKE_MENUOPTION(&MF_Redfont, &MEOS_OffOn, &ud.lockout);
@@ -588,6 +654,11 @@ static MenuEntry_t *MEL_GAMESETUP[] = {
 #endif
 #endif
     &ME_GAMESETUP_CHEATS,
+#ifdef _WIN32
+    &ME_Space8_Redfont,
+    &ME_GAMESETUP_CHECKUPDATES,
+    &ME_GAMESETUP_INSTALLUPDATE,
+#endif
 };
 #endif
 
@@ -604,6 +675,7 @@ MAKE_MENU_TOP_ENTRYLINK( "Keyboard Setup", MEF_BigOptionsRtSections, OPTIONS_KEY
 MAKE_MENU_TOP_ENTRYLINK( "Mouse Setup", MEF_BigOptionsRtSections, OPTIONS_MOUSESETUP, MENU_MOUSESETUP );
 #endif
 MAKE_MENU_TOP_ENTRYLINK( "Controller Setup", MEF_BigOptionsRtSections, OPTIONS_JOYSTICKSETUP, MENU_JOYSTICKSETUP );
+MAKE_MENU_TOP_ENTRYLINK( "Player Input", MEF_BigOptionsRtSections, OPTIONS_PLAYERINPUT, MENU_PLAYERINPUT );
 #ifdef EDUKE32_ANDROID_MENU
 MAKE_MENU_TOP_ENTRYLINK( "Touch Setup", MEF_BigOptionsRtSections, OPTIONS_TOUCHSETUP, MENU_TOUCHSETUP );
 #endif
@@ -844,12 +916,30 @@ static MenuEntry_t *MEL_OPTIONS[] = {
 
 static MenuEntry_t *MEL_CONTROLS[] = {
 #ifndef EDUKE32_ANDROID_MENU
+    &ME_OPTIONS_PLAYERINPUT,
     &ME_OPTIONS_KEYBOARDSETUP,
     &ME_OPTIONS_MOUSESETUP,
     &ME_OPTIONS_JOYSTICKSETUP,
 #else
     &ME_OPTIONS_TOUCHSETUP
 #endif
+};
+
+static char const *MEOSN_PLAYERINPUT_SOURCE[] = { "None", "KB/Mouse", "Pad 1", "Pad 2", "Pad 3", "Pad 4", "Pad 5" };
+static int32_t MEOSV_PLAYERINPUT_SOURCE[] = { RN_SPLIT_INPUT_NONE, RN_SPLIT_INPUT_KBM, RN_SPLIT_INPUT_PAD1, RN_SPLIT_INPUT_PAD2, RN_SPLIT_INPUT_PAD3, RN_SPLIT_INPUT_PAD4, RN_SPLIT_INPUT_PAD5 };
+static MenuOptionSet_t MEOS_PLAYERINPUT_SOURCE = MAKE_MENUOPTIONSET(MEOSN_PLAYERINPUT_SOURCE, MEOSV_PLAYERINPUT_SOURCE, 0x2);
+static MenuOption_t MEO_PLAYERINPUT_P1 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitPlayerInput[0]);
+static MenuOption_t MEO_PLAYERINPUT_P2 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitPlayerInput[1]);
+static MenuEntry_t ME_PLAYERINPUT_P1 = MAKE_MENUENTRY("Player 1:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_PLAYERINPUT_P1, Option);
+static MenuEntry_t ME_PLAYERINPUT_P2 = MAKE_MENUENTRY("Player 2:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_PLAYERINPUT_P2, Option);
+static MenuEntry_t ME_PLAYERINPUT_JOIN2 = MAKE_MENUENTRY("Join Player 2", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
+static MenuEntry_t ME_PLAYERINPUT_DISCONNECT2 = MAKE_MENUENTRY("Disconnect Player 2", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
+static MenuEntry_t *MEL_PLAYERINPUT[] = {
+    &ME_PLAYERINPUT_P1,
+    &ME_PLAYERINPUT_P2,
+    &ME_Space6_Redfont,
+    &ME_PLAYERINPUT_JOIN2,
+    &ME_PLAYERINPUT_DISCONNECT2,
 };
 
 static MenuEntry_t *MEL_CHEATS[ARRAY_SIZE(ME_CheatCodes)+1] = {
@@ -1481,6 +1571,8 @@ static MenuEntry_t *MEL_PLAYER[] = {
     &ME_PLAYER_COLOR,
     &ME_Space4_Bluefont,
     &ME_PLAYER_TEAM,
+    &ME_Space4_Bluefont,
+    &ME_PLAYER_WEAPSWITCH_PICKUP,
 #ifndef EDUKE32_SIMPLE_MENU
     &ME_Space8_Bluefont,
     &ME_PLAYER_MACROS,
@@ -1605,6 +1697,8 @@ static MenuEntry_t *MEL_DHWEAPON[] = {
 
 static MenuMenu_t M_MAIN = MAKE_MENUMENU( NoTitle, &MMF_Top_Main, MEL_MAIN );
 static MenuMenu_t M_MAIN_INGAME = MAKE_MENUMENU( NoTitle, &MMF_Top_Main, MEL_MAIN_INGAME );
+static MenuMenu_t M_NEWGAMEMODE = MAKE_MENUMENU( "Select Mode", &MMF_Top_Episode, MEL_NEWGAMEMODE );
+static MenuMenu_t M_COOPPLAYERS = MAKE_MENUMENU( "Coop Players", &MMF_Top_Episode, MEL_COOPPLAYERS );
 static MenuMenu_t M_EPISODE = MAKE_MENUMENU( "Select An Episode", &MMF_Top_Episode, MEL_EPISODE );
 static MenuMenu_t M_SKILL = MAKE_MENUMENU( "Select Skill", &MMF_Top_Skill, MEL_SKILL );
 #ifndef EDUKE32_SIMPLE_MENU
@@ -1614,6 +1708,7 @@ static MenuMenu_t M_OPTIONS = MAKE_MENUMENU( s_Options, &MMF_Top_Options, MEL_OP
 static MenuMenu_t M_VIDEOSETUP = MAKE_MENUMENU( "Video Mode", &MMF_BigOptions, MEL_VIDEOSETUP );
 static MenuMenu_t M_KEYBOARDSETUP = MAKE_MENUMENU( "Keyboard Setup", &MMF_Top_Options, MEL_KEYBOARDSETUP );
 static MenuMenu_t M_CONTROLS = MAKE_MENUMENU( "Control Setup", &MMF_BigOptions, MEL_CONTROLS );
+static MenuMenu_t M_PLAYERINPUT = MAKE_MENUMENU( "Player Input", &MMF_BigOptions, MEL_PLAYERINPUT );
 static MenuMenu_t M_CHEATS = MAKE_MENUMENU( "Cheats", &MMF_SmallOptions, MEL_CHEATS );
 static MenuMenu_t M_MOUSESETUP = MAKE_MENUMENU( "Mouse Setup", &MMF_BigOptions, MEL_MOUSESETUP );
 #ifdef EDUKE32_ANDROID_MENU
@@ -1705,7 +1800,7 @@ static MenuVerify_t M_QUIT = { CURSOR_CENTER_2LINE, MENU_CLOSE, MA_None, };
 static MenuVerify_t M_QUITTOTITLE = { CURSOR_CENTER_2LINE, MENU_CLOSE, MA_None, };
 static MenuVerify_t M_LOADVERIFY = { CURSOR_CENTER_3LINE, MENU_CLOSE, MA_None, };
 static MenuVerify_t M_LOADDELVERIFY = { CURSOR_CENTER_3LINE, MENU_LOAD, MA_None, };
-static MenuVerify_t M_NEWVERIFY = { CURSOR_CENTER_2LINE, MENU_EPISODE, MA_Advance, };
+static MenuVerify_t M_NEWVERIFY = { CURSOR_CENTER_2LINE, MENU_NEWGAMEMODE, MA_Advance, };
 static MenuVerify_t M_SAVEVERIFY = { CURSOR_CENTER_2LINE, MENU_SAVE, MA_None, };
 static MenuVerify_t M_SAVEDELVERIFY = { CURSOR_CENTER_3LINE, MENU_SAVE, MA_None, };
 static MenuVerify_t M_RESETPLAYER = { CURSOR_CENTER_3LINE, MENU_CLOSE, MA_None, };
@@ -1731,7 +1826,9 @@ static MenuFileSelect_t M_SOUND_SF2 = MAKE_MENUFILESELECT( "Select Sound Bank", 
 static Menu_t Menus[] = {
     { &M_MAIN, MENU_MAIN, MENU_CLOSE, MA_None, Menu },
     { &M_MAIN_INGAME, MENU_MAIN_INGAME, MENU_CLOSE, MA_None, Menu },
-    { &M_EPISODE, MENU_EPISODE, MENU_MAIN, MA_Return, Menu },
+    { &M_NEWGAMEMODE, MENU_NEWGAMEMODE, MENU_MAIN, MA_Return, Menu },
+    { &M_COOPPLAYERS, MENU_COOPPLAYERS, MENU_NEWGAMEMODE, MA_Return, Menu },
+    { &M_EPISODE, MENU_EPISODE, MENU_NEWGAMEMODE, MA_Return, Menu },
     { &M_USERMAP, MENU_USERMAP, MENU_EPISODE, MA_Return, FileSelect },
     { &M_SKILL, MENU_SKILL, MENU_EPISODE, MA_Return, Menu },
 #ifndef EDUKE32_SIMPLE_MENU
@@ -1753,6 +1850,7 @@ static Menu_t Menus[] = {
     { &M_TOUCHSENS, MENU_TOUCHSENS, MENU_TOUCHSETUP, MA_Return, Menu },
     { &M_TOUCHBUTTONS, MENU_TOUCHBUTTONS, MENU_TOUCHSETUP, MA_Return, Panel },
 #endif
+    { &M_PLAYERINPUT, MENU_PLAYERINPUT, MENU_CONTROLS, MA_Return, Menu },
     { &M_CONTROLS, MENU_CONTROLS, MENU_OPTIONS, MA_Return, Menu },
 #ifdef USE_OPENGL
     { &M_RENDERERSETUP_POLYMOST, MENU_POLYMOST, MENU_DISPLAYSETUP, MA_Return, Menu },
@@ -2376,7 +2474,12 @@ static void Menu_Pre(MenuID_t cm)
         MenuEntry_DisableOnCondition(&ME_MAIN_QUITTOTITLE, g_netServer || numplayers > 1);
         fallthrough__;
     case MENU_MAIN:
-        if ((g_netServer || ud.multimode > 1) && ud.recstat != 2)
+        if (REALITY)
+        {
+            ME_MAIN_NEWGAME.entry = &MEO_MAIN_NEWGAME;
+            ME_MAIN_NEWGAME_INGAME.entry = &MEO_MAIN_NEWGAME_INGAME;
+        }
+        else if ((g_netServer || ud.multimode > 1) && ud.recstat != 2)
         {
             ME_MAIN_NEWGAME.entry = &MEO_MAIN_NEWGAME_NETWORK;
             ME_MAIN_NEWGAME_INGAME.entry = &MEO_MAIN_NEWGAME_NETWORK;
@@ -2389,6 +2492,11 @@ static void Menu_Pre(MenuID_t cm)
         break;
 
     case MENU_GAMESETUP:
+#ifdef _WIN32
+        Menu_UpdateRednukemUpdateCheck();
+        ME_GAMESETUP_INSTALLUPDATE.name = g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_REINSTALL_LATEST ? "Reinstall Latest" : "Install Update";
+        MenuEntry_HideOnCondition(&ME_GAMESETUP_INSTALLUPDATE, g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_NONE);
+#endif
         MEO_GAMESETUP_DEMOREC.options = (ps->gm&MODE_GAME) ? &MEOS_DemoRec : &MEOS_OffOn;
         MenuEntry_DisableOnCondition(&ME_GAMESETUP_DEMOREC, (ps->gm&MODE_GAME) && ud.m_recstat != 1);
         break;
@@ -2573,6 +2681,15 @@ static void Menu_Pre(MenuID_t cm)
         MenuEntry_DisableOnCondition(&ME_JOYSTICK_EDITAXES, !CONTROL_JoyPresent || joystick.numAxes == 0);
         MenuEntry_DisableOnCondition(&ME_JOYSTICK_AIM_ASSIST, !ud.config.JoystickViewCentering);
         break;
+
+    case MENU_PLAYERINPUT:
+    {
+        int32_t const inGame = g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME);
+        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_JOIN2, g_fakeMultiMode > 1);
+        MenuEntry_DisableOnCondition(&ME_PLAYERINPUT_JOIN2, !inGame);
+        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_DISCONNECT2, g_fakeMultiMode <= 1);
+        break;
+    }
 
 #ifndef EDUKE32_SIMPLE_MENU
     case MENU_MOUSESETUP:
@@ -2811,6 +2928,19 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
                 rotatesprite_fs(origin.x + ((MENU_MARGIN_CENTER+100)<<16), origin.y + (36<<16), 65536L,0,PLUTOPAKSPRITE+2,(sintable[((int32_t) totalclock<<4)&2047]>>11),0,2+8);
         }
         break;
+
+#ifdef _WIN32
+    case MENU_GAMESETUP:
+        Menu_UpdateRednukemUpdateCheck();
+        if (g_redUpdateStatus[0] != '\0')
+            creditsminitext(origin.x + (160 << 16), origin.y + (136 << 16), g_redUpdateStatus, MF_Minifont.pal_selected);
+        else
+        {
+            Bsprintf(tempbuf, "Version %s", REDNUKEM_SPLITSCREEN_VERSION);
+            creditsminitext(origin.x + (160 << 16), origin.y + (136 << 16), tempbuf, MF_Minifont.pal_selected);
+        }
+        break;
+#endif
 
     case MENU_CDPLAYER:
         rotatesprite_fs(origin.x + (MENU_MARGIN_CENTER<<16), origin.y+(100<<16),32768L,0,CDPLAYER,16,0,10);
@@ -4060,6 +4190,422 @@ static void Menu_EntryFocus(/*MenuEntry_t *entry*/)
     }
 }
 
+#ifdef _WIN32
+static void Menu_PowerShellQuote(char * const out, size_t const outSize, char const * const in)
+{
+    size_t pos = 0;
+    if (outSize == 0)
+        return;
+
+    out[pos++] = '\'';
+    for (char const *p = in; *p != '\0' && pos + 2 < outSize; ++p)
+    {
+        out[pos++] = *p;
+        if (*p == '\'' && pos + 1 < outSize)
+            out[pos++] = '\'';
+    }
+    if (pos + 1 < outSize)
+        out[pos++] = '\'';
+    out[pos] = '\0';
+}
+
+static int32_t Menu_WriteTextFile(char const * const path, char const * const text)
+{
+    FILE * const fp = fopen(path, "wb");
+    if (fp == nullptr)
+        return 0;
+
+    fputs(text, fp);
+    fclose(fp);
+    return 1;
+}
+
+static void Menu_WindowsCommandLineQuote(char * const out, size_t const outSize, char const * const in)
+{
+    size_t pos = 0;
+    if (outSize == 0)
+        return;
+
+    out[pos++] = '"';
+    for (char const *p = in; *p != '\0' && pos + 2 < outSize; ++p)
+    {
+        if (*p == '"' || *p == '\\')
+            out[pos++] = '\\';
+        out[pos++] = *p;
+    }
+    if (pos + 1 < outSize)
+        out[pos++] = '"';
+    out[pos] = '\0';
+}
+
+static int32_t Menu_ParseVersionNumbers(char const *version, int32_t out[3])
+{
+    out[0] = out[1] = out[2] = 0;
+
+    int32_t count = 0;
+    for (char const *p = version; *p != '\0' && count < 3; )
+    {
+        while (*p != '\0' && (*p < '0' || *p > '9'))
+            ++p;
+        if (*p == '\0')
+            break;
+
+        out[count++] = Batol(p);
+
+        while (*p >= '0' && *p <= '9')
+            ++p;
+    }
+
+    return count > 0;
+}
+
+static int32_t Menu_IsVersionNewer(char const * const latest, char const * const current)
+{
+    int32_t latestParts[3], currentParts[3];
+    if (!Menu_ParseVersionNumbers(latest, latestParts) || !Menu_ParseVersionNumbers(current, currentParts))
+        return Bstrcmp(latest, current) != 0;
+
+    for (int32_t i = 0; i < 3; ++i)
+    {
+        if (latestParts[i] > currentParts[i])
+            return 1;
+        if (latestParts[i] < currentParts[i])
+            return 0;
+    }
+
+    return 0;
+}
+
+static int32_t Menu_DownloadTextWinInet(char const * const url, char * const out, size_t const outSize)
+{
+    if (outSize == 0)
+        return 0;
+
+    out[0] = '\0';
+
+    HMODULE const wininet = LoadLibraryA("wininet.dll");
+    if (wininet == nullptr)
+        return 0;
+
+    typedef void * HINTERNET_LOCAL;
+    typedef HINTERNET_LOCAL (WINAPI *InternetOpenAFunc)(LPCSTR, DWORD, LPCSTR, LPCSTR, DWORD);
+    typedef HINTERNET_LOCAL (WINAPI *InternetOpenUrlAFunc)(HINTERNET_LOCAL, LPCSTR, LPCSTR, DWORD, DWORD, DWORD_PTR);
+    typedef BOOL (WINAPI *InternetReadFileFunc)(HINTERNET_LOCAL, LPVOID, DWORD, LPDWORD);
+    typedef BOOL (WINAPI *InternetCloseHandleFunc)(HINTERNET_LOCAL);
+
+    auto const internetOpen = (InternetOpenAFunc)GetProcAddress(wininet, "InternetOpenA");
+    auto const internetOpenUrl = (InternetOpenUrlAFunc)GetProcAddress(wininet, "InternetOpenUrlA");
+    auto const internetReadFile = (InternetReadFileFunc)GetProcAddress(wininet, "InternetReadFile");
+    auto const internetCloseHandle = (InternetCloseHandleFunc)GetProcAddress(wininet, "InternetCloseHandle");
+
+    if (internetOpen == nullptr || internetOpenUrl == nullptr || internetReadFile == nullptr || internetCloseHandle == nullptr)
+    {
+        FreeLibrary(wininet);
+        return 0;
+    }
+
+    DWORD constexpr INTERNET_OPEN_TYPE_PRECONFIG_LOCAL = 0;
+    DWORD constexpr INTERNET_FLAG_RELOAD_LOCAL = 0x80000000u;
+    DWORD constexpr INTERNET_FLAG_NO_CACHE_WRITE_LOCAL = 0x04000000u;
+    DWORD constexpr INTERNET_FLAG_SECURE_LOCAL = 0x00800000u;
+
+    HINTERNET_LOCAL const session = internetOpen("RednukemSplitScreen", INTERNET_OPEN_TYPE_PRECONFIG_LOCAL, nullptr, nullptr, 0);
+    if (session == nullptr)
+    {
+        FreeLibrary(wininet);
+        return 0;
+    }
+
+    char const headers[] = "Accept: application/vnd.github+json\r\nUser-Agent: RednukemSplitScreen\r\n";
+    HINTERNET_LOCAL const request = internetOpenUrl(session, url, headers, ARRAY_SIZE(headers) - 1,
+                                                    INTERNET_FLAG_RELOAD_LOCAL | INTERNET_FLAG_NO_CACHE_WRITE_LOCAL | INTERNET_FLAG_SECURE_LOCAL, 0);
+    if (request == nullptr)
+    {
+        internetCloseHandle(session);
+        FreeLibrary(wininet);
+        return 0;
+    }
+
+    size_t pos = 0;
+    BOOL ok = TRUE;
+    while (pos + 1 < outSize)
+    {
+        DWORD bytesRead = 0;
+        DWORD const toRead = (DWORD)min<size_t>(4096, outSize - pos - 1);
+        ok = internetReadFile(request, out + pos, toRead, &bytesRead);
+        if (!ok || bytesRead == 0)
+            break;
+        pos += bytesRead;
+    }
+
+    out[pos] = '\0';
+
+    internetCloseHandle(request);
+    internetCloseHandle(session);
+    FreeLibrary(wininet);
+
+    return ok && pos > 0;
+}
+
+static int32_t Menu_ExtractJsonStringValue(char const * const json, char const * const key, char * const out, size_t const outSize)
+{
+    if (outSize == 0)
+        return 0;
+
+    out[0] = '\0';
+
+    char keyPattern[128];
+    Bsnprintf(keyPattern, sizeof(keyPattern), "\"%s\"", key);
+
+    char const *keyPos = Bstrstr(json, keyPattern);
+    if (keyPos == nullptr)
+        return 0;
+
+    char const *value = Bstrchr(keyPos + Bstrlen(keyPattern), ':');
+    if (value == nullptr)
+        return 0;
+
+    ++value;
+    while (*value == ' ' || *value == '\t' || *value == '\r' || *value == '\n')
+        ++value;
+
+    if (*value != '"')
+        return 0;
+
+    ++value;
+
+    size_t pos = 0;
+    while (*value != '\0' && *value != '"' && pos + 1 < outSize)
+    {
+        if (*value == '\\' && value[1] != '\0')
+            ++value;
+        out[pos++] = *value++;
+    }
+
+    out[pos] = '\0';
+    return out[0] != '\0';
+}
+
+static int32_t Menu_ExtractReleaseZipUrl(char const * const json, char * const out, size_t const outSize)
+{
+    char const *search = json;
+    char fallback[1024] = "";
+
+    while ((search = Bstrstr(search, "\"browser_download_url\"")) != nullptr)
+    {
+        char url[1024];
+        if (Menu_ExtractJsonStringValue(search, "browser_download_url", url, sizeof(url)) && Bstrstr(url, ".zip") != nullptr)
+        {
+            if (Bstrstr(url, "windows") != nullptr && Bstrstr(url, "x64") != nullptr)
+            {
+                Bstrncpyz(out, url, outSize);
+                return 1;
+            }
+
+            if (fallback[0] == '\0')
+                Bstrncpyz(fallback, url, sizeof(fallback));
+        }
+
+        search += 22;
+    }
+
+    if (fallback[0] == '\0')
+        return 0;
+
+    Bstrncpyz(out, fallback, outSize);
+    return 1;
+}
+
+static DWORD WINAPI Menu_CheckRednukemUpdateThread(void *)
+{
+    char json[65536];
+    char latestVersion[64];
+    char downloadUrl[1024];
+    char const apiUrl[] = "https://api.github.com/repos/ranitado/rednukem-split-screen/releases/latest";
+
+    int32_t const ok = Menu_DownloadTextWinInet(apiUrl, json, sizeof(json))
+        && Menu_ExtractJsonStringValue(json, "tag_name", latestVersion, sizeof(latestVersion))
+        && Menu_ExtractReleaseZipUrl(json, downloadUrl, sizeof(downloadUrl));
+
+    if (ok)
+    {
+        Bstrncpyz(g_redUpdateLatestVersion, latestVersion, sizeof(g_redUpdateLatestVersion));
+        Bstrncpyz(g_redUpdateDownloadUrl, downloadUrl, sizeof(g_redUpdateDownloadUrl));
+    }
+
+    InterlockedExchange(&g_redUpdateCheckResult, ok ? 1 : -1);
+    return 0;
+}
+
+static int32_t Menu_LaunchRednukemUpdaterScript(void)
+{
+    char exePath[BMAX_PATH];
+    if (GetModuleFileNameA(nullptr, exePath, ARRAY_SIZE(exePath)) == 0)
+        return 0;
+
+    char rootPath[BMAX_PATH];
+    Bstrncpyz(rootPath, exePath, sizeof(rootPath));
+    char * const slash = Bstrrchr(rootPath, '\\');
+    if (slash == nullptr)
+        return 0;
+    *slash = '\0';
+
+    char tempPath[BMAX_PATH];
+    if (!GetTempPathA(ARRAY_SIZE(tempPath), tempPath))
+        return 0;
+
+    char scriptPath[BMAX_PATH];
+    Bsnprintf(scriptPath, sizeof(scriptPath), "%srednukem-split-screen-updater-%lu.ps1", tempPath, (unsigned long)GetCurrentProcessId());
+
+    char rootPS[BMAX_PATH * 2], exePS[BMAX_PATH * 2], urlPS[2048], versionPS[256], scriptPS[BMAX_PATH * 2];
+    Menu_PowerShellQuote(rootPS, sizeof(rootPS), rootPath);
+    Menu_PowerShellQuote(exePS, sizeof(exePS), exePath);
+    Menu_PowerShellQuote(urlPS, sizeof(urlPS), g_redUpdateDownloadUrl);
+    Menu_PowerShellQuote(versionPS, sizeof(versionPS), g_redUpdateLatestVersion[0] != '\0' ? g_redUpdateLatestVersion : "latest");
+    Menu_PowerShellQuote(scriptPS, sizeof(scriptPS), scriptPath);
+
+    char script[8192];
+    Bsnprintf(script, sizeof(script),
+        "$ErrorActionPreference='Stop'\r\n"
+        "$gamePid=%lu\r\n"
+        "$root=%s\r\n"
+        "$exe=%s\r\n"
+        "$url=%s\r\n"
+        "$version=%s\r\n"
+        "$script=%s\r\n"
+        "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12\r\n"
+        "$zip=Join-Path $env:TEMP ('rednukem-split-screen-update-' + $gamePid + '.zip')\r\n"
+        "$tmp=Join-Path $env:TEMP ('rednukem-split-screen-extract-' + $gamePid)\r\n"
+        "Write-Host ''\r\n"
+        "Write-Host 'Rednukem Split-Screen updater'\r\n"
+        "Write-Host ('Updating Rednukem Split-Screen to ' + $version)\r\n"
+        "Write-Host ''\r\n"
+        "Write-Host 'Please wait. Do not close this window.'\r\n"
+        "Write-Host ''\r\n"
+        "Write-Host '[1/4] Waiting for the game to close...'\r\n"
+        "try { Wait-Process -Id $gamePid -Timeout 30 -ErrorAction SilentlyContinue } catch {}\r\n"
+        "Start-Sleep -Milliseconds 500\r\n"
+        "Write-Host '[2/4] Downloading package...'\r\n"
+        "Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue\r\n"
+        "Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue\r\n"
+        "Invoke-WebRequest -UseBasicParsing -Headers @{'User-Agent'='RednukemSplitScreen'} -Uri $url -OutFile $zip\r\n"
+        "Write-Host '[3/4] Installing files...'\r\n"
+        "Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force\r\n"
+        "$src=$tmp\r\n"
+        "$items=@(Get-ChildItem -LiteralPath $tmp -Force)\r\n"
+        "if($items.Count -eq 1 -and $items[0].PSIsContainer){$src=$items[0].FullName}\r\n"
+        "$skipExt=@('.cfg','.log','.dmp','.z64','.n64','.v64','.rom','.sav')\r\n"
+        "Get-ChildItem -LiteralPath $src -Recurse -File | ForEach-Object {\r\n"
+        "  $rel=$_.FullName.Substring($src.Length).TrimStart('\\','/')\r\n"
+        "  $relNorm=$rel -replace '\\\\','/'\r\n"
+        "  if($relNorm -match '^(saves|save|screenshots|texturecache)/'){return}\r\n"
+        "  if($skipExt -contains $_.Extension.ToLowerInvariant()){return}\r\n"
+        "  $dest=Join-Path $root $rel\r\n"
+        "  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null\r\n"
+        "  Copy-Item -LiteralPath $_.FullName -Destination $dest -Force\r\n"
+        "}\r\n"
+        "Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue\r\n"
+        "Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue\r\n"
+        "Write-Host '[4/4] Restarting Rednukem Split-Screen...'\r\n"
+        "Start-Process -FilePath $exe -ArgumentList '-noinstancechecking' -WorkingDirectory $root\r\n"
+        "Write-Host ''\r\n"
+        "Write-Host 'Update installed.'\r\n"
+        "Start-Sleep -Seconds 1\r\n"
+        "Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue\r\n",
+        (unsigned long)GetCurrentProcessId(), rootPS, exePS, urlPS, versionPS, scriptPS);
+
+    if (!Menu_WriteTextFile(scriptPath, script))
+        return 0;
+
+    char commandLine[BMAX_PATH * 2 + 128];
+    Bsnprintf(commandLine, sizeof(commandLine), "\"powershell.exe\" -NoProfile -ExecutionPolicy Bypass -File \"%s\"", scriptPath);
+
+    STARTUPINFOA startupInfo {};
+    PROCESS_INFORMATION processInfo {};
+    startupInfo.cb = sizeof(startupInfo);
+    startupInfo.dwFlags = STARTF_USESHOWWINDOW;
+    startupInfo.wShowWindow = SW_SHOWNORMAL;
+
+    if (!CreateProcessA(nullptr, commandLine, nullptr, nullptr, FALSE, 0, nullptr, rootPath, &startupInfo, &processInfo))
+    {
+        DeleteFileA(scriptPath);
+        return 0;
+    }
+
+    CloseHandle(processInfo.hThread);
+    CloseHandle(processInfo.hProcess);
+    return 1;
+}
+
+static void Menu_UpdateRednukemUpdateCheck(void)
+{
+    if (g_redUpdateCheckThread == nullptr)
+        return;
+
+    DWORD exitCode = 0;
+    if (GetExitCodeThread(g_redUpdateCheckThread, &exitCode) && exitCode == STILL_ACTIVE)
+        return;
+
+    CloseHandle(g_redUpdateCheckThread);
+    g_redUpdateCheckThread = nullptr;
+
+    if (InterlockedCompareExchange(&g_redUpdateCheckResult, 0, 0) != 1)
+    {
+        g_redUpdateInstallAvailable = RED_UPDATE_INSTALL_NONE;
+        Bstrncpyz(g_redUpdateStatus, "Update check failed", sizeof(g_redUpdateStatus));
+        return;
+    }
+
+    if (!Menu_IsVersionNewer(g_redUpdateLatestVersion, REDNUKEM_SPLITSCREEN_VERSION))
+    {
+        Bsnprintf(g_redUpdateStatus, sizeof(g_redUpdateStatus), "No new updates  Latest: %s", g_redUpdateLatestVersion);
+        g_redUpdateInstallAvailable = RED_UPDATE_INSTALL_REINSTALL_LATEST;
+        return;
+    }
+
+    Bsnprintf(g_redUpdateStatus, sizeof(g_redUpdateStatus), "Update found: %s", g_redUpdateLatestVersion);
+    g_redUpdateInstallAvailable = RED_UPDATE_INSTALL_NEW_VERSION;
+}
+
+static void Menu_StartRednukemUpdateCheck(void)
+{
+    if (g_redUpdateCheckThread != nullptr)
+    {
+        Bstrncpyz(g_redUpdateStatus, "Searching...", sizeof(g_redUpdateStatus));
+        return;
+    }
+
+    g_redUpdateInstallAvailable = RED_UPDATE_INSTALL_NONE;
+    g_redUpdateLatestVersion[0] = '\0';
+    g_redUpdateDownloadUrl[0] = '\0';
+    InterlockedExchange(&g_redUpdateCheckResult, 0);
+    Bstrncpyz(g_redUpdateStatus, "Searching...", sizeof(g_redUpdateStatus));
+
+    g_redUpdateCheckThread = CreateThread(nullptr, 0, Menu_CheckRednukemUpdateThread, nullptr, 0, nullptr);
+    if (g_redUpdateCheckThread == nullptr)
+        Bstrncpyz(g_redUpdateStatus, "Update check failed", sizeof(g_redUpdateStatus));
+}
+
+static void Menu_InstallRednukemUpdate(void)
+{
+    if (g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_NONE || g_redUpdateDownloadUrl[0] == '\0')
+    {
+        Bstrncpyz(g_redUpdateStatus, "No update ready", sizeof(g_redUpdateStatus));
+        return;
+    }
+
+    Bsnprintf(g_redUpdateStatus, sizeof(g_redUpdateStatus), "Installing %s...", g_redUpdateLatestVersion);
+    if (!Menu_LaunchRednukemUpdaterScript())
+    {
+        Bstrncpyz(g_redUpdateStatus, "Could not start updater", sizeof(g_redUpdateStatus));
+        return;
+    }
+
+    CONFIG_WriteSetup(0);
+    app_exit(EXIT_SUCCESS);
+}
+#endif
+
 static void Menu_StartGameWithoutSkill(void)
 {
     ud.m_player_skill = M_SKILL.currentEntry+1;
@@ -4073,9 +4619,136 @@ static void Menu_StartGameWithoutSkill(void)
     ud.m_respawn_items = 0;
     ud.m_respawn_inventory = 0;
 
-    ud.multimode = 1;
+    if (g_fakeMultiMode > 1)
+        ud.multimode = g_fakeMultiMode;
+    else
+        ud.multimode = 1;
 
     G_NewGame_EnterLevel();
+}
+
+static inline int32_t RedSplit_MenuCurrentPlayerCount(void)
+{
+    return g_fakeMultiMode > 1 ? clamp<int32_t>(g_fakeMultiMode, 2, 4) : 1;
+}
+
+static inline int32_t RedSplit_MenuInGame(void)
+{
+    return g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME);
+}
+
+static void RedSplit_RebuildConnectChain(int32_t const playerCount)
+{
+    for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
+        connectpoint2[playerNum] = -1;
+
+    for (int32_t playerNum = 0; playerNum < playerCount - 1; ++playerNum)
+        connectpoint2[playerNum] = playerNum + 1;
+}
+
+static void RedSplit_HidePlayerSprite(int32_t const playerNum)
+{
+    if ((unsigned)playerNum >= MAXPLAYERS || g_player[playerNum].ps == nullptr)
+        return;
+
+    int32_t const spriteNum = g_player[playerNum].ps->i;
+    if ((unsigned)spriteNum >= MAXSPRITES)
+        return;
+
+    sprite[spriteNum].cstat |= 32768;
+    sprite[spriteNum].xrepeat = 0;
+    sprite[spriteNum].yrepeat = 0;
+}
+
+void RedSplit_SetPlayerCount(int32_t const playerCount)
+{
+    int32_t const oldPlayerCount = RedSplit_MenuCurrentPlayerCount();
+    int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
+
+    g_fakeMultiMode = clampedPlayerCount > 1 ? clampedPlayerCount : 0;
+    ud.multimode = clampedPlayerCount;
+    g_mostConcurrentPlayers = clampedPlayerCount;
+
+    for (int32_t playerNum = 1; playerNum < MAXPLAYERS; ++playerNum)
+        g_player[playerNum].playerquitflag = 0;
+
+    G_MaybeAllocPlayer(0);
+    g_player[0].playerquitflag = 1;
+
+    for (int32_t playerNum = 1; playerNum < clampedPlayerCount; ++playerNum)
+    {
+        G_MaybeAllocPlayer(playerNum);
+        g_player[playerNum].playerquitflag = 1;
+    }
+
+    RedSplit_RebuildConnectChain(clampedPlayerCount);
+    RedSplit_ResetInputQueues();
+
+    if (RedSplit_MenuInGame())
+    {
+        for (int32_t playerNum = oldPlayerCount; playerNum < clampedPlayerCount; ++playerNum)
+            P_ResetPlayer(playerNum);
+
+        for (int32_t playerNum = clampedPlayerCount; playerNum < oldPlayerCount; ++playerNum)
+            RedSplit_HidePlayerSprite(playerNum);
+    }
+
+    RedSplit_ResetInputLatches();
+    RedSplit_ResetInputQueues();
+}
+
+void RedSplit_DisconnectPlayer(int32_t const playerNum)
+{
+    int32_t const playerCount = RedSplit_MenuCurrentPlayerCount();
+    if (playerNum <= 0 || playerNum >= playerCount)
+        return;
+
+    int32_t const lastPlayer = playerCount - 1;
+    int32_t spriteToHide = g_player[playerNum].ps != nullptr ? g_player[playerNum].ps->i : -1;
+
+    RedSplit_CloseExtraMenu();
+
+    if (playerNum != lastPlayer && g_player[playerNum].ps != nullptr && g_player[lastPlayer].ps != nullptr)
+    {
+        DukePlayer_t * const target = g_player[playerNum].ps;
+        DukePlayer_t * const source = g_player[lastPlayer].ps;
+        int32_t const recycledSprite = target->i;
+
+        Bmemcpy(target, source, sizeof(DukePlayer_t));
+        target->frag_ps = playerNum;
+        target->i = source->i;
+
+        g_player[playerNum].pcolor = g_player[lastPlayer].pcolor;
+        g_player[playerNum].pteam = g_player[lastPlayer].pteam;
+        g_player[playerNum].playerquitflag = 1;
+        g_redSplitPlayerInput[playerNum] = g_redSplitPlayerInput[lastPlayer];
+
+        if ((unsigned)target->i < MAXSPRITES)
+            sprite[target->i].yvel = playerNum;
+
+        source->i = recycledSprite;
+        if ((unsigned)recycledSprite < MAXSPRITES)
+            sprite[recycledSprite].yvel = lastPlayer;
+
+        spriteToHide = recycledSprite;
+    }
+
+    g_player[lastPlayer].playerquitflag = 0;
+    g_redSplitPlayerInput[lastPlayer] = RN_SPLIT_INPUT_NONE;
+
+    if ((unsigned)spriteToHide < MAXSPRITES)
+    {
+        sprite[spriteToHide].cstat |= 32768;
+        sprite[spriteToHide].xrepeat = 0;
+        sprite[spriteToHide].yrepeat = 0;
+    }
+
+    int32_t const newPlayerCount = playerCount - 1;
+    g_fakeMultiMode = newPlayerCount > 1 ? newPlayerCount : 0;
+    ud.multimode = newPlayerCount;
+    RedSplit_RebuildConnectChain(newPlayerCount);
+    RedSplit_ResetInputLatches();
+    RedSplit_ResetInputQueues();
 }
 
 static void Menu_DoCheat(int32_t cheatID)
@@ -4151,6 +4824,32 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
 {
     switch (g_currentMenu)
     {
+    case MENU_MAIN_INGAME:
+        if (entry == &ME_MAIN_QUITGAME)
+            G_GameQuit();
+        break;
+
+    case MENU_NEWGAMEMODE:
+        if (entry == &ME_NEWGAMEMODE_SINGLE)
+            RedSplit_SetPlayerCount(1);
+        break;
+
+    case MENU_COOPPLAYERS:
+        if (entry == &ME_COOPPLAYERS_2)
+            RedSplit_SetPlayerCount(2);
+        else if (entry == &ME_COOPPLAYERS_3)
+            RedSplit_SetPlayerCount(3);
+        else if (entry == &ME_COOPPLAYERS_4)
+            RedSplit_SetPlayerCount(4);
+        break;
+
+    case MENU_PLAYERINPUT:
+        if (entry == &ME_PLAYERINPUT_JOIN2 && g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME))
+            RedSplit_SetPlayerCount(2);
+        else if (entry == &ME_PLAYERINPUT_DISCONNECT2)
+            RedSplit_DisconnectPlayer(1);
+        break;
+
     case MENU_EPISODE:
         if (entry != &ME_EPISODE_USERMAP)
         {
@@ -4248,7 +4947,10 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
         ud.m_respawn_items = 0;
         ud.m_respawn_inventory = 0;
 
-        ud.multimode = 1;
+        if (g_fakeMultiMode > 1)
+            ud.multimode = g_fakeMultiMode;
+        else
+            ud.multimode = 1;
 
         G_NewGame_EnterLevel();
         break;
@@ -4443,7 +5145,7 @@ static int32_t Menu_EntryOptionModify(MenuEntry_t *entry, int32_t newOption)
     else if (entry == &ME_GAMESETUP_UPDATES)
         ud.config.LastUpdateCheck = 0;
 #endif
-    else if (entry == &ME_GAMESETUP_WEAPSWITCH_PICKUP)
+    else if (entry == &ME_GAMESETUP_WEAPSWITCH_PICKUP || entry == &ME_PLAYER_WEAPSWITCH_PICKUP)
     {
         ud.weaponswitch &= ~(1|4);
         switch (newOption)
@@ -4574,6 +5276,7 @@ static void Menu_EntryOptionDidModify(MenuEntry_t *entry)
     if (entry == &ME_GAMESETUP_AIM_AUTO ||
         entry == &ME_GAMESETUP_AIM_AUTO_DN64 ||
         entry == &ME_GAMESETUP_WEAPSWITCH_PICKUP ||
+        entry == &ME_PLAYER_WEAPSWITCH_PICKUP ||
         entry == &ME_PLAYER_NAME ||
         entry == &ME_PLAYER_COLOR ||
         entry == &ME_PLAYER_TEAM)
@@ -4775,6 +5478,8 @@ static int32_t Menu_EntryOptionSource(MenuEntry_t *entry, int32_t currentValue)
 {
     if (entry == &ME_GAMESETUP_WEAPSWITCH_PICKUP)
         return (ud.weaponswitch & 1) ? ((ud.weaponswitch & 4) ? 2 : 1) : 0;
+    else if (entry == &ME_PLAYER_WEAPSWITCH_PICKUP)
+        return (ud.weaponswitch & 1) ? 1 : 0;
     else if (entry == &ME_SOUND_DUKETALK)
         return ud.config.VoiceToggle & 1;
     else if (entry == &ME_NETOPTIONS_MONSTERS)
@@ -5546,7 +6251,7 @@ int Menu_Change(MenuID_t cm)
     Menu_ChangingTo(m_currentMenu);
 
 #if !defined EDUKE32_TOUCH_DEVICES
-    m_menuchange_watchpoint = 1;
+    m_menuchange_watchpoint = 2;
 #endif
 
     return 0;
@@ -7255,6 +7960,34 @@ static MenuEntry_t *Menu_RunInput_Menu_Movement(MenuMenu_t *menu, MenuMovement_t
 static void Menu_RunInput_EntryLink_Activate(MenuEntry_t *entry)
 {
     auto *link = (MenuLink_t*)entry->entry;
+
+    if (entry == &ME_MAIN_QUIT || entry == &ME_MAIN_QUITGAME)
+    {
+        G_GameQuit();
+        return;
+    }
+
+    if (REALITY && g_currentMenu == MENU_MAIN_INGAME && entry == &ME_MAIN_QUITTOTITLE)
+    {
+        Menu_EndGameToTitle();
+        Menu_AnimateChange(MENU_CLOSE, MA_None);
+        S_PlaySound(REALITY ? 0x33 : PISTOL_BODYHIT);
+        return;
+    }
+
+#ifdef _WIN32
+    if (entry == &ME_GAMESETUP_CHECKUPDATES)
+    {
+        Menu_StartRednukemUpdateCheck();
+        return;
+    }
+
+    if (entry == &ME_GAMESETUP_INSTALLUPDATE)
+    {
+        Menu_InstallRednukemUpdate();
+        return;
+    }
+#endif
 
     Menu_EntryLinkActivate(entry);
 

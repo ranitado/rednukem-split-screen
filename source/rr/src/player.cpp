@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //-------------------------------------------------------------------------
 
 #include "duke3d.h"
+#include "cmdline.h"
 #include "demo.h"
 
 #ifdef __ANDROID__
@@ -3666,9 +3667,12 @@ void P_GetInput(int playerNum)
     localInput.bits |= (BUTTON(gamefunc_Inventory_Right) || (BUTTON(gamefunc_Dpad_Select) && (input.svel < 0 || input.q16avel > 0))) << SK_INV_RIGHT;
     localInput.bits |= (BUTTON(gamefunc_Inventory) << SK_INVENTORY);
 
-    localInput.bits |= (BUTTON(gamefunc_Steroids) << SK_STEROIDS) | (BUTTON(gamefunc_NightVision) << SK_NIGHTVISION);
-    localInput.bits |= (BUTTON(gamefunc_MedKit) << SK_MEDKIT) | (BUTTON(gamefunc_Holo_Duke) << SK_HOLODUKE);
-    localInput.bits |= (BUTTON(gamefunc_Jetpack) << SK_JETPACK);
+    if (!REALITY)
+    {
+        localInput.bits |= (BUTTON(gamefunc_Steroids) << SK_STEROIDS) | (BUTTON(gamefunc_NightVision) << SK_NIGHTVISION);
+        localInput.bits |= (BUTTON(gamefunc_MedKit) << SK_MEDKIT) | (BUTTON(gamefunc_Holo_Duke) << SK_HOLODUKE);
+        localInput.bits |= (BUTTON(gamefunc_Jetpack) << SK_JETPACK);
+    }
 
     localInput.bits |= BUTTON(gamefunc_Holster_Weapon) << SK_HOLSTER;
     localInput.bits |= BUTTON(gamefunc_Quick_Kick) << SK_QUICK_KICK;
@@ -3818,14 +3822,20 @@ void P_GetInputMotorcycle(int playerNum)
     pPlayer->crouch_toggle = 0;
 
     localInput.bits = BUTTON(gamefunc_Fire) << SK_FIRE;
-    localInput.bits |= BUTTON(gamefunc_Steroids) << SK_STEROIDS;
-    localInput.bits |= BUTTON(gamefunc_NightVision) << SK_NIGHTVISION;
-    localInput.bits |= BUTTON(gamefunc_MedKit) << SK_MEDKIT;
+    if (!REALITY)
+    {
+        localInput.bits |= BUTTON(gamefunc_Steroids) << SK_STEROIDS;
+        localInput.bits |= BUTTON(gamefunc_NightVision) << SK_NIGHTVISION;
+        localInput.bits |= BUTTON(gamefunc_MedKit) << SK_MEDKIT;
+    }
     localInput.bits |= (BUTTON(gamefunc_Inventory_Left) ||
                  (BUTTON(gamefunc_Dpad_Select) && (input.svel > 0 || input.q16avel < 0))) << SK_INV_LEFT;
     localInput.bits |= KB_KeyPressed(sc_Pause) << SK_PAUSE;
-    localInput.bits |= BUTTON(gamefunc_Holo_Duke) << SK_HOLODUKE;
-    localInput.bits |= BUTTON(gamefunc_Jetpack) << SK_JETPACK;
+    if (!REALITY)
+    {
+        localInput.bits |= BUTTON(gamefunc_Holo_Duke) << SK_HOLODUKE;
+        localInput.bits |= BUTTON(gamefunc_Jetpack) << SK_JETPACK;
+    }
     localInput.bits |= (g_gameQuit << SK_GAMEQUIT);
     localInput.bits |= (BUTTON(gamefunc_Inventory_Right) ||
                  (BUTTON(gamefunc_Dpad_Select) && (input.svel < 0 || input.q16avel > 0))) << SK_INV_RIGHT;
@@ -4120,14 +4130,20 @@ void P_GetInputBoat(int playerNum)
     pPlayer->crouch_toggle = 0;
 
     localInput.bits = BUTTON(gamefunc_Fire) << SK_FIRE;
-    localInput.bits |= BUTTON(gamefunc_Steroids) << SK_STEROIDS;
-    localInput.bits |= BUTTON(gamefunc_NightVision) << SK_NIGHTVISION;
-    localInput.bits |= BUTTON(gamefunc_MedKit) << SK_MEDKIT;
+    if (!REALITY)
+    {
+        localInput.bits |= BUTTON(gamefunc_Steroids) << SK_STEROIDS;
+        localInput.bits |= BUTTON(gamefunc_NightVision) << SK_NIGHTVISION;
+        localInput.bits |= BUTTON(gamefunc_MedKit) << SK_MEDKIT;
+    }
     localInput.bits |= (BUTTON(gamefunc_Inventory_Left) ||
                  (BUTTON(gamefunc_Dpad_Select) && (input.svel > 0 || input.q16avel < 0))) << SK_INV_LEFT;
     localInput.bits |= KB_KeyPressed(sc_Pause) << SK_PAUSE;
-    localInput.bits |= BUTTON(gamefunc_Holo_Duke) << SK_HOLODUKE;
-    localInput.bits |= BUTTON(gamefunc_Jetpack) << SK_JETPACK;
+    if (!REALITY)
+    {
+        localInput.bits |= BUTTON(gamefunc_Holo_Duke) << SK_HOLODUKE;
+        localInput.bits |= BUTTON(gamefunc_Jetpack) << SK_JETPACK;
+    }
     localInput.bits |= (g_gameQuit << SK_GAMEQUIT);
     localInput.bits |= (BUTTON(gamefunc_Inventory_Right) ||
                  (BUTTON(gamefunc_Dpad_Select) && (input.svel < 0 || input.q16avel > 0))) << SK_INV_RIGHT;
@@ -5076,6 +5092,7 @@ void P_AddAmmo(DukePlayer_t * const pPlayer, int const weaponNum, int const addA
 void P_AddWeapon(DukePlayer_t *pPlayer, int weaponNum)
 {
     int8_t curr_weapon = pPlayer->curr_weapon;
+    bool const hadWeapon = (pPlayer->gotweapon & (1 << weaponNum)) != 0;
     
     if (pPlayer->on_motorcycle || pPlayer->on_boat)
     {
@@ -5093,7 +5110,7 @@ void P_AddWeapon(DukePlayer_t *pPlayer, int weaponNum)
         return;
     }
 
-    if ((pPlayer->gotweapon & (1<<weaponNum)) == 0)
+    if (!hadWeapon)
     {
         pPlayer->gotweapon |= (1<<weaponNum);
 
@@ -5123,12 +5140,17 @@ void P_AddWeapon(DukePlayer_t *pPlayer, int weaponNum)
             if (weaponNum == HANDBOMB_WEAPON)
                 pPlayer->gotweapon |= (1<<HANDREMOTE_WEAPON);
 
-            return;
+            if (pPlayer->weaponswitch & 1)
+                curr_weapon = weaponNum;
+            else
+                return;
         }
 
         if (!RR || weaponNum != HANDBOMB_WEAPON)
             curr_weapon = weaponNum;
     }
+    else if (REALITY)
+        return;
     else
         curr_weapon = weaponNum;
 
@@ -5189,7 +5211,7 @@ void P_SelectNextInvItem(DukePlayer_t *pPlayer)
 
 void P_CheckWeapon(DukePlayer_t *pPlayer)
 {
-    int playerNum;
+    int playerNum = P_Get(pPlayer->i);
     int weaponNum;
 
     // if (pPlayer->reloading)
@@ -5203,15 +5225,24 @@ void P_CheckWeapon(DukePlayer_t *pPlayer)
         if (weaponNum == pPlayer->curr_weapon)
             return;
 
-        if (REALITY && (weaponNum == KNEE_WEAPON || weaponNum == HANDREMOTE_WEAPON))
+        if ((REALITY && (weaponNum == KNEE_WEAPON || weaponNum == HANDREMOTE_WEAPON))
+            || ((pPlayer->gotweapon & (1<<weaponNum)) && pPlayer->ammo_amount[weaponNum] > 0))
         {
-            P_AddWeapon(pPlayer, weaponNum);
-            return;
-        }
-
-        if ((pPlayer->gotweapon & (1<<weaponNum)) && pPlayer->ammo_amount[weaponNum] > 0)
-        {
-            P_AddWeapon(pPlayer, weaponNum);
+            pPlayer->last_weapon = pPlayer->curr_weapon;
+            pPlayer->random_club_frame = 0;
+            pPlayer->curr_weapon = weaponNum;
+            if (REALITY)
+                pPlayer->dn64_372 = weaponNum;
+            P_SetWeaponGamevars(playerNum, pPlayer);
+            VM_OnEvent(EVENT_CHANGEWEAPON, pPlayer->i, playerNum);
+            pPlayer->kickback_pic = 0;
+            if (pPlayer->holster_weapon == 1)
+            {
+                pPlayer->holster_weapon = 0;
+                pPlayer->weapon_pos = 10;
+            }
+            else pPlayer->weapon_pos = -1;
+            A_PlaySound(REALITY ? 176 : SELECT_WEAPON, pPlayer->i);
             return;
         }
     }
@@ -5220,8 +5251,6 @@ void P_CheckWeapon(DukePlayer_t *pPlayer)
 
     if ((pPlayer->gotweapon & (1<<weaponNum)) && pPlayer->ammo_amount[weaponNum] > 0)
         return;
-
-    playerNum  = P_Get(pPlayer->i);
 
     int wpnInc = 0;
 
@@ -5487,8 +5516,8 @@ void P_FragPlayer(int playerNum)
             swap(&r1, &r2);
         pPlayer->dead_flag = (512 - ((r2 & 1) << 10) + (r1 & 255) - 512) & 2047;
 
-        // if (pPlayer->dead_flag == 0)
-        //     pPlayer->dead_flag++;
+        if (pPlayer->dead_flag == 0)
+            pPlayer->dead_flag++;
 
 #ifndef NETCODE_DISABLE
         //if (g_netServer)
@@ -5529,6 +5558,9 @@ void P_FragPlayer(int playerNum)
 
     if ((g_netServer || ud.multimode > 1) && (REALITY || (pSprite->pal != 1 || (pSprite->cstat & 32768))))
     {
+        if (g_fakeMultiMode > 1 && ((unsigned)pPlayer->frag_ps >= MAXPLAYERS || g_player[pPlayer->frag_ps].ps == nullptr))
+            pPlayer->frag_ps = playerNum;
+
         if (pPlayer->frag_ps != playerNum)
         {
             if (GTFLAGS(GAMETYPE_TDM) && g_player[pPlayer->frag_ps].ps->team == g_player[playerNum].ps->team)
@@ -5563,7 +5595,7 @@ void P_FragPlayer(int playerNum)
             if (actor[pPlayer->i].picnum != APLAYERTOP)
             {
                 pPlayer->fraggedself++;
-                if ((unsigned)pPlayer->wackedbyactor < MAXTILES && A_CheckEnemyTile(sprite[pPlayer->wackedbyactor].picnum))
+                if ((unsigned)pPlayer->wackedbyactor < MAXSPRITES && A_CheckEnemyTile(sprite[pPlayer->wackedbyactor].picnum))
                     Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (krand2() % g_numObituaries)], "A monster",
                              &g_player[playerNum].user_name[0]);
                 else if (actor[pPlayer->i].picnum == NUKEBUTTON)
@@ -9465,7 +9497,15 @@ HORIZONLY:;
                 pPlayer->weapon_pos = WEAPON_POS_RAISE;
             break;
         case 0: break;
-        default: pPlayer->weapon_pos--; break;
+        default:
+        {
+            int32_t const weaponStep = 1;
+            if (pPlayer->weapon_pos < 0)
+                pPlayer->weapon_pos = max<int32_t>(WEAPON_POS_LOWER, pPlayer->weapon_pos - weaponStep);
+            else
+                pPlayer->weapon_pos = max<int32_t>(0, pPlayer->weapon_pos - weaponStep);
+            break;
+        }
     }
 
     P_ProcessWeapon(playerNum);
