@@ -44,7 +44,7 @@ droidinput_t droidinput;
 #define MENU_MARGIN_CENTER  160
 #define MENU_HEIGHT_CENTER  100
 
-#define REDNUKEM_SPLITSCREEN_VERSION "v0.1"
+#define REDNUKEM_SPLITSCREEN_VERSION "v0.2"
 
 int32_t g_skillSoundVoice = -1;
 
