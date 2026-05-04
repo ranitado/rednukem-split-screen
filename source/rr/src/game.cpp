@@ -1612,16 +1612,18 @@ int32_t g_redSplitInvertAim[MAXPLAYERS] = {};
 int32_t g_redSplitViewCentering[MAXPLAYERS] = {};
 int32_t g_redSplitAutoRun[MAXPLAYERS] = {};
 int32_t g_redSplitWeaponWideOffsetX = -39;
+int32_t g_redSplitWeaponPerWeaponWideOffsetX[MAX_WEAPONS] = { -39, -39, -39, -39, -39, -39, -39, -39, -39, -39, -39, 8, -39, -39, -39, -39, -39 };
 int32_t g_redSplitWeaponWideTopOffsetY = 15;
 int32_t g_redSplitWeaponWideScalePercent = 70;
+int32_t g_redSplitWeaponPerWeaponWideScalePercent[MAX_WEAPONS] = { 70, 70, 70, 70, 70, 70, 70, 70, 97, 70, 70, 70, 70, 70, 70, 70, 70 };
 int32_t g_redSplitWeaponQuarterLeftOffsetX = 14;
 int32_t g_redSplitWeaponQuarterRightOffsetX = -10;
 int32_t g_redSplitWeaponQuarterOffsetY = 0;
 int32_t g_redSplitWeaponQuarterScalePercent = 55;
-int32_t g_redSplitWeaponPerWeaponOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, -52, 8 };
-int32_t g_redSplitWeaponPerWeaponOffsetY[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, -28, -28 };
-int32_t g_redSplitWeaponFlashWideOffsetX = 13;
-int32_t g_redSplitWeaponFlashWideOffsetY = -14;
+int32_t g_redSplitWeaponPerWeaponOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, -62, -2, 40, 0, 13 };
+int32_t g_redSplitWeaponPerWeaponOffsetY[MAX_WEAPONS] = { 0, 0, -2, -5, -10, -8, -28, -28, 14, 0, -14 };
+int32_t g_redSplitWeaponFlashWideOffsetX = 17;
+int32_t g_redSplitWeaponFlashWideOffsetY = -17;
 int32_t g_redSplitWeaponFlashWideTopOffsetX = 0;
 int32_t g_redSplitWeaponFlashWideTopOffsetY = 0;
 int32_t g_redSplitWeaponFlashWideBottomOffsetX = 0;
@@ -1632,8 +1634,26 @@ int32_t g_redSplitWeaponFlashDualLeftOffsetX = 37;
 int32_t g_redSplitWeaponFlashDualRightOffsetX = 4;
 int32_t g_redSplitWeaponFlashPistolOffsetX = 0;
 int32_t g_redSplitWeaponFlashPistolOffsetY = 0;
-int32_t g_redSplitWeaponAlienGlowOffsetX = 0;
-int32_t g_redSplitWeaponAlienGlowOffsetY = 0;
+int32_t g_redSplitWeaponAlienGlowOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, 87, 1 };
+int32_t g_redSplitWeaponAlienGlowOffsetY = -26;
+int32_t g_redSplitWeaponAlienGlowSpreadPercent = 100;
+int32_t g_redSplitWeaponAlienGlowSmall1OffsetX = 0;
+int32_t g_redSplitWeaponAlienGlowSmall1OffsetY = 6;
+int32_t g_redSplitWeaponAlienGlowSmall2OffsetX = -2;
+int32_t g_redSplitWeaponAlienGlowSmall2OffsetY = 16;
+int32_t g_redSplitWeaponMissileRightOffsetX = 0;
+int32_t g_redSplitWeaponMissileRightOffsetY = -62;
+int32_t g_redSplitWeaponMissileRocketOffsetX = 0;
+int32_t g_redSplitWeaponMissileRocketOffsetY = 0;
+int32_t g_redSplitWeaponMissileFlashOffsetX = 0;
+int32_t g_redSplitWeaponMissileFlashOffsetY = 0;
+int32_t g_redSplitWeaponTripLeftOffsetX = 0;
+int32_t g_redSplitWeaponTripLeftOffsetY = 0;
+int32_t g_redSplitWeaponTripRightOffsetX = 0;
+int32_t g_redSplitWeaponTripRightOffsetY = 0;
+int32_t g_redSplitWeaponTripMineScalePercent = 100;
+int32_t g_redSplitWeaponKickArmedOffsetX = 20;
+int32_t g_redSplitWeaponKickUnarmedOffsetX = -5;
 int32_t g_redSplitWeaponAnchor = 1;
 
 enum RedSplitExtraMenuPage_t
@@ -1654,6 +1674,9 @@ static int32_t g_redSplitWeaponTuningSelection = 0;
 static int32_t g_redSplitWeaponDebugWeapon = PISTOL_WEAPON;
 static int32_t *g_redSplitWeaponDebugOffsetX = &g_redSplitWeaponPerWeaponOffsetX[PISTOL_WEAPON];
 static int32_t *g_redSplitWeaponDebugOffsetY = &g_redSplitWeaponPerWeaponOffsetY[PISTOL_WEAPON];
+static int32_t *g_redSplitWeaponDebugWideOffsetX = &g_redSplitWeaponPerWeaponWideOffsetX[PISTOL_WEAPON];
+static int32_t *g_redSplitWeaponDebugWideScalePercent = &g_redSplitWeaponPerWeaponWideScalePercent[PISTOL_WEAPON];
+static int32_t *g_redSplitWeaponDebugAlienGlowOffsetX = &g_redSplitWeaponAlienGlowOffsetX[PISTOL_WEAPON];
 static int32_t g_redSplitHudHealthIconTile = 3;
 static int32_t g_redSplitHudHealthIconX = -48;
 static int32_t g_redSplitHudHealthIconY = 87;
@@ -1720,9 +1743,9 @@ static RedSplitHudTuningParam_t g_redSplitWeaponTuningParams[] = {
     { "Weapon", &g_redSplitWeaponDebugWeapon, 0, MAX_WEAPONS - 1 },
     { "Weapon X", g_redSplitWeaponDebugOffsetX, -220, 220 },
     { "Weapon Y", g_redSplitWeaponDebugOffsetY, -160, 180 },
-    { "Wide X", &g_redSplitWeaponWideOffsetX, -180, 180 },
+    { "Wide X", g_redSplitWeaponDebugWideOffsetX, -180, 180 },
     { "Wide top Y", &g_redSplitWeaponWideTopOffsetY, -120, 160 },
-    { "Wide scale", &g_redSplitWeaponWideScalePercent, 20, 140 },
+    { "Wide scale", g_redSplitWeaponDebugWideScalePercent, 20, 140 },
     { "Quarter left X", &g_redSplitWeaponQuarterLeftOffsetX, -180, 180 },
     { "Quarter right X", &g_redSplitWeaponQuarterRightOffsetX, -180, 180 },
     { "Quarter Y", &g_redSplitWeaponQuarterOffsetY, -120, 160 },
@@ -1739,8 +1762,26 @@ static RedSplitHudTuningParam_t g_redSplitWeaponTuningParams[] = {
     { "Flash dual right X", &g_redSplitWeaponFlashDualRightOffsetX, -180, 180 },
     { "Flash pistol X", &g_redSplitWeaponFlashPistolOffsetX, -180, 180 },
     { "Flash pistol Y", &g_redSplitWeaponFlashPistolOffsetY, -120, 160 },
-    { "Alien glow X", &g_redSplitWeaponAlienGlowOffsetX, -180, 180 },
+    { "Alien glow X", g_redSplitWeaponDebugAlienGlowOffsetX, -180, 180 },
     { "Alien glow Y", &g_redSplitWeaponAlienGlowOffsetY, -120, 160 },
+    { "Alien glow spread", &g_redSplitWeaponAlienGlowSpreadPercent, 25, 250 },
+    { "Alien glow S1 X", &g_redSplitWeaponAlienGlowSmall1OffsetX, -180, 180 },
+    { "Alien glow S1 Y", &g_redSplitWeaponAlienGlowSmall1OffsetY, -120, 160 },
+    { "Alien glow S2 X", &g_redSplitWeaponAlienGlowSmall2OffsetX, -180, 180 },
+    { "Alien glow S2 Y", &g_redSplitWeaponAlienGlowSmall2OffsetY, -120, 160 },
+    { "Missile right X", &g_redSplitWeaponMissileRightOffsetX, -180, 180 },
+    { "Missile right Y", &g_redSplitWeaponMissileRightOffsetY, -120, 160 },
+    { "Missile rocket X", &g_redSplitWeaponMissileRocketOffsetX, -180, 180 },
+    { "Missile rocket Y", &g_redSplitWeaponMissileRocketOffsetY, -120, 160 },
+    { "Missile flash X", &g_redSplitWeaponMissileFlashOffsetX, -180, 180 },
+    { "Missile flash Y", &g_redSplitWeaponMissileFlashOffsetY, -120, 160 },
+    { "Trip left X", &g_redSplitWeaponTripLeftOffsetX, -180, 180 },
+    { "Trip left Y", &g_redSplitWeaponTripLeftOffsetY, -120, 160 },
+    { "Trip right X", &g_redSplitWeaponTripRightOffsetX, -180, 180 },
+    { "Trip right Y", &g_redSplitWeaponTripRightOffsetY, -120, 160 },
+    { "Trip mine scale", &g_redSplitWeaponTripMineScalePercent, 20, 180 },
+    { "Kick armed X", &g_redSplitWeaponKickArmedOffsetX, -180, 180 },
+    { "Kick unarmed X", &g_redSplitWeaponKickUnarmedOffsetX, -180, 180 },
     { "Anchor 0L 1S 2R", &g_redSplitWeaponAnchor, 0, 2 },
 };
 
@@ -2203,17 +2244,27 @@ static void RedSplit_UpdateWeaponTuningPointers(void)
 
     g_redSplitWeaponDebugOffsetX = &g_redSplitWeaponPerWeaponOffsetX[weaponNum];
     g_redSplitWeaponDebugOffsetY = &g_redSplitWeaponPerWeaponOffsetY[weaponNum];
+    g_redSplitWeaponDebugWideOffsetX = &g_redSplitWeaponPerWeaponWideOffsetX[weaponNum];
+    g_redSplitWeaponDebugWideScalePercent = &g_redSplitWeaponPerWeaponWideScalePercent[weaponNum];
+    g_redSplitWeaponDebugAlienGlowOffsetX = &g_redSplitWeaponAlienGlowOffsetX[weaponNum];
     g_redSplitWeaponTuningParams[1].value = g_redSplitWeaponDebugOffsetX;
     g_redSplitWeaponTuningParams[2].value = g_redSplitWeaponDebugOffsetY;
+    g_redSplitWeaponTuningParams[3].value = g_redSplitWeaponDebugWideOffsetX;
+    g_redSplitWeaponTuningParams[5].value = g_redSplitWeaponDebugWideScalePercent;
+    g_redSplitWeaponTuningParams[22].value = g_redSplitWeaponDebugAlienGlowOffsetX;
 }
 
 static void RedSplit_ApplyDebugWeaponToPlayers(void)
 {
-    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode > 1 ? g_fakeMultiMode : ud.multimode, 1, 4);
+    int32_t const playerCount = g_fakeMultiMode > 1 ? clamp<int32_t>(g_fakeMultiMode, 2, 4) : 1;
     int32_t const weaponNum = clamp<int32_t>(g_redSplitWeaponDebugWeapon, 0, MAX_WEAPONS - 1);
 
-    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    for (int32_t i = 0; i < playerCount; ++i)
     {
+        int32_t const playerNum = g_fakeMultiMode > 1 ? i : screenpeek;
+        if ((unsigned)playerNum >= MAXPLAYERS)
+            continue;
+
         DukePlayer_t * const p = g_player[playerNum].ps;
         if (p == nullptr)
             continue;
@@ -2288,7 +2339,10 @@ static void RedSplit_HandleWeaponTuningInput(void)
             delta *= 5;
 
         RedSplitHudTuningParam_t &param = g_redSplitWeaponTuningParams[g_redSplitWeaponTuningSelection];
-        *param.value = clamp(*param.value + delta, param.minValue, param.maxValue);
+        if (g_fakeMultiMode > 1 || param.value == &g_redSplitWeaponDebugWeapon)
+        {
+            *param.value = clamp(*param.value + delta, param.minValue, param.maxValue);
+        }
 
         if (param.value == &g_redSplitWeaponDebugWeapon)
             RedSplit_ApplyDebugWeaponToPlayers();
@@ -2307,17 +2361,20 @@ static void RedSplit_DrawWeaponTuningPanel(void)
 
     RedSplit_UpdateWeaponTuningPointers();
 
-    rotatesprite_(4 << 16, 4 << 16, divscale16(150 << 16, tilesiz[0].x << 16), 0, 0, 95, ud.shadow_pal, 2 | 8 | 16 | 32,
-                  0, 0, 0, 0, xdim - 1, ydim - 1);
-
     char line[96];
     minitext(8, 8, "WEAPON TUNE  , closes  [] weapon", 0, 2 | 8 | 16);
 
-    for (int32_t i = 0; i < (int32_t)ARRAY_SIZE(g_redSplitWeaponTuningParams); ++i)
+    int32_t const paramCount = ARRAY_SIZE(g_redSplitWeaponTuningParams);
+    int32_t const maxVisibleRows = 28;
+    int32_t firstParam = g_redSplitWeaponTuningSelection - maxVisibleRows + 1;
+    firstParam = clamp(firstParam, 0, max<int32_t>(paramCount - maxVisibleRows, 0));
+    int32_t const lastParam = min<int32_t>(firstParam + maxVisibleRows, paramCount);
+
+    for (int32_t i = firstParam; i < lastParam; ++i)
     {
         RedSplitHudTuningParam_t const &param = g_redSplitWeaponTuningParams[i];
         Bsprintf(line, "%c %s: %d", i == g_redSplitWeaponTuningSelection ? '>' : ' ', param.name, *param.value);
-        minitext(8, 18 + (i * 6), line, i == g_redSplitWeaponTuningSelection ? 10 : 0, 2 | 8 | 16);
+        minitext(8, 18 + ((i - firstParam) * 6), line, i == g_redSplitWeaponTuningSelection ? 10 : 0, 2 | 8 | 16);
     }
 }
 

@@ -2185,7 +2185,8 @@ static void RedSplit_BuildGamepadInput(int32_t playerNum, int32_t padIndex, inpu
     out->bits |= playerRunning << SK_RUN;
     out->bits |= RedSplit_Button(state, RN_PAD_DPAD_LEFT) << SK_INV_LEFT;
     out->bits |= RedSplit_Button(state, RN_PAD_DPAD_RIGHT) << SK_INV_RIGHT;
-    out->bits |= RedSplit_Button(state, RN_PAD_Y) << SK_INVENTORY;
+    out->bits |= ((gameplayPressed & BIT(RN_PAD_DPAD_DOWN)) != 0) << SK_INVENTORY;
+    out->bits |= RedSplit_Button(state, RN_PAD_Y) << SK_QUICK_KICK;
     out->bits |= RedSplit_Button(state, RN_PAD_START) << SK_ESCAPE;
 
     if (s_redSplitSuppressEscapeTicks > 0)
@@ -2239,6 +2240,9 @@ static void RedSplit_GetInputForPlayer(int32_t playerNum, input_t *out)
             P_GetInput(playerNum);
 
         *out = localInput;
+        out->bits |= KB_KeyPressed(sc_F) << SK_INV_LEFT;
+        out->bits |= KB_KeyPressed(sc_G) << SK_INV_RIGHT;
+        out->bits |= KB_KeyPressed(sc_R) << SK_INVENTORY;
         if (s_redSplitSuppressEscapeTicks > 0)
             out->bits &= ~BIT(SK_ESCAPE);
         joySetPrimaryGamepadIndex(previousPrimaryPad);

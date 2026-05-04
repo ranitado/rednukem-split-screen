@@ -85,7 +85,7 @@ void RT_RotateSpriteSetColor(int a1, int a2, int a3, int a4);
 void RT_RotateSpriteClearFxColor(void);
 void RT_RotateSpriteSetShadePal(int ss, int shade, int pal);
 void RT_RotateSpriteSetShadePalAlpha(int shade, int pal, int alpha);
-void RT_RedSplitWeaponGroupBegin(float x, float y);
+void RT_RedSplitWeaponGroupBegin(float x, float y, int weaponID);
 void RT_RedSplitWeaponGroupEnd(void);
 void RT_RotateSprite(float x, float y, float sx, float sy, int tilenum, int orientation, bool screenCorrection = true);
 void RT_RotateSpriteText(float x, float y, float sx, float sy, int tilenum, int orientation, bool buildcoords = false);

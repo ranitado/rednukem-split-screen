@@ -110,6 +110,9 @@ void RT_DrawBarBG(bool drawhud)
 
 int RT_InvTileScale(int s, int tile)
 {
+    if ((unsigned)tile >= MAXTILES)
+        return 0;
+
     int rt_tile = rt_tilemap[tile];
     if (rt_tile == -1)
         return 0;
@@ -118,6 +121,33 @@ int RT_InvTileScale(int s, int tile)
         return 0;
 
     return (100 * s) / rt_tileinfo[rt_tile].dimy;
+}
+
+static int RT_NormalizeWeaponWheelWeapon(int weaponNum)
+{
+    if (weaponNum == BOWLINGBALL_WEAPON)
+        return PISTOL_WEAPON;
+    if (weaponNum == MOTORCYCLE_WEAPON)
+        return SHOTGUN_WEAPON;
+    if (weaponNum == BOAT_WEAPON)
+        return RPG_WEAPON;
+
+    return weaponNum;
+}
+
+static int RT_WeaponWheelIconTile(int weaponNum)
+{
+    static int const weaponWheelIcon[MAX_WEAPONS] = {
+        BOOTS, AMMO, SHOTGUNAMMO, BATTERYAMMO, RPGAMMO, HBOMBAMMO, CRYSTALAMMO, GROWAMMO,
+        DEVISTATORAMMO, TRIPBOMBSPRITE, FREEZEAMMO, HBOMBAMMO, 34, 50, 43
+    };
+
+    weaponNum = RT_NormalizeWeaponWheelWeapon(weaponNum);
+    if ((unsigned)weaponNum >= MAX_WEAPONS)
+        return -1;
+
+    int const tile = weaponWheelIcon[weaponNum];
+    return RT_InvTileScale(16, tile) > 0 ? tile : -1;
 }
 
 void RT_PrintNumber(float x, float y, const char *string, int orientation)
@@ -234,8 +264,7 @@ void RT_DrawBar(DukePlayer_t *const pPlayer, bool drawhud)
         invAmount = pPlayer->inv_amount[GET_BOOTS] / 2;
         break;
     case ICON_SHIELD:
-        invTile = SHIELD;
-        invAmount = pPlayer->inv_amount[GET_SHIELD];
+        pPlayer->inven_icon = ICON_NONE;
         break;
     default:
         break;
@@ -320,53 +349,69 @@ void RT_DrawBar(DukePlayer_t *const pPlayer, bool drawhud)
 
 void RT_DisplayWeaponIcon(float x, float y, int offset, int tile)
 {
+    int const iconScale = RT_InvTileScale(16, tile);
+    if (iconScale <= 0)
+        return;
+
     int ox = sintable[(offset * 6) & 2047];
     float oy = sintable[(offset * 6 + 512) & 2047] / 65536.f + 0.75f;
     int shade = (int)((oy * 5.f - 4.f) * 255.f);
     int alpha = (int)((oy * 2.f - 1.f) * 256.f);
+    float const drawX = RT_SBarScale(x + (float)((ox * 60) >> 14) - (borderx1+borderx2)/2.f)+(borderx1+borderx2)/2.f;
+    float const drawY = RT_SBarScale(y - bordery2) + bordery2;
+
+    if (g_redSplitHudDrawingView >= 0)
+    {
+        int32_t const viewW = g_redSplitHudX2 - g_redSplitHudX1 + 1;
+        int32_t const viewH = g_redSplitHudY2 - g_redSplitHudY1 + 1;
+        if (viewW <= 0 || viewH <= 0)
+            return;
+
+        if (!waloff[tile])
+            tileLoad(tile);
+
+        int32_t const screenX = g_redSplitHudX1 + Blrintf((drawX / 320.f) * viewW);
+        int32_t const screenY = g_redSplitHudY1 + Blrintf((drawY / 240.f) * viewH);
+        bool const quarterView = viewW < ((float)xdim * 0.75f) && viewH < ((float)ydim * 0.75f);
+        int32_t const splitScale = quarterView ? g_redSplitWeaponQuarterScalePercent : g_redSplitWeaponWideScalePercent;
+        int32_t const zoom = scale(65536, scale(iconScale, splitScale, 100), 100);
+        int32_t const virtualX = scale(screenX, 320, xdim) << 16;
+        int32_t const virtualY = scale(screenY, 200, ydim) << 16;
+        int32_t const buildShade = clamp(32 - (shade >> 3), -32, 32);
+        int32_t orientation = 2 | 8 | 16 | 32;
+
+        if (alpha < 220)
+            orientation |= 1;
+
+        rotatesprite_(virtualX, virtualY, zoom, 0, tile, buildShade, 0, orientation,
+                      0, 0, g_redSplitHudX1, g_redSplitHudY1, g_redSplitHudX2, g_redSplitHudY2);
+        return;
+    }
+
     RT_RotateSpriteSetColor(shade, shade, shade, alpha);;
-    float sx = RT_InvTileScale(16, tile);
-    float sy = RT_InvTileScale(16, tile);
-    RT_RotateSprite(RT_SBarScale(x + (float)((ox * 60) >> 14) - (borderx1+borderx2)/2.f)+(borderx1+borderx2)/2.f,
-        RT_SBarScale(y - bordery2) + bordery2, RT_SBarScale(sx), RT_SBarScale(sy), tile, RTRS_SCALED);
+    float sx = iconScale;
+    float sy = iconScale;
+    RT_RotateSprite(drawX, drawY, RT_SBarScale(sx), RT_SBarScale(sy), tile, RTRS_SCALED);
 }
 
 void RT_DrawWeaponWheel(DukePlayer_t *const pPlayer, bool drawhud)
 {
     if (pPlayer->dn64_378 > 0)
     {
-        auto weaponIconTile = [](int weaponNum)
-        {
-            if (weaponNum == BOWLINGBALL_WEAPON)
-                weaponNum = PISTOL_WEAPON;
-            else if (weaponNum == MOTORCYCLE_WEAPON)
-                weaponNum = SHOTGUN_WEAPON;
-            else if (weaponNum == BOAT_WEAPON)
-                weaponNum = RPG_WEAPON;
-
-            return (unsigned)weaponNum < MAX_WEAPONS ? WeaponPickupSprites[weaponNum] : KNEE;
-        };
-
         float x = (borderx1 + borderx2) / 2.f;
         float y = bordery2;
         float yfactor = drawhud ? 1.f : 1.5f;
-        int weaponNum = pPlayer->dn64_372;
-        if (weaponNum == BOWLINGBALL_WEAPON)
-            weaponNum = PISTOL_WEAPON;
-        else if (weaponNum == MOTORCYCLE_WEAPON)
-            weaponNum = SHOTGUN_WEAPON;
-        else if (weaponNum == BOAT_WEAPON)
-            weaponNum = RPG_WEAPON;
+        int weaponNum = RT_NormalizeWeaponWheelWeapon(pPlayer->dn64_372);
         int wl1 = P_NextWeapon(pPlayer, weaponNum, -1);
         int wr1 = P_NextWeapon(pPlayer, weaponNum, 1);
         int wl2 = P_NextWeapon(pPlayer, wl1, -1);
         int wr2 = P_NextWeapon(pPlayer, wr1, 1);
 
-        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -120 - pPlayer->dn64_374, weaponIconTile(wl2));
-        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, 120 - pPlayer->dn64_374, weaponIconTile(wr2));
-        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -60 - pPlayer->dn64_374, weaponIconTile(wl1));
-        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, 60 - pPlayer->dn64_374, weaponIconTile(wr1));
-        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -pPlayer->dn64_374, weaponIconTile(weaponNum));
+        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -120 - pPlayer->dn64_374, RT_WeaponWheelIconTile(wl2));
+        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, 120 - pPlayer->dn64_374, RT_WeaponWheelIconTile(wr2));
+        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -60 - pPlayer->dn64_374, RT_WeaponWheelIconTile(wl1));
+        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, 60 - pPlayer->dn64_374, RT_WeaponWheelIconTile(wr1));
+        RT_DisplayWeaponIcon(x, y - pPlayer->dn64_378 * yfactor, -pPlayer->dn64_374, RT_WeaponWheelIconTile(weaponNum));
     }
 }
 

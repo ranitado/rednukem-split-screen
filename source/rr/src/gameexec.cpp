@@ -1133,8 +1133,6 @@ static void VM_AddInventory(DukePlayer_t * const pPlayer, int const itemNum, int
     {
         int16_t & shield_amount = pPlayer->inv_amount[GET_SHIELD];
         shield_amount = min(shield_amount + nAmount, pPlayer->max_shield_amount);
-        if (REALITY)
-            pPlayer->inven_icon = ICON_SHIELD;
         break;
     }
 

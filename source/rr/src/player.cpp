@@ -46,7 +46,7 @@ int32_t g_numSelfObituaries = 0;
 int const icon_to_inv[ICON_MAX] = { GET_FIRSTAID, GET_FIRSTAID, GET_STEROIDS, GET_HOLODUKE,
                                     GET_JETPACK,  GET_HEATS,    GET_SCUBA,    GET_BOOTS,    GET_SHIELD };
 
-int const inv_to_icon[GET_MAX] = { ICON_STEROIDS, ICON_SHIELD, ICON_SCUBA, ICON_HOLODUKE, ICON_JETPACK, ICON_NONE,
+int const inv_to_icon[GET_MAX] = { ICON_STEROIDS, ICON_NONE,   ICON_SCUBA, ICON_HOLODUKE, ICON_JETPACK, ICON_NONE,
                                    ICON_NONE,     ICON_HEATS,  ICON_NONE,  ICON_FIRSTAID, ICON_BOOTS };
 
 void P_AddKills(DukePlayer_t * const pPlayer, uint16_t kills)
@@ -4804,6 +4804,8 @@ static int32_t P_DoCounters(int playerNum)
                 A_PlaySound(REALITY ? 40 : DUKE_JETPACK_OFF, pPlayer->i);
                 S_StopEnvSound(REALITY ? 39 : DUKE_JETPACK_IDLE, pPlayer->i);
                 S_StopEnvSound(REALITY ? 38 : DUKE_JETPACK_ON, pPlayer->i);
+                S_StopSound(REALITY ? 39 : DUKE_JETPACK_IDLE);
+                S_StopSound(REALITY ? 38 : DUKE_JETPACK_ON);
             }
         }
 
@@ -5254,6 +5256,20 @@ void P_CheckWeapon(DukePlayer_t *pPlayer)
 
     int wpnInc = 0;
 
+    if (REALITY)
+    {
+        int currentWeapon = weaponNum;
+        if (currentWeapon == BOWLINGBALL_WEAPON)
+            currentWeapon = PISTOL_WEAPON;
+        else if (currentWeapon == MOTORCYCLE_WEAPON)
+            currentWeapon = SHOTGUN_WEAPON;
+        else if (currentWeapon == BOAT_WEAPON)
+            currentWeapon = RPG_WEAPON;
+
+        weaponNum = P_NextWeapon(pPlayer, currentWeapon, -1);
+        goto found_weapon;
+    }
+
     for (wpnInc = 0; wpnInc <= (REALITY ? 13 : 9); ++wpnInc)
     {
         weaponNum = g_player[playerNum].wchoice[wpnInc];
@@ -5276,6 +5292,7 @@ void P_CheckWeapon(DukePlayer_t *pPlayer)
 
     // Found the weapon
 
+found_weapon:
     pPlayer->last_weapon = pPlayer->curr_weapon;
     pPlayer->random_club_frame = 0;
     pPlayer->curr_weapon = weaponNum;
@@ -5538,7 +5555,12 @@ void P_FragPlayer(int playerNum)
     pPlayer->holoduke_on = -1;
 
     if (!RR)
+    {
         S_StopEnvSound(REALITY ? 39 : DUKE_JETPACK_IDLE, pPlayer->i);
+        S_StopEnvSound(REALITY ? 38 : DUKE_JETPACK_ON, pPlayer->i);
+        S_StopSound(REALITY ? 39 : DUKE_JETPACK_IDLE);
+        S_StopSound(REALITY ? 38 : DUKE_JETPACK_ON);
+    }
 
     if (pPlayer->scream_voice > FX_Ok)
     {

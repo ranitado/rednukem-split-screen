@@ -3838,6 +3838,8 @@ void P_HandleKeys(int playerNum)
 
             if (pPlayer->refresh_inventory) pPlayer->refresh_inventory = 0;
             int32_t inventoryIcon = pPlayer->inven_icon;
+            if (inventoryIcon == ICON_SHIELD)
+                inventoryIcon = ICON_NONE;
 
             int i = 0;
 
@@ -3865,12 +3867,11 @@ CHECKINV1:
                     case ICON_FIRSTAID:
                         if (pPlayer->inv_amount[GET_FIRSTAID] > 0 && i > 1)
                             break;
-                        inventoryIcon = inventoryRight ? 2 : 8;
+                        inventoryIcon = inventoryRight ? ICON_STEROIDS : ICON_BOOTS;
                         goto CHECKINV1;
                     case ICON_SHIELD:
-                        if (pPlayer->inv_amount[GET_SHIELD] > 0 && i > 1)
-                            break;
-                        inventoryIcon = inventoryRight ? 1 : 7;
+                    default:
+                        inventoryIcon = inventoryRight ? ICON_FIRSTAID : ICON_BOOTS;
                         goto CHECKINV1;
                 }
             }
@@ -3879,8 +3880,8 @@ CHECKINV1:
             if (inventoryIcon >= 1)
             {
                 pPlayer->inven_icon = inventoryIcon;
-                static const int32_t invQuotes[8] = { QUOTE_MEDKIT, QUOTE_STEROIDS, QUOTE_HOLODUKE,
-                    QUOTE_JETPACK, QUOTE_NVG, QUOTE_SCUBA, QUOTE_BOOTS, QUOTE_DN64ARMOR };
+                static const int32_t invQuotes[] = { QUOTE_MEDKIT, QUOTE_STEROIDS, QUOTE_HOLODUKE,
+                    QUOTE_JETPACK, QUOTE_NVG, QUOTE_SCUBA, QUOTE_BOOTS };
                 if (inventoryIcon-1 < ARRAY_SSIZE(invQuotes))
                     P_DoQuote(invQuotes[inventoryIcon-1], pPlayer);
             }
@@ -4076,6 +4077,8 @@ CHECKINV1:
                     A_PlaySound(40,pPlayer->i);
                     S_StopEnvSound(39,pPlayer->i);
                     S_StopEnvSound(38,pPlayer->i);
+                    S_StopSound(39);
+                    S_StopSound(38);
                     P_DoQuote(QUOTE_JETPACK_OFF,pPlayer);
                 }
             }

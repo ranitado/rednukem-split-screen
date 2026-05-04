@@ -368,6 +368,9 @@ int32_t A_MoveSprite(int32_t spriteNum, vec3_t const * const change, uint32_t cl
     int const         isEnemy = A_CheckEnemySprite(pSprite);
     vec2_t const      oldPos  = *(vec2_t *)pSprite;
 
+    if ((unsigned)pSprite->sectnum >= (unsigned)numsectors)
+        return 16384;
+
     if (pSprite->statnum == STAT_MISC || (isEnemy && pSprite->xrepeat < 4))
     {
         pSprite->x += change->x;
@@ -418,7 +421,7 @@ int32_t A_MoveSprite(int32_t spriteNum, vec3_t const * const change, uint32_t cl
     if (isEnemy)
     {
         // Handle potential stayput condition (map-provided or hard-coded).
-        if (newSectnum < 0
+        if ((unsigned)newSectnum >= (unsigned)numsectors
             || ((actor[spriteNum].actorstayput >= 0 && actor[spriteNum].actorstayput != newSectnum)
                 || (!RR && ((pSprite->picnum == BOSS2 && (REALITY || pSprite->pal == 0) && sector[newSectnum].lotag != ST_3)
                 || ((pSprite->picnum == BOSS1 || pSprite->picnum == BOSS2) && sector[newSectnum].lotag == ST_1_ABOVE_WATER)
@@ -434,7 +437,7 @@ int32_t A_MoveSprite(int32_t spriteNum, vec3_t const * const change, uint32_t cl
 
             setsprite(spriteNum, (vec3_t *)pSprite);
 
-            if (newSectnum < 0)
+            if ((unsigned)newSectnum >= (unsigned)numsectors)
                 newSectnum = 0;
 
             return 16384+newSectnum;
@@ -451,7 +454,17 @@ int32_t A_MoveSprite(int32_t spriteNum, vec3_t const * const change, uint32_t cl
     }
     else if (newSectnum != pSprite->sectnum)
     {
-        changespritesect(spriteNum, newSectnum);
+        if ((unsigned)newSectnum >= (unsigned)numsectors || changespritesect(spriteNum, newSectnum) < 0 || pSprite->sectnum != newSectnum)
+        {
+            *(vec2_t *)pSprite = oldPos;
+            setsprite(spriteNum, (vec3_t *)pSprite);
+            newSectnum = pSprite->sectnum;
+
+            if ((unsigned)newSectnum >= (unsigned)numsectors)
+                return 16384;
+
+            return 16384 + newSectnum;
+        }
         // A_GetZLimits(spritenum);
     }
 

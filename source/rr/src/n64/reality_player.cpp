@@ -3,6 +3,7 @@
 #include "compat.h"
 #include "build.h"
 #include "../duke3d.h"
+#include "../cmdline.h"
 
 // int rt_pfade;
 
@@ -83,7 +84,9 @@ static void RT_DrawTileScaled(int drawX, int drawY, int tileNum, int drawShade, 
     else
         RT_RotateSpriteSetShadePal(screenpeek, drawShade, drawPal);
 
-    RT_RotateSprite(drawX, drawY, 100.f, 100.f, tileNum, drawBits);
+    float const drawScalePercent = (drawScale * 100.f) / 65536.f;
+
+    RT_RotateSprite(drawX, drawY, drawScalePercent, drawScalePercent, tileNum, drawBits);
 #if 0
     int32_t wx[2] = { windowxy1.x, windowxy2.x };
     int32_t wy[2] = { windowxy1.y, windowxy2.y };
@@ -155,11 +158,22 @@ static inline void RT_DrawWeaponTileWithID(int uniqueID, int weaponX, int weapon
 }
 
 static inline void RT_DrawWeaponTileWithIDGrouped(int uniqueID, int weaponX, int weaponY, int weaponTile, int weaponShade,
-                                                  int weaponBits, int p, int groupX, int groupY, int weaponScale = 65536)
+                                                  int weaponBits, int p, int groupX, int groupY, int groupWeaponID = -1,
+                                                  int weaponScale = 65536)
 {
-    RT_RedSplitWeaponGroupBegin(groupX, groupY);
+    RT_RedSplitWeaponGroupBegin(groupX, groupY, groupWeaponID >= 0 ? groupWeaponID : uniqueID);
     RT_DrawWeaponTileWithID(uniqueID, weaponX, weaponY, weaponTile, weaponShade, weaponBits, p, weaponScale);
     RT_RedSplitWeaponGroupEnd();
+}
+
+static inline int RT_RedSplitWeaponTweaksActive(void)
+{
+    return g_fakeMultiMode > 1 && g_redSplitHudDrawingView >= 0;
+}
+
+static inline int RT_RedSplitTwoPlayerWeaponTweaksActive(void)
+{
+    return RT_RedSplitWeaponTweaksActive() && g_fakeMultiMode == 2;
 }
 
 static int RT_P_DisplayKnee(int kneeShade)
@@ -372,7 +386,7 @@ void RT_P_DisplayWeapon(void)
     weaponYOffset -= (pPlayer->hard_landing << 3);
 
     currentWeapon   = (pPlayer->last_weapon >= 0) ? pPlayer->last_weapon : pPlayer->curr_weapon;
-    if ((unsigned)currentWeapon < MAX_WEAPONS)
+    if (RT_RedSplitWeaponTweaksActive() && (unsigned)currentWeapon < MAX_WEAPONS)
     {
         weaponX += g_redSplitWeaponPerWeaponOffsetX[currentWeapon];
         weaponY += g_redSplitWeaponPerWeaponOffsetY[currentWeapon];
@@ -391,13 +405,14 @@ void RT_P_DisplayWeapon(void)
 
     if (quickKickFrame != 14 && ud.drawweapon == 1)
     {
+        int const kickOffsetX = (RT_RedSplitTwoPlayerWeaponTweaksActive() && currentWeapon != KNEE_WEAPON) ? g_redSplitWeaponKickArmedOffsetX : 0;
         guniqhudid = 100;
 
         if (quickKickFrame < 5 || quickKickFrame > 9)
-            RT_DrawTileScaled(weaponX + 35 - (pPlayer->look_ang >> 1), weaponY + 321 - weaponYOffset, KNEE, weaponShade,
+            RT_DrawTileScaled(weaponX + 35 + kickOffsetX - (pPlayer->look_ang >> 1), weaponY + 321 - weaponYOffset, KNEE, weaponShade,
                                 weaponBits | 4 | DRAWEAP_CENTER, weaponPal);
         else
-            RT_DrawTileScaled(weaponX + 115 - 16 - (pPlayer->look_ang >> 1), weaponY + 285 - weaponYOffset, KNEE + 1,
+            RT_DrawTileScaled(weaponX + 115 - 16 + kickOffsetX - (pPlayer->look_ang >> 1), weaponY + 285 - weaponYOffset, KNEE + 1,
                                 weaponShade, weaponBits | 4 | DRAWEAP_CENTER, weaponPal);
         guniqhudid = 0;
     }
@@ -444,34 +459,51 @@ void RT_P_DisplayWeapon(void)
         {
         case KNEE_WEAPON__STATIC:
         {
+            int const kickOffsetX = RT_RedSplitTwoPlayerWeaponTweaksActive() ? g_redSplitWeaponKickUnarmedOffsetX : 0;
             guniqhudid = currentWeapon;
             if (*weaponFrame < 5 || *weaponFrame > 9)
-                RT_DrawTileScaled(weaponX + 260 - halfLookAng, weaponY + 321 - weaponYOffset, KNEE,
+                RT_DrawTileScaled(weaponX + 260 + kickOffsetX - halfLookAng, weaponY + 321 - weaponYOffset, KNEE,
                                     weaponShade, weaponBits, weaponPal);
             else
-                RT_DrawTileScaled(weaponX + 200 - halfLookAng, weaponY + 285 - weaponYOffset, KNEE + 1,
+                RT_DrawTileScaled(weaponX + 200 + kickOffsetX - halfLookAng, weaponY + 285 - weaponYOffset, KNEE + 1,
                                     weaponShade, weaponBits, weaponPal);
             guniqhudid = 0;
             break;
         }
 
         case TRIPBOMB_WEAPON__STATIC:
+        {
             weaponX += 8;
             weaponYOffset -= 10;
 
             if ((*weaponFrame) > 6)
                 weaponY += ((*weaponFrame) << 3);
-            else if ((*weaponFrame) < 4)
-                RT_DrawWeaponTileWithID(currentWeapon << 2, weaponX + 142 - halfLookAng,
-                                        weaponY + 237 - weaponYOffset, HANDHOLDINGLASER + 3, weaponShade, weaponBits, weaponPal);
+            int const tripTweaks = RT_RedSplitWeaponTweaksActive();
+            int const tripLeftOffsetX = tripTweaks ? g_redSplitWeaponTripLeftOffsetX : 0;
+            int const tripLeftOffsetY = tripTweaks ? g_redSplitWeaponTripLeftOffsetY : 0;
+            int const tripRightOffsetX = tripTweaks ? g_redSplitWeaponTripRightOffsetX : 0;
+            int const tripRightOffsetY = tripTweaks ? g_redSplitWeaponTripRightOffsetY : 0;
+            int const tripMineScalePercent = tripTweaks ? clamp<int32_t>(g_redSplitWeaponTripMineScalePercent, 20, 180) : 100;
+            int const tripMineScale = scale(65536, tripMineScalePercent, 100);
+            int const tripGroupX = weaponX + 142 - halfLookAng;
+            int const tripGroupY = weaponY + 249 - weaponYOffset;
 
-            RT_DrawWeaponTileWithID(currentWeapon, weaponX + 130 - halfLookAng, weaponY + 249 - weaponYOffset,
-                                    HANDHOLDINGLASER + ((*weaponFrame) >> 2), weaponShade, weaponBits, weaponPal);
+            if ((*weaponFrame) < 4)
+                RT_DrawWeaponTileWithIDGrouped(currentWeapon << 2, weaponX + 142 - halfLookAng,
+                                               weaponY + 237 - weaponYOffset, HANDHOLDINGLASER + 3, weaponShade, weaponBits,
+                                               weaponPal, tripGroupX, tripGroupY, currentWeapon, tripMineScale);
 
-            RT_DrawWeaponTileWithID(currentWeapon << 1, weaponX + 152 - halfLookAng,
-                                    weaponY + 249 - weaponYOffset, HANDHOLDINGLASER + ((*weaponFrame) >> 2), weaponShade, weaponBits | 4,
-                                    weaponPal);
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon, weaponX + 130 + tripLeftOffsetX - halfLookAng,
+                                           weaponY + 249 + tripLeftOffsetY - weaponYOffset,
+                                           HANDHOLDINGLASER + ((*weaponFrame) >> 2), weaponShade, weaponBits, weaponPal,
+                                           tripGroupX, tripGroupY, currentWeapon);
+
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 1, weaponX + 152 + tripRightOffsetX - halfLookAng,
+                                           weaponY + 249 + tripRightOffsetY - weaponYOffset,
+                                           HANDHOLDINGLASER + ((*weaponFrame) >> 2), weaponShade, weaponBits | 4,
+                                           weaponPal, tripGroupX, tripGroupY, currentWeapon);
             break;
+        }
 
         case RPG_WEAPON__STATIC:
         case BOAT_WEAPON__STATIC:
@@ -487,29 +519,39 @@ void RT_P_DisplayWeapon(void)
 
             int const rpgGroupX = weaponX + 249;
             int const rpgGroupY = (weaponY << 1) + 189 - weaponYOffset;
+            int const missileTweaks = RT_RedSplitWeaponTweaksActive();
+            int const missileRightOffsetX = missileTweaks ? g_redSplitWeaponMissileRightOffsetX : 0;
+            int const missileRightOffsetY = missileTweaks ? g_redSplitWeaponMissileRightOffsetY : 0;
+            int const missileRocketOffsetX = missileTweaks ? g_redSplitWeaponMissileRocketOffsetX : 0;
+            int const missileRocketOffsetY = missileTweaks ? g_redSplitWeaponMissileRocketOffsetY : 0;
+            int const missileFlashOffsetX = missileTweaks ? g_redSplitWeaponMissileFlashOffsetX : 0;
+            int const missileFlashOffsetY = missileTweaks ? g_redSplitWeaponMissileFlashOffsetY : 0;
 
-            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 2, weaponX + 249, (weaponY << 1) + 190 - weaponYOffset, RPGGUN+1, weaponShade,
-                                           weaponBits, weaponPal, rpgGroupX, rpgGroupY);
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 2, weaponX + 249 + missileRightOffsetX,
+                                           (weaponY << 1) + 190 + missileRightOffsetY - weaponYOffset, RPGGUN+1, weaponShade,
+                                           weaponBits, weaponPal, rpgGroupX, rpgGroupY, currentWeapon);
 
             if (*weaponFrame > 0)
             {
-                RT_DrawWeaponTileWithIDGrouped(currentWeapon << 1, weaponX + 249 + max(79 - ((*weaponFrame) << 1), 47),
-                                               (weaponY << 1) + 189 - weaponYOffset + max(0, *weaponFrame * 3 - 60),
+                RT_DrawWeaponTileWithIDGrouped(currentWeapon << 1, weaponX + 249 + missileRocketOffsetX + max(79 - ((*weaponFrame) << 1), 47),
+                                               (weaponY << 1) + 189 + missileRocketOffsetY - weaponYOffset + max(0, *weaponFrame * 3 - 60),
                                                (currentWeapon == RPG_WEAPON) ? 3792 : 3789, weaponShade, weaponBits, weaponPal,
-                                               rpgGroupX, rpgGroupY);
+                                               rpgGroupX, rpgGroupY, currentWeapon);
             }
 
             RT_DrawWeaponTileWithIDGrouped(currentWeapon, weaponX + 249, (weaponY << 1) + 189 - weaponYOffset, RPGGUN, weaponShade,
-                                           weaponBits, weaponPal, rpgGroupX, rpgGroupY);
+                                           weaponBits, weaponPal, rpgGroupX, rpgGroupY, currentWeapon);
 
             if (*weaponFrame == 0)
             {
                 if (currentWeapon == RPG_WEAPON)
-                    RT_DrawWeaponTileWithIDGrouped(currentWeapon << 3, weaponX + 246, (weaponY << 1) + 226 - weaponYOffset,
-                                                   3790, -32, weaponBits, weaponPal, rpgGroupX, rpgGroupY);
+                    RT_DrawWeaponTileWithIDGrouped(currentWeapon << 3, weaponX + 246 + missileFlashOffsetX,
+                                                   (weaponY << 1) + 226 + missileFlashOffsetY - weaponYOffset,
+                                                   3790, -32, weaponBits, weaponPal, rpgGroupX, rpgGroupY, currentWeapon);
                 else
-                    RT_DrawWeaponTileWithIDGrouped(currentWeapon << 3, weaponX + 255, (weaponY << 1) + 230 - weaponYOffset,
-                                                   3791, -32, weaponBits, weaponPal, rpgGroupX, rpgGroupY);
+                    RT_DrawWeaponTileWithIDGrouped(currentWeapon << 3, weaponX + 255 + missileFlashOffsetX,
+                                                   (weaponY << 1) + 230 + missileFlashOffsetY - weaponYOffset,
+                                                   3791, -32, weaponBits, weaponPal, rpgGroupX, rpgGroupY, currentWeapon);
             }
             break;
         }
@@ -517,7 +559,7 @@ void RT_P_DisplayWeapon(void)
         case SHOTGUN_WEAPON__STATIC:
         case MOTORCYCLE_WEAPON__STATIC:
             weaponX -= 8;
-            if (currentWeapon == SHOTGUN_WEAPON)
+            if (RT_RedSplitWeaponTweaksActive() && currentWeapon == SHOTGUN_WEAPON)
                 weaponYOffset += 15;
 
             if (*weaponFrame > 3 && *weaponFrame < 8)
@@ -778,21 +820,38 @@ void RT_P_DisplayWeapon(void)
             }
             int const alienGroupX = weaponX + 206 - halfLookAng;
             int const alienGroupY = weaponY + 227 - weaponYOffset;
+            int const alienGlowTweaks = RT_RedSplitWeaponTweaksActive();
+            int const alienGlowOffsetX = (alienGlowTweaks && (unsigned)currentWeapon < MAX_WEAPONS) ? g_redSplitWeaponAlienGlowOffsetX[currentWeapon] : 0;
+            int const alienGlowOffsetY = alienGlowTweaks ? g_redSplitWeaponAlienGlowOffsetY : 0;
+            int const alienGlowSmall1OffsetX = alienGlowTweaks ? g_redSplitWeaponAlienGlowSmall1OffsetX : 0;
+            int const alienGlowSmall1OffsetY = alienGlowTweaks ? g_redSplitWeaponAlienGlowSmall1OffsetY : 0;
+            int const alienGlowSmall2OffsetX = alienGlowTweaks ? g_redSplitWeaponAlienGlowSmall2OffsetX : 0;
+            int const alienGlowSmall2OffsetY = alienGlowTweaks ? g_redSplitWeaponAlienGlowSmall2OffsetY : 0;
+            int const alienGlowSpreadPercent = alienGlowTweaks ? clamp<int32_t>(g_redSplitWeaponAlienGlowSpreadPercent, 25, 250) : 100;
+            int const alienGlowBigBaseX = 171;
+            int const alienGlowBigBaseY = 203;
+            int const alienGlowSmall1BaseX = alienGlowBigBaseX + scale(149 - alienGlowBigBaseX, alienGlowSpreadPercent, 100);
+            int const alienGlowSmall1BaseY = alienGlowBigBaseY + scale(214 - alienGlowBigBaseY, alienGlowSpreadPercent, 100);
+            int const alienGlowSmall2BaseX = alienGlowBigBaseX + scale(155 - alienGlowBigBaseX, alienGlowSpreadPercent, 100);
+            int const alienGlowSmall2BaseY = alienGlowBigBaseY + scale(221 - alienGlowBigBaseY, alienGlowSpreadPercent, 100);
 
             RT_DrawWeaponTileWithIDGrouped(currentWeapon, alienGroupX, alienGroupY,
-                                           SHRINKER, weaponShade, weaponBits, weaponPal, alienGroupX, alienGroupY);
-            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 2, weaponX + 149 + g_redSplitWeaponAlienGlowOffsetX - halfLookAng,
-                                           weaponY + 214 + g_redSplitWeaponAlienGlowOffsetY - weaponYOffset,
+                                           SHRINKER, weaponShade, weaponBits, weaponPal, alienGroupX, alienGroupY, currentWeapon);
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 2,
+                                           weaponX + alienGlowSmall1BaseX + alienGlowOffsetX + alienGlowSmall1OffsetX - halfLookAng,
+                                           weaponY + alienGlowSmall1BaseY + alienGlowOffsetY + alienGlowSmall1OffsetY - weaponYOffset,
                                            3884, pPlayer->ammo_amount[GROW_WEAPON] > 0 ? -32 : weaponShade + 12, weaponBits, 2,
-                                           alienGroupX, alienGroupY);
-            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 3, weaponX + 155 + g_redSplitWeaponAlienGlowOffsetX - halfLookAng,
-                                           weaponY + 221 + g_redSplitWeaponAlienGlowOffsetY - weaponYOffset,
+                                           alienGroupX, alienGroupY, currentWeapon);
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 3,
+                                           weaponX + alienGlowSmall2BaseX + alienGlowOffsetX + alienGlowSmall2OffsetX - halfLookAng,
+                                           weaponY + alienGlowSmall2BaseY + alienGlowOffsetY + alienGlowSmall2OffsetY - weaponYOffset,
                                            3886, pPlayer->ammo_amount[SHRINKER_WEAPON] > 0 ? -32 : weaponShade + 12, weaponBits, 6,
-                                           alienGroupX, alienGroupY);
-            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 1, weaponX + 171 + g_redSplitWeaponAlienGlowOffsetX - halfLookAng,
-                                           weaponY + 203 + g_redSplitWeaponAlienGlowOffsetY - weaponYOffset,
+                                           alienGroupX, alienGroupY, currentWeapon);
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 1,
+                                           weaponX + alienGlowBigBaseX + alienGlowOffsetX - halfLookAng,
+                                           weaponY + alienGlowBigBaseY + alienGlowOffsetY - weaponYOffset,
                                            3885, (*weaponFrame) > 0 ? -32 : -(sintable[pPlayer->random_club_frame & 2047] >> 10), weaponBits,
-                                           currentWeapon == GROW_WEAPON ? 2 : 6, alienGroupX, alienGroupY);
+                                           currentWeapon == GROW_WEAPON ? 2 : 6, alienGroupX, alienGroupY, currentWeapon);
             break;
         }
         }
