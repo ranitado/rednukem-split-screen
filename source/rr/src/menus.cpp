@@ -32,6 +32,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "cheats.h"
 #include "cmdline.h"
 #include "premap.h"
+#include "kplib.h"
 
 #include "in_android.h"
 #ifndef __ANDROID__
@@ -47,6 +48,10 @@ droidinput_t droidinput;
 #define REDNUKEM_SPLITSCREEN_VERSION "v0.2"
 
 int32_t g_skillSoundVoice = -1;
+
+#ifdef _WIN32
+# include <cstdio>
+#endif
 
 #define USERMAPENTRYLENGTH 25
 
@@ -67,6 +72,9 @@ static char g_redUpdateDownloadUrl[1024] = "";
 static HANDLE g_redUpdateCheckThread = nullptr;
 static LONG g_redUpdateCheckResult = 0;
 static int32_t g_redUpdateInstallAvailable = RED_UPDATE_INSTALL_NONE;
+static HANDLE g_redUpdateDownloadThread = nullptr;
+static LONG g_redUpdateDownloadResult = 0;
+static char g_redUpdateDownloadZipPath[BMAX_PATH] = "";
 
 static void Menu_StartRednukemUpdateCheck(void);
 static void Menu_InstallRednukemUpdate(void);
@@ -2541,8 +2549,11 @@ static void Menu_Pre(MenuID_t cm)
     case MENU_GAMESETUP:
 #ifdef _WIN32
         Menu_UpdateRednukemUpdateCheck();
-        ME_GAMESETUP_INSTALLUPDATE.name = g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_REINSTALL_LATEST ? "Reinstall Latest" : "Install Update";
+        ME_GAMESETUP_INSTALLUPDATE.name = g_redUpdateDownloadThread != nullptr
+            ? "Downloading..."
+            : (g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_REINSTALL_LATEST ? "Reinstall Latest" : "Install Update");
         MenuEntry_HideOnCondition(&ME_GAMESETUP_INSTALLUPDATE, g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_NONE);
+        MenuEntry_DisableOnCondition(&ME_GAMESETUP_INSTALLUPDATE, g_redUpdateDownloadThread != nullptr);
 #endif
         MEO_GAMESETUP_DEMOREC.options = (ps->gm&MODE_GAME) ? &MEOS_DemoRec : &MEOS_OffOn;
         MenuEntry_DisableOnCondition(&ME_GAMESETUP_DEMOREC, (ps->gm&MODE_GAME) && ud.m_recstat != 1);
@@ -4238,35 +4249,6 @@ static void Menu_EntryFocus(/*MenuEntry_t *entry*/)
 }
 
 #ifdef _WIN32
-static void Menu_PowerShellQuote(char * const out, size_t const outSize, char const * const in)
-{
-    size_t pos = 0;
-    if (outSize == 0)
-        return;
-
-    out[pos++] = '\'';
-    for (char const *p = in; *p != '\0' && pos + 2 < outSize; ++p)
-    {
-        out[pos++] = *p;
-        if (*p == '\'' && pos + 1 < outSize)
-            out[pos++] = '\'';
-    }
-    if (pos + 1 < outSize)
-        out[pos++] = '\'';
-    out[pos] = '\0';
-}
-
-static int32_t Menu_WriteTextFile(char const * const path, char const * const text)
-{
-    FILE * const fp = fopen(path, "wb");
-    if (fp == nullptr)
-        return 0;
-
-    fputs(text, fp);
-    fclose(fp);
-    return 1;
-}
-
 static void Menu_WindowsCommandLineQuote(char * const out, size_t const outSize, char const * const in)
 {
     size_t pos = 0;
@@ -4394,6 +4376,364 @@ static int32_t Menu_DownloadTextWinInet(char const * const url, char * const out
     return ok && pos > 0;
 }
 
+static int32_t Menu_DownloadFileUrlMon(char const * const url, char const * const destination)
+{
+    HMODULE const urlmon = LoadLibraryA("urlmon.dll");
+    if (urlmon == nullptr)
+        return 0;
+
+    typedef HRESULT (WINAPI *URLDownloadToFileAFunc)(void *, LPCSTR, LPCSTR, DWORD, void *);
+    auto const download = (URLDownloadToFileAFunc)GetProcAddress(urlmon, "URLDownloadToFileA");
+    if (download == nullptr)
+    {
+        FreeLibrary(urlmon);
+        return 0;
+    }
+
+    HRESULT const result = download(nullptr, url, destination, 0, nullptr);
+    FreeLibrary(urlmon);
+    return SUCCEEDED(result);
+}
+
+static int32_t Menu_DownloadFileWinInet(char const * const url, char const * const destination)
+{
+    HMODULE const wininet = LoadLibraryA("wininet.dll");
+    if (wininet == nullptr)
+        return 0;
+
+    typedef void * HINTERNET_LOCAL;
+    typedef HINTERNET_LOCAL (WINAPI *InternetOpenAFunc)(LPCSTR, DWORD, LPCSTR, LPCSTR, DWORD);
+    typedef HINTERNET_LOCAL (WINAPI *InternetOpenUrlAFunc)(HINTERNET_LOCAL, LPCSTR, LPCSTR, DWORD, DWORD, DWORD_PTR);
+    typedef BOOL (WINAPI *InternetReadFileFunc)(HINTERNET_LOCAL, LPVOID, DWORD, LPDWORD);
+    typedef BOOL (WINAPI *InternetCloseHandleFunc)(HINTERNET_LOCAL);
+
+    auto const internetOpen = (InternetOpenAFunc)GetProcAddress(wininet, "InternetOpenA");
+    auto const internetOpenUrl = (InternetOpenUrlAFunc)GetProcAddress(wininet, "InternetOpenUrlA");
+    auto const internetReadFile = (InternetReadFileFunc)GetProcAddress(wininet, "InternetReadFile");
+    auto const internetCloseHandle = (InternetCloseHandleFunc)GetProcAddress(wininet, "InternetCloseHandle");
+
+    if (internetOpen == nullptr || internetOpenUrl == nullptr || internetReadFile == nullptr || internetCloseHandle == nullptr)
+    {
+        FreeLibrary(wininet);
+        return 0;
+    }
+
+    FILE * const fp = fopen(destination, "wb");
+    if (fp == nullptr)
+    {
+        FreeLibrary(wininet);
+        return 0;
+    }
+
+    DWORD constexpr INTERNET_OPEN_TYPE_PRECONFIG_LOCAL = 0;
+    DWORD constexpr INTERNET_FLAG_RELOAD_LOCAL = 0x80000000u;
+    DWORD constexpr INTERNET_FLAG_NO_CACHE_WRITE_LOCAL = 0x04000000u;
+    DWORD constexpr INTERNET_FLAG_SECURE_LOCAL = 0x00800000u;
+
+    HINTERNET_LOCAL const session = internetOpen("RednukemSplitScreen", INTERNET_OPEN_TYPE_PRECONFIG_LOCAL, nullptr, nullptr, 0);
+    if (session == nullptr)
+    {
+        fclose(fp);
+        FreeLibrary(wininet);
+        return 0;
+    }
+
+    char const headers[] = "User-Agent: RednukemSplitScreen\r\n";
+    HINTERNET_LOCAL const request = internetOpenUrl(session, url, headers, ARRAY_SIZE(headers) - 1,
+                                                    INTERNET_FLAG_RELOAD_LOCAL | INTERNET_FLAG_NO_CACHE_WRITE_LOCAL | INTERNET_FLAG_SECURE_LOCAL, 0);
+    if (request == nullptr)
+    {
+        internetCloseHandle(session);
+        fclose(fp);
+        FreeLibrary(wininet);
+        return 0;
+    }
+
+    char buffer[32768];
+    BOOL ok = TRUE;
+
+    for (;;)
+    {
+        DWORD bytesRead = 0;
+        ok = internetReadFile(request, buffer, ARRAY_SIZE(buffer), &bytesRead);
+        if (!ok || bytesRead == 0)
+            break;
+
+        if (fwrite(buffer, 1, bytesRead, fp) != bytesRead)
+        {
+            ok = FALSE;
+            break;
+        }
+    }
+
+    internetCloseHandle(request);
+    internetCloseHandle(session);
+    fclose(fp);
+    FreeLibrary(wininet);
+
+    return ok;
+}
+
+static int32_t Menu_DownloadRednukemUpdatePackage(char const * const url, char const * const destination)
+{
+    remove(destination);
+    return Menu_DownloadFileWinInet(url, destination) || Menu_DownloadFileUrlMon(url, destination);
+}
+
+struct rednukemUpdateDownloadParams_t
+{
+    char url[1024];
+    char destination[BMAX_PATH];
+};
+
+static DWORD WINAPI Menu_DownloadRednukemUpdateThread(void * const data)
+{
+    rednukemUpdateDownloadParams_t * const params = (rednukemUpdateDownloadParams_t *)data;
+    int32_t const ok = params != nullptr && Menu_DownloadRednukemUpdatePackage(params->url, params->destination);
+    delete params;
+    InterlockedExchange(&g_redUpdateDownloadResult, ok ? 1 : -1);
+    return 0;
+}
+
+static void Menu_CreateParentDirectories(char const * const filename)
+{
+    char path[BMAX_PATH];
+    Bstrncpyz(path, filename, ARRAY_SIZE(path));
+
+    for (char *p = path; *p != '\0'; ++p)
+    {
+        if (*p != '/' && *p != '\\')
+            continue;
+
+        char const saved = *p;
+        *p = '\0';
+
+        if (path[0] != '\0' && !(path[1] == ':' && path[2] == '\0'))
+            CreateDirectoryA(path, nullptr);
+
+        *p = saved;
+    }
+}
+
+static int32_t Menu_UpdatePathHasSuffix(char const * const path, char const * const suffix)
+{
+    size_t const pathLen = Bstrlen(path);
+    size_t const suffixLen = Bstrlen(suffix);
+
+    return pathLen >= suffixLen && Bstrcasecmp(path + pathLen - suffixLen, suffix) == 0;
+}
+
+static int32_t Menu_ShouldSkipRednukemUpdateEntry(char const * const rel)
+{
+    if (rel[0] == '\0' || rel[0] == '/' || rel[0] == '\\' || Bstrchr(rel, ':') != nullptr)
+        return 1;
+
+    if (Bstrstr(rel, "../") != nullptr || Bstrstr(rel, "/../") != nullptr || Bstrstr(rel, "..\\") != nullptr || Bstrstr(rel, "\\..\\") != nullptr)
+        return 1;
+
+    if (Bstrncasecmp(rel, "saves/", 6) == 0 || Bstrncasecmp(rel, "save/", 5) == 0 ||
+        Bstrncasecmp(rel, "screenshots/", 12) == 0 || Bstrncasecmp(rel, "texturecache/", 13) == 0)
+        return 1;
+
+    return Menu_UpdatePathHasSuffix(rel, ".grp") || Menu_UpdatePathHasSuffix(rel, ".cfg") ||
+           Menu_UpdatePathHasSuffix(rel, ".log") || Menu_UpdatePathHasSuffix(rel, ".dmp") ||
+           Menu_UpdatePathHasSuffix(rel, ".sav") || Menu_UpdatePathHasSuffix(rel, ".z64") ||
+           Menu_UpdatePathHasSuffix(rel, ".n64") || Menu_UpdatePathHasSuffix(rel, ".v64") ||
+           Menu_UpdatePathHasSuffix(rel, ".rom");
+}
+
+static char const *Menu_StripRednukemUpdatePackageRoot(char const * const rel)
+{
+    char const * const slash = Bstrchr(rel, '/');
+    if (slash == nullptr)
+        return rel;
+
+    size_t const firstPartLen = slash - rel;
+    char firstPart[BMAX_PATH];
+    if (firstPartLen >= ARRAY_SIZE(firstPart))
+        return rel;
+
+    Bmemcpy(firstPart, rel, firstPartLen);
+    firstPart[firstPartLen] = '\0';
+
+    if (Bstrncasecmp(firstPart, "rednukem-split-screen-", 23) == 0)
+        return slash + 1;
+
+    return rel;
+}
+
+static int32_t Menu_NormalizeRednukemUpdateEntryName(char * const out, size_t const outSize, char const * raw)
+{
+    if (outSize == 0)
+        return 0;
+
+    if (raw[0] == '|')
+        ++raw;
+
+    size_t pos = 0;
+    for (; *raw != '\0' && pos + 1 < outSize; ++raw)
+        out[pos++] = (*raw == '\\') ? '/' : *raw;
+
+    out[pos] = '\0';
+
+    char const * const stripped = Menu_StripRednukemUpdatePackageRoot(out);
+    if (stripped != out)
+        Bmemmove(out, stripped, Bstrlen(stripped) + 1);
+
+    return !Menu_ShouldSkipRednukemUpdateEntry(out);
+}
+
+static int32_t Menu_ExtractRednukemUpdateZip(char const * const zipPath, char const * const rootPath)
+{
+    if (kzaddstack(zipPath) < 0)
+        return 0;
+
+    char found[BMAX_PATH];
+    char rel[BMAX_PATH];
+    char dest[BMAX_PATH];
+    char buffer[32768];
+    int32_t extracted = 0;
+
+    Bstrcpy(found, "*");
+    kzfindfilestart(found);
+
+    while (kzfindfile(found))
+    {
+        if (found[0] != '|')
+            continue;
+
+        if (!Menu_NormalizeRednukemUpdateEntryName(rel, ARRAY_SIZE(rel), found))
+            continue;
+
+        size_t const relLen = Bstrlen(rel);
+        if (relLen == 0 || rel[relLen - 1] == '/')
+            continue;
+
+        if (!kzopen(found))
+            continue;
+
+        Bsnprintf(dest, ARRAY_SIZE(dest), "%s/%s", rootPath, rel);
+        Bcorrectfilename(dest, 0);
+        Menu_CreateParentDirectories(dest);
+
+        FILE * const fp = fopen(dest, "wb");
+        if (fp == nullptr)
+        {
+            kzclose();
+            kzuninit();
+            return 0;
+        }
+
+        int32_t remaining = kzfilelength();
+        while (remaining > 0)
+        {
+            int32_t const chunk = min<int32_t>(remaining, ARRAY_SIZE(buffer));
+            if (kzread(buffer, chunk) != chunk || fwrite(buffer, 1, chunk, fp) != (size_t)chunk)
+            {
+                fclose(fp);
+                kzclose();
+                kzuninit();
+                return 0;
+            }
+
+            remaining -= chunk;
+        }
+
+        fclose(fp);
+        kzclose();
+        ++extracted;
+    }
+
+    kzuninit();
+    return extracted > 0;
+}
+
+static void Menu_AttachRednukemUpdaterConsole(void)
+{
+    AllocConsole();
+    FILE *dummy;
+    freopen_s(&dummy, "CONOUT$", "w", stdout);
+    freopen_s(&dummy, "CONOUT$", "w", stderr);
+    freopen_s(&dummy, "CONIN$", "r", stdin);
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    setvbuf(stderr, nullptr, _IONBF, 0);
+    SetConsoleTitleA("Rednukem Split-Screen Updater");
+}
+
+static int32_t Menu_StartUpdatedRednukemGame(char const * const exePath, char const * const rootPath)
+{
+    char exeQuoted[BMAX_PATH * 2];
+    Menu_WindowsCommandLineQuote(exeQuoted, sizeof(exeQuoted), exePath);
+
+    char commandLine[BMAX_PATH * 2 + 64];
+    Bsnprintf(commandLine, sizeof(commandLine), "%s -noinstancechecking", exeQuoted);
+
+    STARTUPINFOA startupInfo {};
+    PROCESS_INFORMATION processInfo {};
+    startupInfo.cb = sizeof(startupInfo);
+
+    if (!CreateProcessA(nullptr, commandLine, nullptr, nullptr, FALSE, 0, nullptr, rootPath, &startupInfo, &processInfo))
+        return 0;
+
+    CloseHandle(processInfo.hThread);
+    CloseHandle(processInfo.hProcess);
+    return 1;
+}
+
+int32_t Menu_RunRednukemUpdaterMode(int argc, char const* const* argv)
+{
+    if (argc < 7 || Bstrcmp(argv[1], "-rednukem-split-screen-updater") != 0)
+        return 0;
+
+    DWORD const pidToWait = (DWORD)Bstrtoul(argv[2], nullptr, 10);
+    char const * const rootPath = argv[3];
+    char const * const exePath = argv[4];
+    char const * const zipPath = argv[5];
+    char const * const version = argv[6];
+
+    Menu_AttachRednukemUpdaterConsole();
+
+    printf("\nRednukem Split-Screen updater\n");
+    printf("Updating Rednukem Split-Screen to %s\n\n", version);
+    printf("Please wait. Do not close this window.\n\n");
+
+    printf("[1/4] Waiting for the game to close...\n");
+    HANDLE const process = OpenProcess(SYNCHRONIZE, FALSE, pidToWait);
+    if (process != nullptr)
+    {
+        WaitForSingleObject(process, 30000);
+        CloseHandle(process);
+    }
+    Sleep(500);
+
+    printf("[2/4] Checking downloaded package...\n");
+    FILE * const zipFile = fopen(zipPath, "rb");
+    if (zipFile == nullptr)
+        goto fail;
+    fclose(zipFile);
+
+    printf("[3/4] Installing files...\n");
+    if (!Menu_ExtractRednukemUpdateZip(zipPath, rootPath))
+        goto fail;
+
+    printf("[4/4] Restarting Rednukem Split-Screen...\n");
+    remove(zipPath);
+
+    if (!Menu_StartUpdatedRednukemGame(exePath, rootPath))
+        goto fail;
+
+    printf("\nUpdate installed.\n");
+    Sleep(1000);
+    return 1;
+
+fail:
+    printf("\nUpdate failed.\n");
+    printf("The game folder was left untouched where possible.\n");
+    printf("Press Enter to close this window.\n");
+    getchar();
+    return 1;
+}
+
 static int32_t Menu_ExtractJsonStringValue(char const * const json, char const * const key, char * const out, size_t const outSize)
 {
     if (outSize == 0)
@@ -4484,7 +4824,7 @@ static DWORD WINAPI Menu_CheckRednukemUpdateThread(void *)
     return 0;
 }
 
-static int32_t Menu_LaunchRednukemUpdaterScript(void)
+static int32_t Menu_LaunchRednukemUpdater(char const * const zipPath)
 {
     char exePath[BMAX_PATH];
     if (GetModuleFileNameA(nullptr, exePath, ARRAY_SIZE(exePath)) == 0)
@@ -4501,81 +4841,30 @@ static int32_t Menu_LaunchRednukemUpdaterScript(void)
     if (!GetTempPathA(ARRAY_SIZE(tempPath), tempPath))
         return 0;
 
-    char scriptPath[BMAX_PATH];
-    Bsnprintf(scriptPath, sizeof(scriptPath), "%srednukem-split-screen-updater-%lu.ps1", tempPath, (unsigned long)GetCurrentProcessId());
+    char updaterPath[BMAX_PATH];
+    Bsnprintf(updaterPath, sizeof(updaterPath), "%srednukem-split-screen-updater-%lu.exe", tempPath, (unsigned long)GetCurrentProcessId());
 
-    char rootPS[BMAX_PATH * 2], exePS[BMAX_PATH * 2], urlPS[2048], versionPS[256], scriptPS[BMAX_PATH * 2];
-    Menu_PowerShellQuote(rootPS, sizeof(rootPS), rootPath);
-    Menu_PowerShellQuote(exePS, sizeof(exePS), exePath);
-    Menu_PowerShellQuote(urlPS, sizeof(urlPS), g_redUpdateDownloadUrl);
-    Menu_PowerShellQuote(versionPS, sizeof(versionPS), g_redUpdateLatestVersion[0] != '\0' ? g_redUpdateLatestVersion : "latest");
-    Menu_PowerShellQuote(scriptPS, sizeof(scriptPS), scriptPath);
-
-    char script[8192];
-    Bsnprintf(script, sizeof(script),
-        "$ErrorActionPreference='Stop'\r\n"
-        "$gamePid=%lu\r\n"
-        "$root=%s\r\n"
-        "$exe=%s\r\n"
-        "$url=%s\r\n"
-        "$version=%s\r\n"
-        "$script=%s\r\n"
-        "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12\r\n"
-        "$zip=Join-Path $env:TEMP ('rednukem-split-screen-update-' + $gamePid + '.zip')\r\n"
-        "$tmp=Join-Path $env:TEMP ('rednukem-split-screen-extract-' + $gamePid)\r\n"
-        "Write-Host ''\r\n"
-        "Write-Host 'Rednukem Split-Screen updater'\r\n"
-        "Write-Host ('Updating Rednukem Split-Screen to ' + $version)\r\n"
-        "Write-Host ''\r\n"
-        "Write-Host 'Please wait. Do not close this window.'\r\n"
-        "Write-Host ''\r\n"
-        "Write-Host '[1/4] Waiting for the game to close...'\r\n"
-        "try { Wait-Process -Id $gamePid -Timeout 30 -ErrorAction SilentlyContinue } catch {}\r\n"
-        "Start-Sleep -Milliseconds 500\r\n"
-        "Write-Host '[2/4] Downloading package...'\r\n"
-        "Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue\r\n"
-        "Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue\r\n"
-        "Invoke-WebRequest -UseBasicParsing -Headers @{'User-Agent'='RednukemSplitScreen'} -Uri $url -OutFile $zip\r\n"
-        "Write-Host '[3/4] Installing files...'\r\n"
-        "Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force\r\n"
-        "$src=$tmp\r\n"
-        "$items=@(Get-ChildItem -LiteralPath $tmp -Force)\r\n"
-        "if($items.Count -eq 1 -and $items[0].PSIsContainer){$src=$items[0].FullName}\r\n"
-        "$skipExt=@('.cfg','.log','.dmp','.z64','.n64','.v64','.rom','.sav')\r\n"
-        "Get-ChildItem -LiteralPath $src -Recurse -File | ForEach-Object {\r\n"
-        "  $rel=$_.FullName.Substring($src.Length).TrimStart('\\','/')\r\n"
-        "  $relNorm=$rel -replace '\\\\','/'\r\n"
-        "  if($relNorm -match '^(saves|save|screenshots|texturecache)/'){return}\r\n"
-        "  if($skipExt -contains $_.Extension.ToLowerInvariant()){return}\r\n"
-        "  $dest=Join-Path $root $rel\r\n"
-        "  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null\r\n"
-        "  Copy-Item -LiteralPath $_.FullName -Destination $dest -Force\r\n"
-        "}\r\n"
-        "Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue\r\n"
-        "Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue\r\n"
-        "Write-Host '[4/4] Restarting Rednukem Split-Screen...'\r\n"
-        "Start-Process -FilePath $exe -ArgumentList '-noinstancechecking' -WorkingDirectory $root\r\n"
-        "Write-Host ''\r\n"
-        "Write-Host 'Update installed.'\r\n"
-        "Start-Sleep -Seconds 1\r\n"
-        "Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue\r\n",
-        (unsigned long)GetCurrentProcessId(), rootPS, exePS, urlPS, versionPS, scriptPS);
-
-    if (!Menu_WriteTextFile(scriptPath, script))
+    if (!CopyFileA(exePath, updaterPath, FALSE))
         return 0;
 
-    char commandLine[BMAX_PATH * 2 + 128];
-    Bsnprintf(commandLine, sizeof(commandLine), "\"powershell.exe\" -NoProfile -ExecutionPolicy Bypass -File \"%s\"", scriptPath);
+    char updaterQuoted[BMAX_PATH * 2], rootQuoted[BMAX_PATH * 2], exeQuoted[BMAX_PATH * 2], zipQuoted[BMAX_PATH * 2], versionQuoted[256];
+    Menu_WindowsCommandLineQuote(updaterQuoted, sizeof(updaterQuoted), updaterPath);
+    Menu_WindowsCommandLineQuote(rootQuoted, sizeof(rootQuoted), rootPath);
+    Menu_WindowsCommandLineQuote(exeQuoted, sizeof(exeQuoted), exePath);
+    Menu_WindowsCommandLineQuote(zipQuoted, sizeof(zipQuoted), zipPath);
+    Menu_WindowsCommandLineQuote(versionQuoted, sizeof(versionQuoted), g_redUpdateLatestVersion[0] != '\0' ? g_redUpdateLatestVersion : "latest version");
+
+    char commandLine[BMAX_PATH * 6];
+    Bsnprintf(commandLine, sizeof(commandLine), "%s -rednukem-split-screen-updater %lu %s %s %s %s",
+              updaterQuoted, (unsigned long)GetCurrentProcessId(), rootQuoted, exeQuoted, zipQuoted, versionQuoted);
 
     STARTUPINFOA startupInfo {};
     PROCESS_INFORMATION processInfo {};
     startupInfo.cb = sizeof(startupInfo);
-    startupInfo.dwFlags = STARTF_USESHOWWINDOW;
-    startupInfo.wShowWindow = SW_SHOWNORMAL;
 
-    if (!CreateProcessA(nullptr, commandLine, nullptr, nullptr, FALSE, 0, nullptr, rootPath, &startupInfo, &processInfo))
+    if (!CreateProcessA(updaterPath, commandLine, nullptr, nullptr, FALSE, 0, nullptr, rootPath, &startupInfo, &processInfo))
     {
-        DeleteFileA(scriptPath);
+        DeleteFileA(updaterPath);
         return 0;
     }
 
@@ -4586,6 +4875,36 @@ static int32_t Menu_LaunchRednukemUpdaterScript(void)
 
 static void Menu_UpdateRednukemUpdateCheck(void)
 {
+    if (g_redUpdateDownloadThread != nullptr)
+    {
+        DWORD exitCode = 0;
+        if (GetExitCodeThread(g_redUpdateDownloadThread, &exitCode) && exitCode == STILL_ACTIVE)
+            return;
+
+        CloseHandle(g_redUpdateDownloadThread);
+        g_redUpdateDownloadThread = nullptr;
+
+        if (InterlockedCompareExchange(&g_redUpdateDownloadResult, 0, 0) != 1)
+        {
+            remove(g_redUpdateDownloadZipPath);
+            g_redUpdateDownloadZipPath[0] = '\0';
+            Bstrncpyz(g_redUpdateStatus, "Download failed", sizeof(g_redUpdateStatus));
+            return;
+        }
+
+        Bsnprintf(g_redUpdateStatus, sizeof(g_redUpdateStatus), "Installing %s...", g_redUpdateLatestVersion);
+        if (!Menu_LaunchRednukemUpdater(g_redUpdateDownloadZipPath))
+        {
+            remove(g_redUpdateDownloadZipPath);
+            g_redUpdateDownloadZipPath[0] = '\0';
+            Bstrncpyz(g_redUpdateStatus, "Could not start updater", sizeof(g_redUpdateStatus));
+            return;
+        }
+
+        CONFIG_WriteSetup(0);
+        app_exit(EXIT_SUCCESS);
+    }
+
     if (g_redUpdateCheckThread == nullptr)
         return;
 
@@ -4635,21 +4954,44 @@ static void Menu_StartRednukemUpdateCheck(void)
 
 static void Menu_InstallRednukemUpdate(void)
 {
+    if (g_redUpdateDownloadThread != nullptr)
+    {
+        Bsnprintf(g_redUpdateStatus, sizeof(g_redUpdateStatus), "Downloading %s...", g_redUpdateLatestVersion);
+        return;
+    }
+
     if (g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_NONE || g_redUpdateDownloadUrl[0] == '\0')
     {
         Bstrncpyz(g_redUpdateStatus, "No update ready", sizeof(g_redUpdateStatus));
         return;
     }
 
-    Bsnprintf(g_redUpdateStatus, sizeof(g_redUpdateStatus), "Installing %s...", g_redUpdateLatestVersion);
-    if (!Menu_LaunchRednukemUpdaterScript())
+    char tempPath[BMAX_PATH];
+    if (!GetTempPathA(ARRAY_SIZE(tempPath), tempPath))
     {
-        Bstrncpyz(g_redUpdateStatus, "Could not start updater", sizeof(g_redUpdateStatus));
+        Bstrncpyz(g_redUpdateStatus, "Could not prepare update", sizeof(g_redUpdateStatus));
         return;
     }
 
-    CONFIG_WriteSetup(0);
-    app_exit(EXIT_SUCCESS);
+    Bsnprintf(g_redUpdateDownloadZipPath, sizeof(g_redUpdateDownloadZipPath), "%srednukem-split-screen-update-%lu.zip",
+              tempPath, (unsigned long)GetCurrentProcessId());
+    remove(g_redUpdateDownloadZipPath);
+
+    rednukemUpdateDownloadParams_t * const params = new rednukemUpdateDownloadParams_t;
+    Bstrncpyz(params->url, g_redUpdateDownloadUrl, sizeof(params->url));
+    Bstrncpyz(params->destination, g_redUpdateDownloadZipPath, sizeof(params->destination));
+
+    InterlockedExchange(&g_redUpdateDownloadResult, 0);
+    g_redUpdateDownloadThread = CreateThread(nullptr, 0, Menu_DownloadRednukemUpdateThread, params, 0, nullptr);
+    if (g_redUpdateDownloadThread == nullptr)
+    {
+        delete params;
+        g_redUpdateDownloadZipPath[0] = '\0';
+        Bstrncpyz(g_redUpdateStatus, "Could not start download", sizeof(g_redUpdateStatus));
+        return;
+    }
+
+    Bsnprintf(g_redUpdateStatus, sizeof(g_redUpdateStatus), "Downloading %s...", g_redUpdateLatestVersion);
 }
 #endif
 

@@ -508,6 +508,9 @@ int G_CheckPlayerColor(int color);
 void Menu_Init(void);
 void Menu_Open(uint8_t playerID);
 void Menu_Close(uint8_t playerID);
+#ifdef _WIN32
+int32_t Menu_RunRednukemUpdaterMode(int argc, char const* const* argv);
+#endif
 void M_DisplayMenus(void);
 void Menu_SuppressMouseHoverFromGamepad(void);
 

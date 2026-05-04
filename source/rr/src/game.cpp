@@ -9080,6 +9080,11 @@ EDUKE32_STATIC_ASSERT(sizeof(DukePlayer_t)%4 == 0);
 
 int app_main(int argc, char const * const * argv)
 {
+#ifdef _WIN32
+    if (Menu_RunRednukemUpdaterMode(argc, argv))
+        return 0;
+#endif
+
 #ifndef NETCODE_DISABLE
     if (enet_initialize() != 0)
         initprintf("An error occurred while initializing ENet.\n");
