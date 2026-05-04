@@ -1600,6 +1600,7 @@ int32_t g_redSplitHudX1 = 0;
 int32_t g_redSplitHudY1 = 0;
 int32_t g_redSplitHudX2 = 0;
 int32_t g_redSplitHudY2 = 0;
+int32_t g_redSplitQuoteTextDrawing = 0;
 int32_t g_redSplitExtraMenuPlayer = -1;
 int32_t g_redSplitExtraMenuPage = 0;
 int32_t g_redSplitExtraMenuSelection = 0;

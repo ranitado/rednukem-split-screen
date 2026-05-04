@@ -4473,8 +4473,17 @@ void RT_RotateSpriteText(float x, float y, float sx, float sy, int tilenum, int 
     glOrtho(0, xdim, ydim, 0, -1.f, 1.f);
     float const vx1 = x1 * scl + xo;
     float const vx2 = x2 * scl + xo;
-    float const vy1 = RT_RedSplitHudY(y1 * scl, !buildcoords);
-    float const vy2 = RT_RedSplitHudY(y2 * scl, !buildcoords);
+    float vy1, vy2;
+    if (g_redSplitQuoteTextDrawing && g_redSplitHudDrawingView >= 0)
+    {
+        vy1 = (float)g_redSplitHudY1 + y1 * scl;
+        vy2 = (float)g_redSplitHudY1 + y2 * scl;
+    }
+    else
+    {
+        vy1 = RT_RedSplitHudY(y1 * scl, !buildcoords);
+        vy2 = RT_RedSplitHudY(y2 * scl, !buildcoords);
+    }
 
     glBegin(GL_QUADS);
     glTexCoord2f(u1, v1); glVertex2f(vx1, vy1);

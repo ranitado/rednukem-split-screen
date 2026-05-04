@@ -1118,7 +1118,7 @@ void G_PrintGameQuotes(int32_t snum)
                     x = scale(g_redSplitHudX1 + 8, 320, xdim) << 16;
                 else
                     x = scale((g_redSplitHudX1 + g_redSplitHudX2 + 1) / 2, 320, xdim) << 16;
-                y = (scale(g_redSplitHudY1, 200, ydim) << 16) + text_ypos() + (REALITY ? (6<<16) : 0);
+                y = text_ypos() + (REALITY ? (6<<16) : 0);
             }
         }
 #endif
@@ -1131,11 +1131,11 @@ void G_PrintGameQuotes(int32_t snum)
                 :
 #endif
                 (TEXT_XCENTER | (REALITY ? TEXT_N64NOPAL : 0));
-        int32_t const savedRedSplitHudDrawingView = g_redSplitHudDrawingView;
-        if (savedRedSplitHudDrawingView >= 0)
-            g_redSplitHudDrawingView = -1;
+        int32_t const savedRedSplitQuoteTextDrawing = g_redSplitQuoteTextDrawing;
+        if (g_redSplitHudDrawingView >= 0)
+            g_redSplitQuoteTextDrawing = 1;
         height = gametext_(x, y, apStrings[ps->ftq], textsh(k), pal, texto(k), texta(k), quoteFlags).y + (1<<16);
-        g_redSplitHudDrawingView = savedRedSplitHudDrawingView;
+        g_redSplitQuoteTextDrawing = savedRedSplitQuoteTextDrawing;
     }
     while (0);
 

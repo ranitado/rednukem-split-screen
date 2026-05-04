@@ -797,7 +797,7 @@ void P_RandomSpawnPoint(int playerNum)
         }
     }
 
-    if (g_fakeMultiMode && playerNum > 0)
+    if (g_fakeMultiMode)
         i = 0;
 
     pPlayer->pos        = g_playerSpawnPoints[i].pos;

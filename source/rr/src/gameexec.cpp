@@ -128,6 +128,82 @@ static void VM_DeleteSprite(int const spriteNum, int const playerNum)
     A_DeleteSprite(spriteNum);
 }
 
+static inline bool VM_IsLocalSplitScreen(void)
+{
+    return g_fakeMultiMode >= 2 && ud.multimode >= 2;
+}
+
+static bool VM_IsPickupSoundSprite(void)
+{
+    if (vm.pUSprite == nullptr)
+        return false;
+
+    switch (DYNAMICTILEMAP(vm.pUSprite->picnum))
+    {
+        case DN64TILE34__STATIC:
+        case DN64TILE43__STATIC:
+        case DN64TILE50__STATIC:
+        case ATOMICHEALTH__STATIC:
+        case STEROIDS__STATIC:
+        case HEATSENSOR__STATIC:
+        case SHIELD__STATIC:
+        case AIRTANK__STATIC:
+        case TRIPBOMBSPRITE__STATIC:
+        case JETPACK__STATIC:
+        case HOLODUKE__STATIC:
+        case FIRSTGUNSPRITE__STATIC:
+        case CHAINGUNSPRITE__STATIC:
+        case SHOTGUNSPRITE__STATIC:
+        case RPGSPRITE__STATIC:
+        case SHRINKERSPRITE__STATIC:
+        case FREEZESPRITE__STATIC:
+        case DEVISTATORSPRITE__STATIC:
+        case GROWSPRITEICON__STATIC:
+        case SHOTGUNAMMO__STATIC:
+        case FREEZEAMMO__STATIC:
+        case HBOMBAMMO__STATIC:
+        case CRYSTALAMMO__STATIC:
+        case GROWAMMO__STATIC:
+        case BATTERYAMMO__STATIC:
+        case DEVISTATORAMMO__STATIC:
+        case RPGAMMO__STATIC:
+        case BOOTS__STATIC:
+        case AMMO__STATIC:
+        case AMMOLOTS__STATIC:
+        case COLA__STATIC:
+        case FIRSTAID__STATIC:
+        case SIXPAK__STATIC:
+        case ACCESSCARD__STATIC:
+        case RRTILE43__STATICRR:
+        case BOWLINGBALLSPRITE__STATICRR:
+        case RPG2SPRITE__STATICRR:
+        case MOTOAMMO__STATICRR:
+        case BOATAMMO__STATICRR:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static int VM_PlayActorSound(int const soundNum)
+{
+    if (VM_IsLocalSplitScreen() && VM_IsPickupSoundSprite())
+        return S_PlaySound(soundNum);
+
+    return A_PlaySound(soundNum, vm.spriteNum);
+}
+
+static int VM_PlayGlobalSound(int const soundNum)
+{
+    if (VM_IsLocalSplitScreen())
+        return S_PlaySound(soundNum);
+
+    if (vm.playerNum == screenpeek || (g_gametypeFlags[ud.coop] & GAMETYPE_COOPSOUND))
+        return A_PlaySound(soundNum, g_player[screenpeek].ps->i);
+
+    return -1;
+}
+
 intptr_t apScriptEvents[MAXEVENTS];
 static uspritetype dummy_sprite;
 static actor_t     dummy_actor;
@@ -1844,7 +1920,7 @@ GAMEEXEC_STATIC void VM_Execute(native_t loop)
                 }
 
                 if (!S_CheckSoundPlaying(vm.spriteNum, *insptr++))
-                    A_PlaySound(*(insptr - 1), vm.spriteNum);
+                    VM_PlayActorSound(*(insptr - 1));
 
                 continue;
 
@@ -1867,12 +1943,7 @@ GAMEEXEC_STATIC void VM_Execute(native_t loop)
                     insptr++;
                     continue;
                 }
-                if (vm.playerNum == screenpeek || (g_gametypeFlags[ud.coop] & GAMETYPE_COOPSOUND)
-#ifdef SPLITSCREEN_MOD_HACKS
-                    || (g_fakeMultiMode == 2)
-#endif
-                    )
-                    A_PlaySound(*insptr, g_player[screenpeek].ps->i);
+                VM_PlayGlobalSound(*insptr);
                 insptr++;
                 continue;
 
@@ -1915,7 +1986,7 @@ GAMEEXEC_STATIC void VM_Execute(native_t loop)
                     insptr++;
                     continue;
                 }
-                A_PlaySound(*insptr++, vm.spriteNum);
+                VM_PlayActorSound(*insptr++);
                 continue;
 
             case CON_TIP:
@@ -3427,7 +3498,7 @@ GAMEEXEC_STATIC void RT_VM_Execute(native_t loop)
                 }
 
                 if (!S_CheckSoundPlaying(vm.spriteNum, *insptr++))
-                    A_PlaySound(*(insptr - 1), vm.spriteNum);
+                    VM_PlayActorSound(*(insptr - 1));
 
                 continue;
 
@@ -3450,12 +3521,7 @@ GAMEEXEC_STATIC void RT_VM_Execute(native_t loop)
                     insptr++;
                     continue;
                 }
-                if (vm.playerNum == screenpeek || (g_gametypeFlags[ud.coop] & GAMETYPE_COOPSOUND)
-#ifdef SPLITSCREEN_MOD_HACKS
-                    || (g_fakeMultiMode == 2)
-#endif
-                    )
-                    A_PlaySound(*insptr, g_player[screenpeek].ps->i);
+                VM_PlayGlobalSound(*insptr);
                 insptr++;
                 continue;
 
@@ -3466,7 +3532,7 @@ GAMEEXEC_STATIC void RT_VM_Execute(native_t loop)
                     insptr++;
                     continue;
                 }
-                A_PlaySound(*insptr++, vm.spriteNum);
+                VM_PlayActorSound(*insptr++);
                 continue;
 
             case RT_CON_TIP:

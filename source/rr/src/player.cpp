@@ -5553,6 +5553,28 @@ void P_FragPlayer(int playerNum)
         pPlayer->dn_388 = 0;
     }
 
+#ifdef SPLITSCREEN_MOD_HACKS
+    if (REALITY && g_fakeMultiMode > 1)
+    {
+        if ((unsigned)pPlayer->frag_ps >= MAXPLAYERS || g_player[pPlayer->frag_ps].ps == nullptr)
+            pPlayer->frag_ps = playerNum;
+
+        if (pPlayer->frag_ps != playerNum)
+        {
+            g_player[pPlayer->frag_ps].ps->frag++;
+            g_player[pPlayer->frag_ps].frags[playerNum]++;
+            g_player[playerNum].frags[playerNum]++;
+        }
+        else
+            pPlayer->fraggedself++;
+
+        pPlayer->frag_ps = playerNum;
+        P_ResetPlayer(playerNum);
+        pus = NUMPAGES;
+        return;
+    }
+#endif
+
     if ((REALITY || pSprite->pal != 1) && (pSprite->cstat & 32768) == 0)
         pSprite->cstat = 0;
 
@@ -5583,7 +5605,7 @@ void P_FragPlayer(int playerNum)
                 P_DoQuote(QUOTE_RESERVED2, g_player[pPlayer->frag_ps].ps);
             }
 
-            if (ud.obituaries)
+            if (ud.obituaries && g_numObituaries > 0)
             {
                 Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (g_globalRandom % g_numObituaries)],
                          &g_player[pPlayer->frag_ps].user_name[0], &g_player[playerNum].user_name[0]);
@@ -5596,16 +5618,23 @@ void P_FragPlayer(int playerNum)
             {
                 pPlayer->fraggedself++;
                 if ((unsigned)pPlayer->wackedbyactor < MAXSPRITES && A_CheckEnemyTile(sprite[pPlayer->wackedbyactor].picnum))
-                    Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (krand2() % g_numObituaries)], "A monster",
-                             &g_player[playerNum].user_name[0]);
+                {
+                    if (g_numObituaries > 0)
+                        Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (krand2() % g_numObituaries)], "A monster",
+                                 &g_player[playerNum].user_name[0]);
+                    else
+                        Bsprintf(tempbuf, "A monster killed %s", &g_player[playerNum].user_name[0]);
+                }
                 else if (actor[pPlayer->i].picnum == NUKEBUTTON)
                     Bsprintf(tempbuf, "^02%s^02 tried to leave", &g_player[playerNum].user_name[0]);
-                else
+                else if (g_numSelfObituaries > 0)
                 {
                     // random suicide death string
                     Bsprintf(tempbuf, apStrings[SUICIDEQUOTEINDEX + (krand2() % g_numSelfObituaries)],
                              &g_player[playerNum].user_name[0]);
                 }
+                else
+                    Bsprintf(tempbuf, "%s died", &g_player[playerNum].user_name[0]);
             }
             else
                 Bsprintf(tempbuf, "^02%s^02 switched to team %d", &g_player[playerNum].user_name[0], pPlayer->team + 1);
@@ -7380,6 +7409,21 @@ static void P_Dead(int const playerNum, int const sectorLotag, int const floorZ,
 {
     DukePlayer_t *const pPlayer = g_player[playerNum].ps;
     spritetype *const   pSprite = &sprite[pPlayer->i];
+
+#ifdef SPLITSCREEN_MOD_HACKS
+    if (REALITY && g_fakeMultiMode > 1)
+    {
+        if (pPlayer->dead_flag == 0)
+        {
+            P_FragPlayer(playerNum);
+            return;
+        }
+
+        P_ResetPlayer(playerNum);
+        pus = NUMPAGES;
+        return;
+    }
+#endif
 
     if (ud.recstat == 1 && (!g_netServer && ud.multimode < 2))
         G_CloseDemoWrite();

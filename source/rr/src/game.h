@@ -78,6 +78,7 @@ extern int32_t g_redSplitHudX1;
 extern int32_t g_redSplitHudY1;
 extern int32_t g_redSplitHudX2;
 extern int32_t g_redSplitHudY2;
+extern int32_t g_redSplitQuoteTextDrawing;
 extern int32_t g_redSplitDeferHud;
 extern int32_t g_redSplitSuppressMenuDraw;
 extern int32_t g_redSplitExtraMenuPlayer;
