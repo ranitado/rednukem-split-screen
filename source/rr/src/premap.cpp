@@ -806,26 +806,6 @@ void P_RandomSpawnPoint(int playerNum)
     pPlayer->q16ang       = fix16_from_int(g_playerSpawnPoints[i].ang);
     pPlayer->cursectnum = g_playerSpawnPoints[i].sect;
 
-    if (g_fakeMultiMode && playerNum > 0)
-    {
-        int16_t const spawnAng = g_playerSpawnPoints[i].ang & 2047;
-        vec3_t const  oldPos   = pPlayer->pos;
-        int16_t       oldSect  = pPlayer->cursectnum;
-
-        pPlayer->pos.x += sintable[(spawnAng + 512) & 2047] >> 9;
-        pPlayer->pos.y += sintable[spawnAng & 2047] >> 9;
-        updatesector(pPlayer->pos.x, pPlayer->pos.y, &pPlayer->cursectnum);
-
-        if (pPlayer->cursectnum < 0)
-        {
-            pPlayer->pos        = oldPos;
-            pPlayer->cursectnum = oldSect;
-        }
-
-        pPlayer->opos   = pPlayer->pos;
-        pPlayer->bobpos = *(vec2_t *)&pPlayer->pos;
-    }
-
     sprite[pPlayer->i].cstat = 1 + 256;
 }
 
@@ -862,6 +842,7 @@ void P_ResetPlayer(int playerNum)
     pSprite->pal      = pPlayer->palookup;
 
     pPlayer->last_extra = pSprite->extra = pPlayer->max_player_health;
+    RedSplit_BeginSpawnPlayerClipGrace();
 
     pPlayer->wantweaponfire         = -1;
     pPlayer->q16horiz                  = F16(100);
@@ -1239,6 +1220,7 @@ static void resetprestat(int playerNum, int gameMode)
     tempwallptr        = 0;
     g_curViewscreen    = -1;
     g_earthquakeTime   = 0;
+    RedSplit_ClearPlayerQuakes();
     g_interpolationCnt = 0;
 
     if (RRRA)
@@ -2262,24 +2244,11 @@ static void resetpspritevars(char gameMode)
                 int16_t spawnSect = s->sectnum;
                 int16_t spawnAng  = s->ang;
 
-                if (g_fakeMultiMode && j > 0 && g_playerSpawnCnt > 0)
+                if (g_fakeMultiMode && g_playerSpawnCnt > 0)
                 {
                     spawnPos  = g_playerSpawnPoints[0].pos;
                     spawnSect = g_playerSpawnPoints[0].sect;
                     spawnAng  = g_playerSpawnPoints[0].ang;
-
-                    vec3_t const oldPos  = spawnPos;
-                    int16_t const oldSect = spawnSect;
-
-                    spawnPos.x += sintable[(spawnAng + 512) & 2047] >> 9;
-                    spawnPos.y += sintable[spawnAng & 2047] >> 9;
-                    updatesector(spawnPos.x, spawnPos.y, &spawnSect);
-
-                    if (spawnSect < 0)
-                    {
-                        spawnPos  = oldPos;
-                        spawnSect = oldSect;
-                    }
 
                     s->x = spawnPos.x;
                     s->y = spawnPos.y;
@@ -2295,6 +2264,7 @@ static void resetpspritevars(char gameMode)
                 g_player[j].ps->oq16ang = g_player[j].ps->q16ang = fix16_from_int(spawnAng);
 
                 updatesector(spawnPos.x,spawnPos.y,&g_player[j].ps->cursectnum);
+                RedSplit_BeginSpawnPlayerClipGrace();
             }
 
             j++;

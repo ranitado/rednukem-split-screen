@@ -117,7 +117,7 @@ char keydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN] =
    "LShift", "RShift",
    "CapLck", "",
    "Space", "/",
-   "LCtrl", "",
+   "C", "",
    "PgUp", "Kpad9",
    "PgDn", "Kpad3",
    "Insert", "Kpad0",

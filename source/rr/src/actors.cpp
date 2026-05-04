@@ -2172,7 +2172,7 @@ crack_default:
                     }
 
 DETONATE:
-                    g_earthquakeTime = 16;
+                    RedSplit_SetPlayerQuakeFromSprite(spriteNum, 16);
 
                     for (SPRITES_OF(STAT_EFFECTOR, j))
                     {
@@ -3211,7 +3211,7 @@ ACTOR_STATIC void G_MoveWeapons(void)
                                         P_PalFrom(ps, pSprite->yvel - 32, 64, 96, 96);
                                     }
                                 }
-                                g_earthquakeTime = 15;
+                                RedSplit_SetPlayerQuakeFromSprite(spriteNum, 15);
                                 RT_AddExplosion(pSprite->x >> 1, pSprite->y >> 1, pSprite->z >> 5, 4);
                             }
                             else
@@ -4302,7 +4302,7 @@ ACTOR_STATIC void G_MoveActors(void)
                 {
                     S_PlaySound(215);
                     deletesprite(spriteNum);
-                    g_earthquakeTime = 32;
+                    RedSplit_SetPlayerQuakeFromSprite(spriteNum, 32);
                     P_PalFrom(g_player[myconnectindex].ps, 48, 32, 32, 32);
                 }
             }
@@ -4771,7 +4771,7 @@ ACTOR_STATIC void G_MoveActors(void)
 
             if (pData[0] > (GAMETICSPERSEC*8))
             {
-                g_earthquakeTime = 16;
+                RedSplit_SetPlayerQuakeFromSprite(spriteNum, 16);
                 S_PlaySound(REALITY ? 8 : RPG_EXPLODE);
 
                 for (bssize_t j  = 0; j < 32; j++)
@@ -7893,7 +7893,7 @@ ACTOR_STATIC void G_MoveEffectors(void)   //STATNUM 3
                 {
                     if ((pData[0]&31) ==  8)
                     {
-                        g_earthquakeTime = 48;
+                        RedSplit_SetAllPlayerQuakes(48);
                         A_PlaySound(REALITY ? 54 : EARTHQUAKE,g_player[screenpeek].ps->i);
                     }
 

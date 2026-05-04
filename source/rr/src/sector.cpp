@@ -3715,7 +3715,11 @@ void P_HandleKeys(int playerNum)
         pPlayer->return_to_center = 9;
     
     if (TEST_SYNC_KEY(playerBits, SK_QUICK_KICK) && pPlayer->quick_kick == 0)
-        if (pPlayer->curr_weapon != KNEE_WEAPON || pPlayer->kickback_pic == 0)
+        if (pPlayer->curr_weapon == KNEE_WEAPON && pPlayer->kickback_pic == 0)
+        {
+            pPlayer->kickback_pic = 1;
+        }
+        else if (pPlayer->curr_weapon != KNEE_WEAPON || pPlayer->kickback_pic == 0)
         {
             pPlayer->quick_kick = 14;
             if (pPlayer->fta == 0 || pPlayer->ftq == 80)
@@ -4156,7 +4160,11 @@ void P_HandleSharedKeys(int playerNum)
     {
 
         if (TEST_SYNC_KEY(playerBits, SK_QUICK_KICK) && pPlayer->quick_kick == 0)
-            if (pPlayer->curr_weapon != KNEE_WEAPON || pPlayer->kickback_pic == 0)
+            if (pPlayer->curr_weapon == KNEE_WEAPON && pPlayer->kickback_pic == 0)
+            {
+                pPlayer->kickback_pic = 1;
+            }
+            else if (pPlayer->curr_weapon != KNEE_WEAPON || pPlayer->kickback_pic == 0)
             {
                 if (VM_OnEvent(EVENT_QUICKKICK,g_player[playerNum].ps->i,playerNum) == 0)
                 {
@@ -4822,6 +4830,40 @@ static int P_FindWall(DukePlayer_t *pPlayer, int *hitWall)
     return FindDistance2D(hitData.x - pPlayer->pos.x, hitData.y - pPlayer->pos.y);
 }
 
+static int P_FindNearbyNukeButton(DukePlayer_t const * const pPlayer)
+{
+    if (!REALITY || pPlayer == nullptr || pPlayer->cursectnum < 0)
+        return -1;
+
+    int bestSprite = -1;
+    int bestDist = INT32_MAX;
+    int const playerAng = fix16_to_int(pPlayer->q16ang);
+
+    for (bssize_t SPRITES_OF(STAT_DEFAULT, spriteNum))
+    {
+        spritetype const &s = sprite[spriteNum];
+
+        if (DYNAMICTILEMAP(G_GetBaseSwitch(s.picnum)) != NUKEBUTTON__STATIC)
+            continue;
+
+        int const dist = FindDistance2D(s.x - pPlayer->pos.x, s.y - pPlayer->pos.y);
+        if (dist > 2048 || dist >= bestDist)
+            continue;
+
+        int const angDiff = klabs(G_GetAngleDelta(playerAng, getangle(s.x - pPlayer->pos.x, s.y - pPlayer->pos.y)));
+        if (angDiff > 384 && dist > 768)
+            continue;
+
+        if (!cansee(pPlayer->pos.x, pPlayer->pos.y, pPlayer->pos.z, pPlayer->cursectnum, s.x, s.y, s.z, s.sectnum))
+            continue;
+
+        bestSprite = spriteNum;
+        bestDist = dist;
+    }
+
+    return bestSprite;
+}
+
 // returns 1 if sprite i should not be considered by neartag
 static int32_t our_neartag_blacklist(int32_t UNUSED(spriteNum))
 {
@@ -5084,6 +5126,17 @@ void P_CheckSectors(int playerNum)
         if (nearSector >= 0 && (sector[nearSector].lotag&16384))
             return;
 
+        if (REALITY && nearSprite < 0)
+        {
+            int const nukeButton = P_FindNearbyNukeButton(pPlayer);
+            if (nukeButton >= 0)
+            {
+                nearSprite = nukeButton;
+                nearWall = -1;
+                nearSector = -1;
+            }
+        }
+
         if (nearSprite == -1 && nearWall == -1)
         {
             if (pPlayer->cursectnum >= 0 && sector[pPlayer->cursectnum].lotag == 2)
@@ -5191,7 +5244,9 @@ void P_CheckSectors(int playerNum)
 
                 P_FindWall(pPlayer, &wallNum);
 
-                if (wallNum >= 0 && wall[wallNum].overpicnum == 0)
+                if ((wallNum >= 0 && wall[wallNum].overpicnum == 0) ||
+                    (REALITY && cansee(pPlayer->pos.x, pPlayer->pos.y, pPlayer->pos.z, pPlayer->cursectnum,
+                                       sprite[nearSprite].x, sprite[nearSprite].y, sprite[nearSprite].z, sprite[nearSprite].sectnum)))
                 {
                     if (actor[nearSprite].t_data[0] == 0)
                     {

@@ -1742,9 +1742,9 @@ GAMEEXEC_STATIC void VM_Execute(native_t loop)
             case CON_MAMAQUAKE:
                 insptr++;
                 if (vm.pSprite->pal == 31)
-                    g_earthquakeTime = 4;
+                    RedSplit_SetPlayerQuakeFromSprite(vm.spriteNum, 4);
                 else if(vm.pSprite->pal == 32)
-                    g_earthquakeTime = 6;
+                    RedSplit_SetPlayerQuakeFromSprite(vm.spriteNum, 6);
                 continue;
 
             case CON_GARYBANJO:
@@ -3611,7 +3611,7 @@ GAMEEXEC_STATIC void RT_VM_Execute(native_t loop)
 
             case RT_CON_ENDOFGAME:
                 insptr++;
-                g_earthquakeTime = *insptr;
+                RedSplit_SetAllPlayerQuakes(*insptr);
                 pPlayer->timebeforeexit  = *insptr++;
                 pPlayer->customexitsound = -1;
                 ud.eog                   = 1;

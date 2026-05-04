@@ -340,6 +340,7 @@ void    P_DHGetInput(int const playerNum);
 void P_AddAmmo(DukePlayer_t * pPlayer, int weaponNum, int addAmount);
 void    P_AddWeapon(DukePlayer_t *pPlayer, int weaponNum);
 void    P_CheckWeapon(DukePlayer_t *pPlayer);
+void    P_StopWeaponChargeSounds(DukePlayer_t *pPlayer, int weaponNum);
 void    P_DisplayScuba(void);
 void    P_DisplayWeapon(void);
 void P_DropWeapon(int playerNum);

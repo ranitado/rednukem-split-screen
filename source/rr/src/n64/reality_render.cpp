@@ -1073,7 +1073,10 @@ void RT_DisplayTileWorld(float x, float y, float sx, float sy, int16_t picnum, i
 
             if (rt_fxtile)
             {
-                mappedCenterX += g_redSplitWeaponFlashWideOffsetX * sclx;
+                int const flashWideOffsetX = ((unsigned)rt_flashweaponid < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponFlashWideOffsetX[rt_flashweaponid] : g_redSplitWeaponFlashWideOffsetX;
+                int const flashWideOffsetY = ((unsigned)rt_flashweaponid < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponFlashWideOffsetY[rt_flashweaponid] : g_redSplitWeaponFlashWideOffsetY;
+
+                mappedCenterX += flashWideOffsetX * sclx;
                 if (picnum == 0xf4f)
                 {
                     if (rt_flashweaponid == CHAINGUN_WEAPON)
@@ -1094,7 +1097,7 @@ void RT_DisplayTileWorld(float x, float y, float sx, float sy, int16_t picnum, i
                         mappedCenterY += g_redSplitWeaponFlashWideBottomOffsetY * scly;
                     }
                 }
-                mappedCenterY += g_redSplitWeaponFlashWideOffsetY * scly;
+                mappedCenterY += flashWideOffsetY * scly;
             }
         }
 
@@ -4326,7 +4329,10 @@ void RT_RotateSprite(float x, float y, float sx, float sy, int tilenum, int orie
 
         if (wideHalfView && weaponFlash)
         {
-            mappedCenterX += g_redSplitWeaponFlashWideOffsetX * scl;
+            int const flashWideOffsetX = ((unsigned)rt_flashweaponid < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponFlashWideOffsetX[rt_flashweaponid] : g_redSplitWeaponFlashWideOffsetX;
+            int const flashWideOffsetY = ((unsigned)rt_flashweaponid < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponFlashWideOffsetY[rt_flashweaponid] : g_redSplitWeaponFlashWideOffsetY;
+
+            mappedCenterX += flashWideOffsetX * scl;
             if (rt_flashweaponid == CHAINGUN_WEAPON)
                 mappedCenterX += (centerX < ((float)xdim * 0.5f) ? g_redSplitWeaponFlashDualLeftOffsetX : g_redSplitWeaponFlashDualRightOffsetX) * scl;
             else if (rt_flashweaponid == PISTOL_WEAPON || rt_flashweaponid == BOWLINGBALL_WEAPON)
@@ -4344,7 +4350,7 @@ void RT_RotateSprite(float x, float y, float sx, float sy, int tilenum, int orie
                 mappedCenterX += g_redSplitWeaponFlashWideBottomOffsetX * scl;
                 mappedCenterY += g_redSplitWeaponFlashWideBottomOffsetY * scl;
             }
-            mappedCenterY += g_redSplitWeaponFlashWideOffsetY * scl;
+            mappedCenterY += flashWideOffsetY * scl;
         }
 
         if (quarterView && weaponTile && !pipebombTile)

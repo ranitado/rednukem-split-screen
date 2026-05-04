@@ -642,6 +642,37 @@ static int32_t S_IsSplitPlayerSprite(int32_t const spriteNum)
     return 0;
 }
 
+static int32_t S_IsSplitPlayerManagedSound(int32_t const soundNum)
+{
+    if (REALITY)
+    {
+        switch (soundNum)
+        {
+            case 9:   // DN64 shrinker charge
+            case 38:  // DN64 jetpack on
+            case 39:  // DN64 jetpack idle
+            case 40:  // DN64 jetpack off
+            case 253: // DN64 grow/expander charge
+                return 1;
+        }
+    }
+
+    if (RR && soundNum == 431)
+        return 1;
+
+    switch (DYNAMICSOUNDMAP(soundNum))
+    {
+        case DUKE_JETPACK_ON__STATIC:
+        case DUKE_JETPACK_IDLE__STATIC:
+        case DUKE_JETPACK_OFF__STATIC:
+        case EXPANDERSHOOT__STATIC:
+        case SHRINKER_FIRE__STATIC:
+            return 1;
+    }
+
+    return 0;
+}
+
 static bool S_CalcDistAndAng(int32_t spriteNum, int32_t soundNum, int32_t sectNum, int32_t angle,
                                 const vec3_t *cam, const vec3_t *pos,
                                 int32_t *distPtr, int32_t *angPtr)
@@ -761,11 +792,13 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t *pos)
         return 0;
     }
 
-    if (g_fakeMultiMode >= 2 && (snd.m & (SF_LOOP|SF_MSFX|SF_TALK)) == 0
+    int const splitPlayerManaged = S_IsSplitPlayerManagedSound(sndNum);
+
+    if (g_fakeMultiMode >= 2 && (snd.m & (SF_LOOP|SF_MSFX|SF_TALK)) == 0 && !splitPlayerManaged
         && S_GetSplitSoundPlayer(spriteNum, pos) != screenpeek)
         return S_PlaySound(sndNum);
 
-    if (S_IsSplitPlayerSprite(spriteNum) && (snd.m & (SF_LOOP|SF_MSFX)) == 0)
+    if (S_IsSplitPlayerSprite(spriteNum) && (snd.m & (SF_LOOP|SF_MSFX)) == 0 && !splitPlayerManaged)
         return S_PlaySound(sndNum);
 
     if (g_fakeMultiMode >= 2 && (sndNum == DUKE_GET || (REALITY && sndNum == 167)))
@@ -800,6 +833,9 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t *pos)
     int const  explosionp = S_CalcDistAndAng(spriteNum, sndNum, CAMERA(sect), fix16_to_int(CAMERA(q16ang)), &CAMERA(pos), pos, &sndist, &sndang);
     int        pitch      = S_GetPitch(sndNum);
     DukePlayer_t const * pOther = g_player[soundPlayer].ps != nullptr ? g_player[soundPlayer].ps : g_player[screenpeek].ps;
+
+    if (g_fakeMultiMode >= 2 && explosionp)
+        RedSplit_SetPlayerQuakeFromSprite(spriteNum, REALITY ? 15 : 16);
 
     if (g_fakeMultiMode >= 2 && pOther != nullptr && pOther->i == spriteNum)
     {
@@ -969,7 +1005,7 @@ int A_PlaySound(int soundNum, int spriteNum)
             if (S_CheckSoundPlaying(spriteNum, soundNum))
                 return -1;
         }
-        else if ((g_sounds[soundNum].m & (SF_MSFX|SF_TALK)) == 0)
+        else if ((g_sounds[soundNum].m & (SF_MSFX|SF_TALK)) == 0 && !S_IsSplitPlayerManagedSound(soundNum))
         {
             return S_PlaySound(soundNum);
         }

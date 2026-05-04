@@ -78,6 +78,9 @@ int32_t g_quitDeadline = 0;
 
 int32_t g_cameraDistance = 0, g_cameraClock = 0;
 static int32_t g_quickExit;
+static int32_t g_redSplitPlayerQuakeTime[MAXPLAYERS] = {};
+static int32_t g_redSplitSpawnPlayerClipActive = 0;
+static int32_t g_redSplitSpawnPlayerClipTimer = 0;
 
 char boardfilename[BMAX_PATH] = {0}, currentboardfilename[BMAX_PATH] = {0};
 
@@ -912,6 +915,17 @@ void G_HandleMirror(int32_t x, int32_t y, int32_t z, fix16_t a, fix16_t q16horiz
     }
 }
 
+static void G_AllocateSaveShotTile(void)
+{
+    walock[TILE_SAVESHOT] = CACHE1D_PERMANENT;
+
+    if (waloff[TILE_SAVESHOT] == 0)
+        g_cache.allocateBlock(&waloff[TILE_SAVESHOT], 200 * 320, &walock[TILE_SAVESHOT]);
+
+    tilesiz[TILE_SAVESHOT].x = 200;
+    tilesiz[TILE_SAVESHOT].y = 320;
+}
+
 #ifdef USE_OPENGL
 static void G_ReadGLFrame(void)
 {
@@ -920,12 +934,8 @@ static void G_ReadGLFrame(void)
     palette_t *const frame = (palette_t *)Xcalloc(xdim * ydim, sizeof(palette_t));
     char *const pic = (char *) waloff[TILE_SAVESHOT];
 
-    int32_t x, y;
-    const int32_t xf = divscale16(ydim*4/3, 320);
-    const int32_t yf = divscale16(ydim, 200);  // (ydim<<16)/200
-
-    tilesiz[TILE_SAVESHOT].x = 200;
-    tilesiz[TILE_SAVESHOT].y = 320;
+    int const xf = divscale16(xdim, 320);
+    int const yf = divscale16(ydim, 200);
 
     if (!frame)
     {
@@ -937,13 +947,15 @@ static void G_ReadGLFrame(void)
     glReadPixels(0, 0, xdim, ydim, GL_RGBA, GL_UNSIGNED_BYTE, frame);
     videoEndDrawing();
 
-    for (y = 0; y < 200; y++)
+    for (int y = 0; y < 200; y++)
     {
-        const int32_t base = mulscale16(200 - y - 1, yf)*xdim;
+        int32_t const sourceY = clamp<int32_t>(ydim - 1 - mulscale16(y, yf), 0, ydim - 1);
+        int32_t const base = sourceY * xdim;
 
-        for (x = 0; x < 320; x++)
+        for (int x = 0; x < 320; x++)
         {
-            const palette_t *pix = &frame[base + mulscale16(x, xf) + (xdim-(ydim*4/3))/2];
+            int32_t const sourceX = clamp<int32_t>(mulscale16(x, xf), 0, xdim - 1);
+            const palette_t *pix = &frame[base + sourceX];
             pic[320 * y + x] = paletteGetClosestColor(pix->r, pix->g, pix->b);
         }
     }
@@ -951,6 +963,41 @@ static void G_ReadGLFrame(void)
     Xfree(frame);
 }
 #endif
+
+static void G_ReadClassicFrame(void)
+{
+    char *const pic = (char *)waloff[TILE_SAVESHOT];
+    int const xf = divscale16(xdim, 320);
+    int const yf = divscale16(ydim, 200);
+
+    videoBeginDrawing();
+    for (int y = 0; y < 200; y++)
+    {
+        int32_t const sourceY = clamp<int32_t>(mulscale16(y, yf), 0, ydim - 1);
+        auto const row = (uint8_t const *)(frameplace + ylookup[sourceY]);
+
+        for (int x = 0; x < 320; x++)
+        {
+            int32_t const sourceX = clamp<int32_t>(mulscale16(x, xf), 0, xdim - 1);
+            pic[320 * y + x] = row[sourceX];
+        }
+    }
+    videoEndDrawing();
+}
+
+static void G_ReadFrameIntoSaveShot(void)
+{
+    G_AllocateSaveShotTile();
+
+    if (videoGetRenderMode() == REND_CLASSIC)
+        G_ReadClassicFrame();
+#ifdef USE_OPENGL
+    else
+        G_ReadGLFrame();
+#endif
+
+    tileInvalidate(TILE_SAVESHOT, 0, 255);
+}
 
 void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
 {
@@ -1302,10 +1349,12 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
         ceilZ  = actor[pPlayer->i].ceilingz;
         floorZ = actor[pPlayer->i].floorz;
 
-        if (g_earthquakeTime > 0 && (REALITY || pPlayer->on_ground == 1))
+        int32_t const quakeTime = g_fakeMultiMode >= 2 ? g_redSplitPlayerQuakeTime[clamp<int32_t>(screenpeek, 0, MAXPLAYERS - 1)] : g_earthquakeTime;
+
+        if (quakeTime > 0 && (REALITY || pPlayer->on_ground == 1))
         {
-            CAMERA(pos.z) += 256 - (((g_earthquakeTime)&1) << 9);
-            CAMERA(q16ang)   += fix16_from_int((2 - ((g_earthquakeTime)&2)) << 2);
+            CAMERA(pos.z) += 256 - ((quakeTime & 1) << 9);
+            CAMERA(q16ang)   += fix16_from_int((2 - (quakeTime & 2)) << 2);
         }
 
         if (sprite[pPlayer->i].pal == 1)
@@ -1606,6 +1655,7 @@ int32_t g_redSplitExtraMenuPage = 0;
 int32_t g_redSplitExtraMenuSelection = 0;
 int32_t g_redSplitDeferHud = 0;
 int32_t g_redSplitSuppressMenuDraw = 0;
+static int32_t g_redSplitCapturingSaveShot = 0;
 int32_t g_redSplitLookSensitivityX[MAXPLAYERS] = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
 int32_t g_redSplitLookSensitivityY[MAXPLAYERS] = { 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };
 int32_t g_redSplitInvertAim[MAXPLAYERS] = {};
@@ -1620,18 +1670,20 @@ int32_t g_redSplitWeaponQuarterLeftOffsetX = 14;
 int32_t g_redSplitWeaponQuarterRightOffsetX = -10;
 int32_t g_redSplitWeaponQuarterOffsetY = 0;
 int32_t g_redSplitWeaponQuarterScalePercent = 55;
-int32_t g_redSplitWeaponPerWeaponOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, -62, -2, 40, 0, 13 };
-int32_t g_redSplitWeaponPerWeaponOffsetY[MAX_WEAPONS] = { 0, 0, -2, -5, -10, -8, -28, -28, 14, 0, -14 };
-int32_t g_redSplitWeaponFlashWideOffsetX = 17;
-int32_t g_redSplitWeaponFlashWideOffsetY = -17;
+int32_t g_redSplitWeaponPerWeaponOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, -62, -2, 40, 36, 13 };
+int32_t g_redSplitWeaponPerWeaponOffsetY[MAX_WEAPONS] = { 0, 0, -2, -4, -10, -8, -28, -28, 14, -32, -14 };
+int32_t g_redSplitWeaponFlashWideOffsetX = 15;
+int32_t g_redSplitWeaponFlashWideOffsetY = -16;
+int32_t g_redSplitWeaponPerWeaponFlashWideOffsetX[MAX_WEAPONS] = { 15, 13, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15 };
+int32_t g_redSplitWeaponPerWeaponFlashWideOffsetY[MAX_WEAPONS] = { -16, -15, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16, -16 };
 int32_t g_redSplitWeaponFlashWideTopOffsetX = 0;
 int32_t g_redSplitWeaponFlashWideTopOffsetY = 0;
 int32_t g_redSplitWeaponFlashWideBottomOffsetX = 0;
 int32_t g_redSplitWeaponFlashWideBottomOffsetY = 0;
 int32_t g_redSplitWeaponFlashQuarterLeftOffsetX = 16;
 int32_t g_redSplitWeaponFlashQuarterRightOffsetX = 0;
-int32_t g_redSplitWeaponFlashDualLeftOffsetX = 37;
-int32_t g_redSplitWeaponFlashDualRightOffsetX = 4;
+int32_t g_redSplitWeaponFlashDualLeftOffsetX = 33;
+int32_t g_redSplitWeaponFlashDualRightOffsetX = 3;
 int32_t g_redSplitWeaponFlashPistolOffsetX = 0;
 int32_t g_redSplitWeaponFlashPistolOffsetY = 0;
 int32_t g_redSplitWeaponAlienGlowOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, 87, 1 };
@@ -1648,13 +1700,167 @@ int32_t g_redSplitWeaponMissileRocketOffsetY = 0;
 int32_t g_redSplitWeaponMissileFlashOffsetX = 0;
 int32_t g_redSplitWeaponMissileFlashOffsetY = 0;
 int32_t g_redSplitWeaponTripLeftOffsetX = 0;
-int32_t g_redSplitWeaponTripLeftOffsetY = 0;
+int32_t g_redSplitWeaponTripLeftOffsetY = 14;
 int32_t g_redSplitWeaponTripRightOffsetX = 0;
-int32_t g_redSplitWeaponTripRightOffsetY = 0;
-int32_t g_redSplitWeaponTripMineScalePercent = 100;
-int32_t g_redSplitWeaponKickArmedOffsetX = 20;
-int32_t g_redSplitWeaponKickUnarmedOffsetX = -5;
+int32_t g_redSplitWeaponTripRightOffsetY = 14;
+int32_t g_redSplitWeaponTripMineScalePercent = 103;
+int32_t g_redSplitWeaponKickArmedOffsetX = 40;
+int32_t g_redSplitWeaponKickUnarmedOffsetX = -10;
 int32_t g_redSplitWeaponAnchor = 1;
+
+void RedSplit_ClearPlayerQuakes(void)
+{
+    Bmemset(g_redSplitPlayerQuakeTime, 0, sizeof(g_redSplitPlayerQuakeTime));
+}
+
+void RedSplit_SetPlayerQuake(int32_t const playerNum, int32_t const duration)
+{
+    if ((unsigned)playerNum >= MAXPLAYERS || duration <= 0)
+        return;
+
+    g_redSplitPlayerQuakeTime[playerNum] = max<int32_t>(g_redSplitPlayerQuakeTime[playerNum], duration);
+}
+
+void RedSplit_SetAllPlayerQuakes(int32_t const duration)
+{
+    g_earthquakeTime = max<int32_t>(g_earthquakeTime, duration);
+
+    if (g_fakeMultiMode < 2 || duration <= 0)
+        return;
+
+    for (int32_t playerNum = 0, playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4); playerNum < playerCount; ++playerNum)
+        RedSplit_SetPlayerQuake(playerNum, duration);
+}
+
+void RedSplit_SetPlayerQuakeFromSprite(int32_t const spriteNum, int32_t const duration)
+{
+    g_earthquakeTime = max<int32_t>(g_earthquakeTime, duration);
+
+    if (g_fakeMultiMode < 2 || duration <= 0)
+        return;
+
+    if ((unsigned)spriteNum >= MAXSPRITES)
+    {
+        RedSplit_SetAllPlayerQuakes(duration);
+        return;
+    }
+
+    static int32_t const quakeNearDistance = 8192;
+    static int32_t const quakeFallbackDistance = 16384;
+    int32_t nearestPlayer = -1;
+    int32_t nearestDistance = INT32_MAX;
+    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4);
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        DukePlayer_t const * const ps = g_player[playerNum].ps;
+        if (ps == nullptr)
+            continue;
+
+        int32_t const distance = FindDistance3D(ps->pos.x - sprite[spriteNum].x, ps->pos.y - sprite[spriteNum].y, ps->pos.z - sprite[spriteNum].z);
+
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearestPlayer = playerNum;
+        }
+
+        if (distance <= quakeNearDistance)
+            RedSplit_SetPlayerQuake(playerNum, duration);
+    }
+
+    if (nearestPlayer >= 0 && nearestDistance <= quakeFallbackDistance)
+        RedSplit_SetPlayerQuake(nearestPlayer, duration);
+}
+
+static int32_t RedSplit_IsActivePlayerSprite(int32_t const playerNum)
+{
+    if ((unsigned)playerNum >= MAXPLAYERS)
+        return 0;
+
+    DukePlayer_t const * const ps = g_player[playerNum].ps;
+    if (ps == nullptr || (unsigned)ps->i >= MAXSPRITES)
+        return 0;
+
+    spritetype const * const pSprite = &sprite[ps->i];
+    return ps->dead_flag == 0 && pSprite->statnum != MAXSTATUS && pSprite->picnum == APLAYER && pSprite->extra > 0;
+}
+
+static int32_t RedSplit_SpawnPlayersStillOverlapping(void)
+{
+    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4);
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        if (!RedSplit_IsActivePlayerSprite(playerNum))
+            continue;
+
+        DukePlayer_t const * const ps = g_player[playerNum].ps;
+
+        for (int32_t otherPlayer = playerNum + 1; otherPlayer < playerCount; ++otherPlayer)
+        {
+            if (!RedSplit_IsActivePlayerSprite(otherPlayer))
+                continue;
+
+            DukePlayer_t const * const otherPs = g_player[otherPlayer].ps;
+            if (klabs(ps->pos.z - otherPs->pos.z) < PHEIGHT && FindDistance2D(ps->pos.x - otherPs->pos.x, ps->pos.y - otherPs->pos.y) < 768)
+                return 1;
+        }
+    }
+
+    return 0;
+}
+
+static void RedSplit_ApplySpawnPlayerClipGrace(void)
+{
+    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4);
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        if (!RedSplit_IsActivePlayerSprite(playerNum))
+            continue;
+
+        spritetype * const pSprite = &sprite[g_player[playerNum].ps->i];
+
+        if (g_redSplitSpawnPlayerClipActive)
+            pSprite->cstat &= ~CSTAT_SPRITE_BLOCK;
+        else if ((pSprite->cstat & CSTAT_SPRITE_INVISIBLE) == 0)
+            pSprite->cstat |= CSTAT_SPRITE_BLOCK;
+    }
+}
+
+void RedSplit_BeginSpawnPlayerClipGrace(void)
+{
+    if (g_fakeMultiMode < 2)
+        return;
+
+    g_redSplitSpawnPlayerClipActive = 1;
+    g_redSplitSpawnPlayerClipTimer = GAMETICSPERSEC * 2;
+    RedSplit_ApplySpawnPlayerClipGrace();
+}
+
+void RedSplit_UpdateSpawnPlayerClipGrace(void)
+{
+    if (g_fakeMultiMode < 2)
+    {
+        if (g_redSplitSpawnPlayerClipActive)
+        {
+            g_redSplitSpawnPlayerClipActive = 0;
+            RedSplit_ApplySpawnPlayerClipGrace();
+        }
+        g_redSplitSpawnPlayerClipActive = 0;
+        g_redSplitSpawnPlayerClipTimer = 0;
+        return;
+    }
+
+    if (g_redSplitSpawnPlayerClipTimer > 0)
+        --g_redSplitSpawnPlayerClipTimer;
+
+    if (g_redSplitSpawnPlayerClipActive && g_redSplitSpawnPlayerClipTimer <= 0 && !RedSplit_SpawnPlayersStillOverlapping())
+        g_redSplitSpawnPlayerClipActive = 0;
+
+    RedSplit_ApplySpawnPlayerClipGrace();
+}
 
 enum RedSplitExtraMenuPage_t
 {
@@ -1676,7 +1882,18 @@ static int32_t *g_redSplitWeaponDebugOffsetX = &g_redSplitWeaponPerWeaponOffsetX
 static int32_t *g_redSplitWeaponDebugOffsetY = &g_redSplitWeaponPerWeaponOffsetY[PISTOL_WEAPON];
 static int32_t *g_redSplitWeaponDebugWideOffsetX = &g_redSplitWeaponPerWeaponWideOffsetX[PISTOL_WEAPON];
 static int32_t *g_redSplitWeaponDebugWideScalePercent = &g_redSplitWeaponPerWeaponWideScalePercent[PISTOL_WEAPON];
+static int32_t *g_redSplitWeaponDebugFlashWideOffsetX = &g_redSplitWeaponPerWeaponFlashWideOffsetX[PISTOL_WEAPON];
+static int32_t *g_redSplitWeaponDebugFlashWideOffsetY = &g_redSplitWeaponPerWeaponFlashWideOffsetY[PISTOL_WEAPON];
 static int32_t *g_redSplitWeaponDebugAlienGlowOffsetX = &g_redSplitWeaponAlienGlowOffsetX[PISTOL_WEAPON];
+
+static int32_t RedSplit_VisibleWeaponDebugMax(void)
+{
+    if (REALITY)
+        return clamp<int32_t>(max<int32_t>(GROW_WEAPON, HANDREMOTE_WEAPON), 0, MAX_WEAPONS - 1);
+
+    return MAX_WEAPONS - 1;
+}
+
 static int32_t g_redSplitHudHealthIconTile = 3;
 static int32_t g_redSplitHudHealthIconX = -48;
 static int32_t g_redSplitHudHealthIconY = 87;
@@ -1696,6 +1913,9 @@ static int32_t g_redSplitHudAmmoIconScale = 19;
 static int32_t g_redSplitHudAmmoTextX = 369;
 static int32_t g_redSplitHudAmmoTextY = 88;
 static int32_t g_redSplitHudAmmoTextScale = 66;
+static int32_t g_redSplitHudAccessIconX = 356;
+static int32_t g_redSplitHudAccessIconY = 68;
+static int32_t g_redSplitHudAccessIconScale = 85;
 static int32_t g_redSplitExtraMenuBgX = 0;
 static int32_t g_redSplitExtraMenuBgY = 0;
 static int32_t g_redSplitExtraMenuBgW = 320;
@@ -1732,6 +1952,9 @@ static RedSplitHudTuningParam_t g_redSplitHudTuningParams[] = {
     { "Ammo text X", &g_redSplitHudAmmoTextX, -220, 560 },
     { "Ammo text Y", &g_redSplitHudAmmoTextY, -40, 140 },
     { "Ammo text scale", &g_redSplitHudAmmoTextScale, 1, 140 },
+    { "Access icon X", &g_redSplitHudAccessIconX, -220, 560 },
+    { "Access icon Y", &g_redSplitHudAccessIconY, -40, 140 },
+    { "Access icon scale", &g_redSplitHudAccessIconScale, 1, 140 },
     { "Extra bg X", &g_redSplitExtraMenuBgX, -320, 320 },
     { "Extra bg Y", &g_redSplitExtraMenuBgY, -100, 100 },
     { "Extra bg W", &g_redSplitExtraMenuBgW, 20, 420 },
@@ -1750,8 +1973,8 @@ static RedSplitHudTuningParam_t g_redSplitWeaponTuningParams[] = {
     { "Quarter right X", &g_redSplitWeaponQuarterRightOffsetX, -180, 180 },
     { "Quarter Y", &g_redSplitWeaponQuarterOffsetY, -120, 160 },
     { "Quarter scale", &g_redSplitWeaponQuarterScalePercent, 20, 140 },
-    { "Flash wide X", &g_redSplitWeaponFlashWideOffsetX, -180, 180 },
-    { "Flash wide Y", &g_redSplitWeaponFlashWideOffsetY, -120, 160 },
+    { "Flash wide X", g_redSplitWeaponDebugFlashWideOffsetX, -180, 180 },
+    { "Flash wide Y", g_redSplitWeaponDebugFlashWideOffsetY, -120, 160 },
     { "Flash wide top X", &g_redSplitWeaponFlashWideTopOffsetX, -180, 180 },
     { "Flash wide top Y", &g_redSplitWeaponFlashWideTopOffsetY, -120, 160 },
     { "Flash wide bottom X", &g_redSplitWeaponFlashWideBottomOffsetX, -180, 180 },
@@ -2099,13 +2322,13 @@ static void RedSplit_DrawMinimalHudText(RedSplitViewport_t const &view, int32_t 
         view.x1, view.y1, view.x2, view.y2);
 }
 
-static void RedSplit_DrawMinimalHudTile(RedSplitViewport_t const &view, int32_t const x, int32_t const y, int32_t const tile, int32_t const scalePercent)
+static void RedSplit_DrawMinimalHudTile(RedSplitViewport_t const &view, int32_t const x, int32_t const y, int32_t const tile, int32_t const scalePercent, int32_t const pal = 0)
 {
     if (tile < 0 || tilesiz[tile].x == 0 || tilesiz[tile].y == 0)
         return;
 
     rotatesprite_(RedSplit_ViewXFrom320(view, x) << 16, RedSplit_ViewYFrom100(view, y) << 16,
-        scale(65536, RedSplit_ViewScalePercent(view, scalePercent), 100), 0, tile, 0, 0,
+        scale(65536, RedSplit_ViewScalePercent(view, scalePercent), 100), 0, tile, 0, pal,
         2 | 8 | 16 | ROTATESPRITE_FULL16, 0, 0, view.x1, view.y1, view.x2, view.y2);
 }
 
@@ -2135,6 +2358,58 @@ static int32_t RedSplit_HudHealthIconTile(void)
     return g_redSplitHudHealthIconTiles[clamp<int32_t>(g_redSplitHudHealthIconTile, 0, (int32_t)ARRAY_SIZE(g_redSplitHudHealthIconTiles) - 1)];
 }
 
+static int32_t RedSplit_HudAccessBits(DukePlayer_t const * const p)
+{
+    if (p == nullptr)
+        return 0;
+
+    int32_t accessBits = p->got_access & 7;
+
+    if (p->keys[1])
+        accessBits |= 1;
+    if (p->keys[2])
+        accessBits |= 2;
+    if (p->keys[3])
+        accessBits |= 4;
+
+    return accessBits;
+}
+
+static int32_t RedSplit_HudAccessTile(int32_t const accessBit)
+{
+    if (REALITY)
+        return accessBit == 1 ? ACCESSCARD : accessBit == 2 ? DN64TILE65 : DN64TILE66;
+
+    return ACCESS_ICON;
+}
+
+static int32_t RedSplit_HudAccessPal(int32_t const accessBit)
+{
+    if (REALITY)
+        return 0;
+
+    return accessBit == 1 ? 0 : accessBit == 2 ? 21 : 23;
+}
+
+static void RedSplit_DrawMinimalHudAccessCards(DukePlayer_t const * const p, RedSplitViewport_t const &view)
+{
+    static int32_t const cardBits[] = { 1, 2, 4 };
+    static int32_t const cardOffsetX[] = { 6, 0, 0 };
+    static int32_t const cardOffsetY[] = { -8, -2, 6 };
+
+    int32_t const accessBits = RedSplit_HudAccessBits(p);
+
+    for (int32_t i = 0; i < (int32_t)ARRAY_SIZE(cardBits); ++i)
+    {
+        int32_t const accessBit = cardBits[i];
+        if ((accessBits & accessBit) == 0)
+            continue;
+
+        RedSplit_DrawMinimalHudTile(view, g_redSplitHudAccessIconX + cardOffsetX[i], g_redSplitHudAccessIconY + cardOffsetY[i],
+                                    RedSplit_HudAccessTile(accessBit), g_redSplitHudAccessIconScale, RedSplit_HudAccessPal(accessBit));
+    }
+}
+
 static void RedSplit_DrawMinimalHudForPlayer(int32_t const playerNum, RedSplitViewport_t const &view)
 {
     DukePlayer_t const * const p = g_player[playerNum].ps;
@@ -2159,6 +2434,7 @@ static void RedSplit_DrawMinimalHudForPlayer(int32_t const playerNum, RedSplitVi
     RedSplit_DrawMinimalHudTile(view, g_redSplitHudArmorIconX, g_redSplitHudArmorIconY, SHIELD, g_redSplitHudArmorIconScale);
     if (hasAmmoHud)
         RedSplit_DrawMinimalHudTile(view, g_redSplitHudAmmoIconX, g_redSplitHudAmmoIconY, RedSplit_HudAmmoIconForWeapon(weaponNum), RedSplit_HudAmmoIconScaleForWeapon(weaponNum));
+    RedSplit_DrawMinimalHudAccessCards(p, view);
 
     Bsprintf(value, "%d", p->last_extra);
     RedSplit_DrawMinimalHudText(view, g_redSplitHudHealthTextX, g_redSplitHudHealthTextY, value, 0, g_redSplitHudHealthTextScale);
@@ -2240,24 +2516,32 @@ static void RedSplit_DrawHudTuningPanel(void)
 
 static void RedSplit_UpdateWeaponTuningPointers(void)
 {
-    int32_t const weaponNum = clamp<int32_t>(g_redSplitWeaponDebugWeapon, 0, MAX_WEAPONS - 1);
+    int32_t const maxWeapon = RedSplit_VisibleWeaponDebugMax();
+    g_redSplitWeaponTuningParams[0].maxValue = maxWeapon;
+    g_redSplitWeaponDebugWeapon = clamp<int32_t>(g_redSplitWeaponDebugWeapon, 0, maxWeapon);
+
+    int32_t const weaponNum = g_redSplitWeaponDebugWeapon;
 
     g_redSplitWeaponDebugOffsetX = &g_redSplitWeaponPerWeaponOffsetX[weaponNum];
     g_redSplitWeaponDebugOffsetY = &g_redSplitWeaponPerWeaponOffsetY[weaponNum];
     g_redSplitWeaponDebugWideOffsetX = &g_redSplitWeaponPerWeaponWideOffsetX[weaponNum];
     g_redSplitWeaponDebugWideScalePercent = &g_redSplitWeaponPerWeaponWideScalePercent[weaponNum];
+    g_redSplitWeaponDebugFlashWideOffsetX = &g_redSplitWeaponPerWeaponFlashWideOffsetX[weaponNum];
+    g_redSplitWeaponDebugFlashWideOffsetY = &g_redSplitWeaponPerWeaponFlashWideOffsetY[weaponNum];
     g_redSplitWeaponDebugAlienGlowOffsetX = &g_redSplitWeaponAlienGlowOffsetX[weaponNum];
     g_redSplitWeaponTuningParams[1].value = g_redSplitWeaponDebugOffsetX;
     g_redSplitWeaponTuningParams[2].value = g_redSplitWeaponDebugOffsetY;
     g_redSplitWeaponTuningParams[3].value = g_redSplitWeaponDebugWideOffsetX;
     g_redSplitWeaponTuningParams[5].value = g_redSplitWeaponDebugWideScalePercent;
+    g_redSplitWeaponTuningParams[10].value = g_redSplitWeaponDebugFlashWideOffsetX;
+    g_redSplitWeaponTuningParams[11].value = g_redSplitWeaponDebugFlashWideOffsetY;
     g_redSplitWeaponTuningParams[22].value = g_redSplitWeaponDebugAlienGlowOffsetX;
 }
 
 static void RedSplit_ApplyDebugWeaponToPlayers(void)
 {
     int32_t const playerCount = g_fakeMultiMode > 1 ? clamp<int32_t>(g_fakeMultiMode, 2, 4) : 1;
-    int32_t const weaponNum = clamp<int32_t>(g_redSplitWeaponDebugWeapon, 0, MAX_WEAPONS - 1);
+    int32_t const weaponNum = clamp<int32_t>(g_redSplitWeaponDebugWeapon, 0, RedSplit_VisibleWeaponDebugMax());
 
     for (int32_t i = 0; i < playerCount; ++i)
     {
@@ -2301,14 +2585,16 @@ static void RedSplit_HandleWeaponTuningInput(void)
 
     if (KB_KeyPressed(sc_OpenBracket))
     {
-        g_redSplitWeaponDebugWeapon = (g_redSplitWeaponDebugWeapon + MAX_WEAPONS - 1) % MAX_WEAPONS;
+        int32_t const maxWeapon = RedSplit_VisibleWeaponDebugMax();
+        g_redSplitWeaponDebugWeapon = (g_redSplitWeaponDebugWeapon + maxWeapon) % (maxWeapon + 1);
         RedSplit_UpdateWeaponTuningPointers();
         RedSplit_ApplyDebugWeaponToPlayers();
         KB_ClearKeyDown(sc_OpenBracket);
     }
     else if (KB_KeyPressed(sc_CloseBracket))
     {
-        g_redSplitWeaponDebugWeapon = (g_redSplitWeaponDebugWeapon + 1) % MAX_WEAPONS;
+        int32_t const maxWeapon = RedSplit_VisibleWeaponDebugMax();
+        g_redSplitWeaponDebugWeapon = (g_redSplitWeaponDebugWeapon + 1) % (maxWeapon + 1);
         RedSplit_UpdateWeaponTuningPointers();
         RedSplit_ApplyDebugWeaponToPlayers();
         KB_ClearKeyDown(sc_CloseBracket);
@@ -2557,7 +2843,8 @@ static bool G_DrawMvpLocalSplitScreen(int32_t const smoothRatio)
         RT_DrawWeaponWheelForPlayer(playerNum, false);
         g_redSplitHudDrawingView = -1;
         RedSplit_DrawMinimalHudForPlayer(playerNum, view);
-        RedSplit_DrawExtraMenuForPlayer(playerNum, view);
+        if (!g_redSplitCapturingSaveShot)
+            RedSplit_DrawExtraMenuForPlayer(playerNum, view);
     }
 
     g_redSplitDrawingView = -1;
@@ -2574,11 +2861,70 @@ static bool G_DrawMvpLocalSplitScreen(int32_t const smoothRatio)
     }
 #endif
     RedSplit_DrawLevelTitleOnce();
-    M_DisplayMenus();
-    RedSplit_DrawHudTuningPanel();
-    RedSplit_DrawWeaponTuningPanel();
+    if (!g_redSplitCapturingSaveShot)
+    {
+        M_DisplayMenus();
+        RedSplit_DrawHudTuningPanel();
+        RedSplit_DrawWeaponTuningPanel();
+    }
 
     return true;
+}
+
+void G_CaptureSaveShot(int32_t const smoothRatio)
+{
+    if ((unsigned)myconnectindex >= MAXPLAYERS || g_player[myconnectindex].ps == nullptr)
+        return;
+
+    int32_t const savedScreenPeek = screenpeek;
+    vec2_t const savedWindowXY1 = windowxy1;
+    vec2_t const savedWindowXY2 = windowxy2;
+    int32_t const savedCapturingSaveShot = g_redSplitCapturingSaveShot;
+    int32_t savedPlayerGm[MAXPLAYERS] = {};
+    auto const savedPauseOn = ud.pause_on;
+
+    for (int i = 0; i < MAXPLAYERS; ++i)
+    {
+        if (g_player[i].ps == nullptr)
+            continue;
+
+        savedPlayerGm[i] = g_player[i].ps->gm;
+        g_player[i].ps->gm &= ~(MODE_MENU | MODE_TYPE);
+    }
+    ud.pause_on = 0;
+
+    g_redSplitCapturingSaveShot = 1;
+    bool const splitScreenRendered = G_DrawMvpLocalSplitScreen(smoothRatio);
+    if (!splitScreenRendered)
+    {
+        screenpeek = myconnectindex;
+        G_DrawRooms(myconnectindex, smoothRatio);
+
+        if (videoGetRenderMode() >= REND_POLYMOST)
+            G_DrawBackground();
+
+        G_DisplayRest(smoothRatio);
+    }
+    g_redSplitCapturingSaveShot = savedCapturingSaveShot;
+
+    G_ReadFrameIntoSaveShot();
+
+    for (int i = 0; i < MAXPLAYERS; ++i)
+        if (g_player[i].ps != nullptr)
+            g_player[i].ps->gm = savedPlayerGm[i];
+    ud.pause_on = savedPauseOn;
+
+    screenpeek = savedScreenPeek;
+    videoSetViewableArea(savedWindowXY1.x, savedWindowXY1.y, savedWindowXY2.x, savedWindowXY2.y);
+#ifdef USE_OPENGL
+    if (videoGetRenderMode() >= REND_POLYMOST)
+    {
+        buildgl_setViewport(0, 0, xdim, ydim);
+        glViewport(0, 0, xdim, ydim);
+        glScissor(0, 0, xdim, ydim);
+        buildgl_setDisabled(GL_SCISSOR_TEST);
+    }
+#endif
 }
 
 static void RedSplit_ApplyDirectStartupDefaults(void)
@@ -7784,9 +8130,7 @@ FAKE_F3:
                 return;
             }
 
-            g_screenCapture = 1;
-            G_DrawRooms(myconnectindex,65536);
-            g_screenCapture = 0;
+            G_CaptureSaveShot(65536);
 
             if (g_lastusersave.isValid())
             {
@@ -8990,11 +9334,20 @@ static void G_Startup(void)
 
 static void P_SetupMiscInputSettings(void)
 {
-    DukePlayer_t *ps = g_player[myconnectindex].ps;
+    int32_t const playerCount = g_fakeMultiMode > 1 ? clamp<int32_t>(g_fakeMultiMode, 2, MAXPLAYERS) : 1;
 
-    ps->aim_mode = ud.mouseaiming;
-    ps->auto_aim = ud.config.AutoAim;
-    ps->weaponswitch = ud.weaponswitch;
+    for (int32_t i = 0; i < playerCount; ++i)
+    {
+        int32_t const playerNum = g_fakeMultiMode > 1 ? i : myconnectindex;
+        DukePlayer_t *ps = g_player[playerNum].ps;
+
+        if (ps == nullptr)
+            continue;
+
+        ps->aim_mode = ud.mouseaiming;
+        ps->auto_aim = ud.config.AutoAim;
+        ps->weaponswitch = ud.weaponswitch;
+    }
 }
 
 void G_UpdatePlayerFromMenu(void)
@@ -9393,7 +9746,7 @@ int app_main(int argc, char const * const * argv)
         Bsprintf(g_player[j].user_name,"PLAYER %d",j+1);
         g_player[j].ps->team = g_player[j].pteam = i;
         g_player[j].ps->weaponswitch = 3;
-        g_player[j].ps->auto_aim = 0;
+        g_player[j].ps->auto_aim = g_fakeMultiMode > 1 ? ud.config.AutoAim : 0;
         i = 1-i;
     }
 
@@ -9855,9 +10208,7 @@ MAIN_LOOP_RESTART:
             KB_FlushKeyboardQueue();
             videoNextPage();
 
-            g_screenCapture = 1;
-            G_DrawRooms(myconnectindex, 65536);
-            g_screenCapture = 0;
+            G_CaptureSaveShot(65536);
 
             G_SavePlayerMaybeMulti(g_lastautosave, true);
             g_quickload = &g_lastautosave;
@@ -10011,6 +10362,12 @@ int G_DoMoveThings(void)
 
     everyothertime++;
     if (g_earthquakeTime > 0) g_earthquakeTime--;
+    if (g_fakeMultiMode >= 2)
+    {
+        for (int32_t playerNum = 0, playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4); playerNum < playerCount; ++playerNum)
+            if (g_redSplitPlayerQuakeTime[playerNum] > 0)
+                g_redSplitPlayerQuakeTime[playerNum]--;
+    }
 
     if (ud.pause_on == 0)
     {
@@ -10018,6 +10375,9 @@ int G_DoMoveThings(void)
         if (!REALITY)
             A_MoveDummyPlayers();//ST 13
     }
+
+    if (ud.pause_on == 0)
+        RedSplit_UpdateSpawnPlayerClipGrace();
 
     for (bssize_t TRAVERSE_CONNECT(i))
     {

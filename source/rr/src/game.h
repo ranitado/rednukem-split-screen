@@ -97,6 +97,8 @@ extern int32_t g_redSplitWeaponPerWeaponOffsetX[MAX_WEAPONS];
 extern int32_t g_redSplitWeaponPerWeaponOffsetY[MAX_WEAPONS];
 extern int32_t g_redSplitWeaponFlashWideOffsetX;
 extern int32_t g_redSplitWeaponFlashWideOffsetY;
+extern int32_t g_redSplitWeaponPerWeaponFlashWideOffsetX[MAX_WEAPONS];
+extern int32_t g_redSplitWeaponPerWeaponFlashWideOffsetY[MAX_WEAPONS];
 extern int32_t g_redSplitWeaponFlashWideTopOffsetX;
 extern int32_t g_redSplitWeaponFlashWideTopOffsetY;
 extern int32_t g_redSplitWeaponFlashWideBottomOffsetX;
@@ -129,6 +131,7 @@ extern int32_t g_redSplitWeaponKickArmedOffsetX;
 extern int32_t g_redSplitWeaponKickUnarmedOffsetX;
 extern int32_t g_redSplitWeaponAnchor;
 void RedSplit_SetPlayerCount(int32_t playerCount);
+void RedSplit_AssignInputsForPlayerCount(int32_t playerCount);
 void RedSplit_DisconnectPlayer(int32_t playerNum);
 void RedSplit_OpenExtraMenu(int32_t playerNum);
 void RedSplit_CloseExtraMenu(void);
@@ -141,6 +144,12 @@ void RedSplit_BackExtraMenu(void);
 int32_t RedSplit_PollExtraMenuInputs(void);
 void RedSplit_ResetInputLatches(void);
 void RedSplit_ResetInputQueues(void);
+void RedSplit_ClearPlayerQuakes(void);
+void RedSplit_SetPlayerQuake(int32_t playerNum, int32_t duration);
+void RedSplit_SetPlayerQuakeFromSprite(int32_t spriteNum, int32_t duration);
+void RedSplit_SetAllPlayerQuakes(int32_t duration);
+void RedSplit_BeginSpawnPlayerClipGrace(void);
+void RedSplit_UpdateSpawnPlayerClipGrace(void);
 
 enum GametypeFlags_t {
     GAMETYPE_COOP                   = 0x00000001,
@@ -440,6 +449,7 @@ void G_DrawBackground(void);
 void G_DrawFrags(void);
 void G_HandleMirror(int32_t x, int32_t y, int32_t z, fix16_t a, fix16_t horiz, int32_t smoothratio);
 void G_DrawRooms(int32_t playerNum,int32_t smoothratio);
+void G_CaptureSaveShot(int32_t smoothratio);
 void G_DrawTXDigiNumZ(int32_t starttile,int32_t x,int32_t y,int32_t n,int32_t s,int32_t pal,int32_t cs,int32_t x1,int32_t y1,int32_t x2,int32_t y2,int32_t z);
 void G_GameExit(const char *msg) ATTRIBUTE((noreturn));
 void G_GameQuit(void);

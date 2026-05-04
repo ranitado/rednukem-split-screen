@@ -2019,7 +2019,10 @@ static uint32_t RedSplit_BuildMenuBits(gamepadstate_t const &state, int32_t cons
 static int32_t RedSplit_HandleExtraMenuPressed(int32_t const playerNum, uint32_t const menuPressed)
 {
     if (menuPressed != 0)
+    {
+        CONTROL_LastSeenInput = LastSeenInput::Joystick;
         Menu_SuppressMouseHoverFromGamepad();
+    }
 
     if (playerNum <= 0)
         return 0;
@@ -2080,6 +2083,7 @@ int32_t RedSplit_PollExtraMenuInputs(void)
 
                 if (menuPressed & BIT(RN_PAD_START))
                 {
+                    CONTROL_LastSeenInput = LastSeenInput::Joystick;
                     Menu_SuppressMouseHoverFromGamepad();
                     RedSplit_OpenPauseMenuFromExtra();
                     I_EscapeTriggerClear();
@@ -2138,6 +2142,7 @@ static void RedSplit_BuildGamepadInput(int32_t playerNum, int32_t padIndex, inpu
 
     if (playerNum == 0 && g_redSplitExtraMenuPlayer > 0 && (menuPressed & BIT(RN_PAD_START)))
     {
+        CONTROL_LastSeenInput = LastSeenInput::Joystick;
         Menu_SuppressMouseHoverFromGamepad();
         RedSplit_OpenPauseMenuFromExtra();
         I_EscapeTriggerClear();

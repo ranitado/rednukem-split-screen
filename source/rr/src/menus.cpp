@@ -45,7 +45,7 @@ droidinput_t droidinput;
 #define MENU_MARGIN_CENTER  160
 #define MENU_HEIGHT_CENTER  100
 
-#define REDNUKEM_SPLITSCREEN_VERSION "v0.3"
+#define REDNUKEM_SPLITSCREEN_VERSION "v0.4"
 
 int32_t g_skillSoundVoice = -1;
 
@@ -75,6 +75,11 @@ static int32_t g_redUpdateInstallAvailable = RED_UPDATE_INSTALL_NONE;
 static HANDLE g_redUpdateDownloadThread = nullptr;
 static LONG g_redUpdateDownloadResult = 0;
 static char g_redUpdateDownloadZipPath[BMAX_PATH] = "";
+
+static char const *Menu_RednukemDisplayVersion(char const * const version)
+{
+    return (version[0] == 'v' || version[0] == 'V') ? version + 1 : version;
+}
 
 static void Menu_StartRednukemUpdateCheck(void);
 static void Menu_InstallRednukemUpdate(void);
@@ -157,6 +162,54 @@ static void creditsminitext(int32_t x, int32_t y, const char *t, int32_t p)
 #pragma pack(push,1)
 static savehead_t savehead;
 #pragma pack(pop)
+
+static char const *Menu_SaveInfoLevelName(int32_t const volumeNum, int32_t const levelNum)
+{
+    if ((unsigned)volumeNum >= MAXVOLUMES || (unsigned)levelNum >= MAXLEVELS)
+        return "^10unnamed^0";
+
+    char const * const name = g_mapInfo[(volumeNum * MAXLEVELS) + levelNum].name;
+    return name ? name : "^10unnamed^0";
+}
+
+static char const *Menu_SaveInfoSkillName(int32_t const skill)
+{
+    int32_t const skillIndex = skill - 1;
+    if ((unsigned)skillIndex < MAXSKILLS && g_skillNames[skillIndex][0])
+        return g_skillNames[skillIndex];
+
+    return "^10unknown^0";
+}
+
+static void Menu_DrawSaveInfoLine(vec2_t const origin, int32_t const line, char const * const text)
+{
+    mgametext(origin.x + (4 << 16), origin.y + ((150 + line * 10) << 16), text);
+}
+
+static void Menu_DrawSaveInfo(vec2_t const origin, int32_t const players, int32_t const volumeNum,
+                              int32_t const levelNum, int32_t const skill, char const * const boardFilename)
+{
+    char buf[128];
+    int32_t line = 0;
+
+    if (players > 1)
+    {
+        Bsnprintf(buf, sizeof(buf), "Players: %d", players);
+        Menu_DrawSaveInfoLine(origin, line++, buf);
+    }
+
+    Bsnprintf(buf, sizeof(buf), "Level: %s", Menu_SaveInfoLevelName(volumeNum, levelNum));
+    Menu_DrawSaveInfoLine(origin, line++, buf);
+
+    Bsnprintf(buf, sizeof(buf), "Difficulty: %s", Menu_SaveInfoSkillName(skill));
+    Menu_DrawSaveInfoLine(origin, line++, buf);
+
+    if (volumeNum == 0 && levelNum == 7 && boardFilename != nullptr && boardFilename[0] != '\0')
+    {
+        Bsnprintf(buf, sizeof(buf), "Map: %s", boardFilename);
+        Menu_DrawSaveInfoLine(origin, line, buf);
+    }
+}
 
 static void Menu_DrawBackground(const vec2_t origin)
 {
@@ -374,6 +427,9 @@ MenuFont_t MF_Bluefont =              { { 5<<16, 7<<16 },   { 0, 0 },           
 MenuFont_t MF_Minifont =              { { 4<<16, 5<<16 },   { 1<<16, 1<<16 },   65536,              10<<16,             110<<16,            32768, 32768, 32768, 0,
                                         -1,                 10,                 0,                  0,                  2,                  2,                   0,
                                         0,                  0,                  16 };
+static MenuFont_t MF_LoadSavefont =   { { 5<<16, 7<<16 },   { 0, 0 },           65536,              10<<16,             110<<16,            32768, 32768, 32768, 0,
+                                        -1,                 10,                 0,                  0,                  10,                 10,                  16,
+                                        0,                  0,                  16 };
 
 
 static MenuMenuFormat_t MMF_Top_Main =             { {  MENU_MARGIN_CENTER<<16, 55<<16, }, -(170<<16) };
@@ -390,7 +446,7 @@ static MenuMenuFormat_t MMF_MouseJoySetupBtns =    { {                  76<<16, 
 static MenuMenuFormat_t MMF_FuncList =             { {                 100<<16, 51<<16, },    152<<16 };
 static MenuMenuFormat_t MMF_ColorCorrect =         { { MENU_MARGIN_REGULAR<<16, 86<<16, },    190<<16 };
 static MenuMenuFormat_t MMF_BigSliders =           { {    MENU_MARGIN_WIDE<<16, 37<<16, },    190<<16 };
-static MenuMenuFormat_t MMF_LoadSave =             { {                 200<<16, 49<<16, },    145<<16 };
+static MenuMenuFormat_t MMF_LoadSave =             { {                 163<<16, 49<<16, },    145<<16 };
 static MenuMenuFormat_t MMF_NetSetup =             { {                  36<<16, 38<<16, },    190<<16 };
 static MenuMenuFormat_t MMF_FileSelectLeft =       { {                  40<<16, 45<<16, },    162<<16 };
 static MenuMenuFormat_t MMF_FileSelectRight =      { {                 164<<16, 45<<16, },    162<<16 };
@@ -418,7 +474,7 @@ static MenuEntryFormat_t MEF_KBFuncList =       { 3<<16,      0, -(225<<16) };
 static MenuEntryFormat_t MEF_FuncList =         { 3<<16,      0, -(170<<16) };
 static MenuEntryFormat_t MEF_ColorCorrect =     { 2<<16,      0, -(240<<16) };
 static MenuEntryFormat_t MEF_BigSliders =       { 2<<16,      0, -(260<<16) };
-static MenuEntryFormat_t MEF_LoadSave =         { 2<<16,     -1,     78<<16 };
+static MenuEntryFormat_t MEF_LoadSave =         { 2<<16,     -1,    157<<16 };
 static MenuEntryFormat_t MEF_NetSetup =         { 4<<16,      0,    112<<16 };
 static MenuEntryFormat_t MEF_NetSetup_Confirm = { 4<<16, 16<<16,    112<<16 };
 
@@ -495,7 +551,7 @@ MAKE_MENU_TOP_ENTRYLINK( s_NewGame, MEF_MainMenu, MAIN_NEWGAME, MENU_NEWGAMEMODE
 //#ifdef EDUKE32_SIMPLE_MENU
 MAKE_MENU_TOP_ENTRYLINK( "Resume Game", MEF_MainMenu, MAIN_RESUMEGAME, MENU_CLOSE );
 //#endif
-MAKE_MENU_TOP_ENTRYLINK( s_NewGame, MEF_MainMenu, MAIN_NEWGAME_INGAME, MENU_NEWVERIFY );
+MAKE_MENU_TOP_ENTRYLINK( s_NewGame, MEF_MainMenu, MAIN_NEWGAME_INGAME, MENU_NEWGAMEMODE );
 static MenuLink_t MEO_MAIN_NEWGAME_NETWORK = { MENU_NETWORK, MA_Advance, };
 MAKE_MENU_TOP_ENTRYLINK( s_SaveGame, MEF_MainMenu, MAIN_SAVEGAME, MENU_SAVE );
 MAKE_MENU_TOP_ENTRYLINK( s_LoadGame, MEF_MainMenu, MAIN_LOADGAME, MENU_LOAD );
@@ -624,6 +680,8 @@ static MenuOption_t MEO_GAMESETUP_UPDATES = MAKE_MENUOPTION( &MF_Redfont, &MEOS_
 static MenuEntry_t ME_GAMESETUP_UPDATES = MAKE_MENUENTRY( "Online updates:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_GAMESETUP_UPDATES, Option );
 static MenuLink_t MEO_GAMESETUP_CHECKUPDATES = { MENU_UPDATECHECK, MA_None, };
 static MenuEntry_t ME_GAMESETUP_CHECKUPDATES = MAKE_MENUENTRY( "Check updates", &MF_Redfont, &MEF_BigOptionsRt, &MEO_GAMESETUP_CHECKUPDATES, Link );
+static MenuSpacer_t MEO_GAMESETUP_UPDATESTATUSSPACE = { 8 };
+static MenuEntry_t ME_GAMESETUP_UPDATESTATUSSPACE = MAKE_MENUENTRY( NULL, &MF_Redfont, &MEF_Null, &MEO_GAMESETUP_UPDATESTATUSSPACE, Spacer );
 static MenuLink_t MEO_GAMESETUP_INSTALLUPDATE = { MENU_UPDATECHECK, MA_None, };
 static MenuEntry_t ME_GAMESETUP_INSTALLUPDATE = MAKE_MENUENTRY( "Install update", &MF_Redfont, &MEF_BigOptionsRt, &MEO_GAMESETUP_INSTALLUPDATE, Link );
 #endif
@@ -646,7 +704,6 @@ static MenuLink_t MEO_GAMESETUP_CHEATS = { MENU_CHEATS, MA_Advance, };
 static MenuEntry_t ME_GAMESETUP_CHEATS = MAKE_MENUENTRY( "Cheats", &MF_Redfont, &MEF_BigOptionsRt, &MEO_GAMESETUP_CHEATS, Link );
 
 static MenuEntry_t *MEL_GAMESETUP[] = {
-    &ME_ADULTMODE,
 #if defined STARTUP_SETUP_WINDOW && !defined EDUKE32_SIMPLE_MENU
     &ME_GAMESETUP_STARTWIN,
 #endif
@@ -655,8 +712,6 @@ static MenuEntry_t *MEL_GAMESETUP[] = {
 #ifdef EDUKE32_ANDROID_MENU
     &ME_GAMESETUP_QUICKSWITCH,
     &ME_GAMESETUP_CROUCHLOCK,
-#else
-    &ME_GAMESETUP_DEMOREC,
 #ifdef _WIN32
     //&ME_GAMESETUP_UPDATES,
 #endif
@@ -665,6 +720,7 @@ static MenuEntry_t *MEL_GAMESETUP[] = {
 #ifdef _WIN32
     &ME_Space8_Redfont,
     &ME_GAMESETUP_CHECKUPDATES,
+    &ME_GAMESETUP_UPDATESTATUSSPACE,
     &ME_GAMESETUP_INSTALLUPDATE,
 #endif
 };
@@ -1415,17 +1471,17 @@ static MenuEntry_t *MEL_SCREENSETUP[] = {
 
 // Save and load will be filled in before every viewing of the save/load screen.
 static MenuLink_t MEO_LOAD = { MENU_LOADVERIFY, MA_None, };
-static MenuEntry_t ME_LOAD_TEMPLATE = MAKE_MENUENTRY( NULL, &MF_Minifont, &MEF_LoadSave, &MEO_LOAD, Link );
-static MenuEntry_t ME_LOAD_EMPTY = MAKE_MENUENTRY( NULL, &MF_Minifont, &MEF_LoadSave, nullptr, Dummy );
+static MenuEntry_t ME_LOAD_TEMPLATE = MAKE_MENUENTRY( NULL, &MF_LoadSavefont, &MEF_LoadSave, &MEO_LOAD, Link );
+static MenuEntry_t ME_LOAD_EMPTY = MAKE_MENUENTRY( NULL, &MF_LoadSavefont, &MEF_LoadSave, nullptr, Dummy );
 static MenuEntry_t *ME_LOAD;
 static MenuEntry_t **MEL_LOAD;
 
 static char const s_NewSaveGame[] = "(New Save Game)";
-static MenuString_t MEO_SAVE_TEMPLATE = MAKE_MENUSTRING( NULL, &MF_Minifont, MAXSAVEGAMENAME, 0 );
-static MenuString_t MEO_SAVE_NEW = MAKE_MENUSTRING( NULL, &MF_Minifont, MAXSAVEGAMENAME, 0 );
+static MenuString_t MEO_SAVE_TEMPLATE = MAKE_MENUSTRING( NULL, &MF_LoadSavefont, MAXSAVEGAMENAME, 0 );
+static MenuLink_t MEO_SAVE_NEW = { MENU_SAVEVERIFY, MA_None, };
 static MenuString_t *MEO_SAVE;
-static MenuEntry_t ME_SAVE_TEMPLATE = MAKE_MENUENTRY( NULL, &MF_Minifont, &MEF_LoadSave, &MEO_SAVE_TEMPLATE, String );
-static MenuEntry_t ME_SAVE_NEW = MAKE_MENUENTRY( s_NewSaveGame, &MF_Minifont, &MEF_LoadSave, &MEO_SAVE_NEW, String );
+static MenuEntry_t ME_SAVE_TEMPLATE = MAKE_MENUENTRY( NULL, &MF_LoadSavefont, &MEF_LoadSave, &MEO_SAVE_TEMPLATE, String );
+static MenuEntry_t ME_SAVE_NEW = MAKE_MENUENTRY( s_NewSaveGame, &MF_Bluefont, &MEF_LoadSave, &MEO_SAVE_NEW, Link );
 static MenuEntry_t *ME_SAVE;
 static MenuEntry_t **MEL_SAVE;
 
@@ -2084,6 +2140,19 @@ static void Menu_PopulateJoystick(void)
     M_JOYSTICKAXES.numEntries = joystick.numAxes;
 }
 
+static void Menu_UpdateLoadSaveFont(void)
+{
+    MF_LoadSavefont = MF_Bluefont;
+
+    constexpr int32_t loadSaveScale = 88;
+    MF_LoadSavefont.zoom = scale(MF_Bluefont.zoom, loadSaveScale, 100);
+    MF_LoadSavefont.cursorLeftPosition = scale(MF_Bluefont.cursorLeftPosition, loadSaveScale, 100);
+    MF_LoadSavefont.cursorCenterPosition = scale(MF_Bluefont.cursorCenterPosition, loadSaveScale, 100);
+    MF_LoadSavefont.cursorScale = scale(MF_Bluefont.cursorScale, loadSaveScale, 100);
+    MF_LoadSavefont.cursorScale2 = scale(MF_Bluefont.cursorScale2, loadSaveScale, 100);
+    MF_LoadSavefont.cursorScale3 = scale(MF_Bluefont.cursorScale3, loadSaveScale, 100);
+}
+
 /*
 This function prepares data after ART and CON have been processed.
 It also initializes some data in loops rather than statically at compile time.
@@ -2464,6 +2533,8 @@ void Menu_Init(void)
                 MEL_GAMESETUP[i] = &ME_GAMESETUP_AIM_AUTO_DN64;
         }
     }
+
+    Menu_UpdateLoadSaveFont();
 }
 
 static void Menu_Run(Menu_t *cm, vec2_t origin);
@@ -2555,8 +2626,6 @@ static void Menu_Pre(MenuID_t cm)
         MenuEntry_HideOnCondition(&ME_GAMESETUP_INSTALLUPDATE, g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_NONE);
         MenuEntry_DisableOnCondition(&ME_GAMESETUP_INSTALLUPDATE, g_redUpdateDownloadThread != nullptr);
 #endif
-        MEO_GAMESETUP_DEMOREC.options = (ps->gm&MODE_GAME) ? &MEOS_DemoRec : &MEOS_OffOn;
-        MenuEntry_DisableOnCondition(&ME_GAMESETUP_DEMOREC, (ps->gm&MODE_GAME) && ud.m_recstat != 1);
         break;
 
 #ifdef USE_OPENGL
@@ -2915,12 +2984,31 @@ static void Menu_PreDrawBackground(MenuID_t cm, const vec2_t origin)
 }
 
 
+static int32_t Menu_UseGamepadVerifyPrompt(void)
+{
+    if (CONTROL_LastSeenInput == LastSeenInput::Joystick)
+        return 1;
+
+    if (REALITY && g_fakeMultiMode > 1)
+    {
+        int32_t const playerNum = g_redSplitExtraMenuPlayer >= 0 ? g_redSplitExtraMenuPlayer : myconnectindex;
+        if ((unsigned)playerNum < MAXPLAYERS)
+        {
+            int32_t const inputSource = g_redSplitPlayerInput[playerNum];
+            if (inputSource >= RN_SPLIT_INPUT_PAD1 && inputSource <= RN_SPLIT_INPUT_PAD5)
+                return 1;
+        }
+    }
+
+    return 0;
+}
+
 static void Menu_DrawVerifyPrompt(int32_t x, int32_t y, const char * text, int numlines = 1)
 {
     mgametextcenter(x, y + (90<<16), text);
 #ifndef EDUKE32_ANDROID_MENU
-    char const * inputs = CONTROL_LastSeenInput == LastSeenInput::Joystick
-        ? "Press (A) to accept, (B) to return."
+    char const * inputs = Menu_UseGamepadVerifyPrompt()
+        ? "(A/B)"
         : "(Y/N)";
     mgametextcenter(x, y + (90<<16) + MF_Bluefont.get_yline() * numlines, inputs);
 #endif
@@ -2986,19 +3074,6 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
                 rotatesprite_fs(origin.x + ((MENU_MARGIN_CENTER+100)<<16), origin.y + (36<<16), 65536L,0,PLUTOPAKSPRITE+2,(sintable[((int32_t) totalclock<<4)&2047]>>11),0,2+8);
         }
         break;
-
-#ifdef _WIN32
-    case MENU_GAMESETUP:
-        Menu_UpdateRednukemUpdateCheck();
-        if (g_redUpdateStatus[0] != '\0')
-            creditsminitext(origin.x + (160 << 16), origin.y + (136 << 16), g_redUpdateStatus, MF_Minifont.pal_selected);
-        else
-        {
-            Bsprintf(tempbuf, "Version %s", REDNUKEM_SPLITSCREEN_VERSION);
-            creditsminitext(origin.x + (160 << 16), origin.y + (136 << 16), tempbuf, MF_Minifont.pal_selected);
-        }
-        break;
-#endif
 
     case MENU_CDPLAYER:
         rotatesprite_fs(origin.x + (MENU_MARGIN_CENTER<<16), origin.y+(100<<16),32768L,0,CDPLAYER,16,0,10);
@@ -3074,16 +3149,16 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
         for (i = 0; i <= 108; i += 12)
             rotatesprite_fs(origin.x + ((160+64+91-64)<<16), origin.y + ((i+56)<<16), 65536L,0,TEXTBOX,24,0,10);
 #endif
-        Menu_BlackRectangle(origin.x + (198<<16), origin.y + (47<<16), 102<<16, 100<<16, 1|32);
+        Menu_BlackRectangle(origin.x + (160<<16), origin.y + (47<<16), 160<<16, 100<<16, 1|32);
 
-        rotatesprite_fs(origin.x + (22<<16), origin.y + (97<<16), 65536L,0,WINDOWBORDER2,24,0,10);
-        rotatesprite_fs(origin.x + (180<<16), origin.y + (97<<16), 65536L,1024,WINDOWBORDER2,24,0,10);
-        rotatesprite_fs(origin.x + (99<<16), origin.y + (50<<16), 65536L,512,WINDOWBORDER1,24,0,10);
-        rotatesprite_fs(origin.x + (103<<16), origin.y + (144<<16), 65536L,1024+512,WINDOWBORDER1,24,0,10);
+        rotatesprite_fs(origin.x + (1<<16), origin.y + (97<<16), 65536L,0,WINDOWBORDER2,24,0,10);
+        rotatesprite_fs(origin.x + (159<<16), origin.y + (97<<16), 65536L,1024,WINDOWBORDER2,24,0,10);
+        rotatesprite_fs(origin.x + (78<<16), origin.y + (50<<16), 65536L,512,WINDOWBORDER1,24,0,10);
+        rotatesprite_fs(origin.x + (82<<16), origin.y + (144<<16), 65536L,1024+512,WINDOWBORDER1,24,0,10);
 
         if (M_LOAD.currentEntry >= (int32_t)g_nummenusaves)
         {
-            menutext_centeralign(origin.x + (101<<16), origin.y + (97<<16), "Empty");
+            menutext_centeralign(origin.x + (80<<16), origin.y + (97<<16), "Empty");
             break;
         }
 
@@ -3091,38 +3166,25 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
 
         if (msv.brief.isValid())
         {
-            rotatesprite_fs(origin.x + (101<<16), origin.y + (97<<16), 65536>>1,512,TILE_LOADSHOT,-32,0,4+10+64);
+            rotatesprite_fs(origin.x + (80<<16), origin.y + (97<<16), 65536>>1,512,TILE_LOADSHOT,-32,0,4+10+64);
 
             if (msv.isOldVer)
             {
-                menutext_centeralign(origin.x + (101<<16), origin.y + (97<<16), "Previous\nVersion");
+                menutext_centeralign(origin.x + (80<<16), origin.y + (97<<16), "Previous\nVersion");
 
 #ifndef EDUKE32_SIMPLE_MENU
                 Bsprintf(tempbuf,"Saved: %d.%d.%d.%u %d-bit", savehead.majorver, savehead.minorver,
                          savehead.bytever, savehead.userbytever, 8*savehead.getPtrSize());
-                mgametext(origin.x + (31<<16), origin.y + (104<<16), tempbuf);
+                mgametext(origin.x + (10<<16), origin.y + (104<<16), tempbuf);
                 Bsprintf(tempbuf,"Our: %d.%d.%d.%u %d-bit", SV_MAJOR_VER, SV_MINOR_VER, BYTEVERSION,
                          ud.userbytever, (int32_t)(8*sizeof(intptr_t)));
-                mgametext(origin.x + ((31+16)<<16), origin.y + (114<<16), tempbuf);
+                mgametext(origin.x + (26<<16), origin.y + (114<<16), tempbuf);
 #endif
 
                 break;
             }
 
-            if (savehead.numplayers > 1)
-            {
-                Bsprintf(tempbuf, "Players: %-2d                      ", savehead.numplayers);
-                mgametextcenter(origin.x, origin.y + (156<<16), tempbuf);
-            }
-
-            {
-                const char *name = g_mapInfo[(savehead.volnum*MAXLEVELS) + savehead.levnum].name;
-                Bsprintf(tempbuf, "%s / %s", name ? name : "^10unnamed^0", g_skillNames[savehead.skill-1]);
-            }
-
-            mgametextcenter(origin.x, origin.y + (168<<16), tempbuf);
-            if (savehead.volnum == 0 && savehead.levnum == 7)
-                mgametextcenter(origin.x, origin.y + (180<<16), savehead.boardfn);
+            Menu_DrawSaveInfo(origin, savehead.numplayers, savehead.volnum, savehead.levnum, savehead.skill, savehead.boardfn);
         }
         break;
     }
@@ -3133,14 +3195,14 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
         for (i = 0; i <= 108; i += 12)
             rotatesprite_fs(origin.x + ((160+64+91-64)<<16), origin.y + ((i+56)<<16), 65536L,0,TEXTBOX,24,0,10);
 #endif
-        Menu_BlackRectangle(origin.x + (198<<16), origin.y + (47<<16), 102<<16, 100<<16, 1|32);
+        Menu_BlackRectangle(origin.x + (160<<16), origin.y + (47<<16), 160<<16, 100<<16, 1|32);
 
         if (!REALITY)
         {
-            rotatesprite_fs(origin.x + (22<<16), origin.y + (97<<16), 65536L,0,WINDOWBORDER2,24,0,10);
-            rotatesprite_fs(origin.x + (180<<16), origin.y + (97<<16), 65536L,1024,WINDOWBORDER2,24,0,10);
-            rotatesprite_fs(origin.x + (99<<16), origin.y + (50<<16), 65536L,512,WINDOWBORDER1,24,0,10);
-            rotatesprite_fs(origin.x + (103<<16), origin.y + (144<<16), 65536L,1024+512,WINDOWBORDER1,24,0,10);
+            rotatesprite_fs(origin.x + (1<<16), origin.y + (97<<16), 65536L,0,WINDOWBORDER2,24,0,10);
+            rotatesprite_fs(origin.x + (159<<16), origin.y + (97<<16), 65536L,1024,WINDOWBORDER2,24,0,10);
+            rotatesprite_fs(origin.x + (78<<16), origin.y + (50<<16), 65536L,512,WINDOWBORDER1,24,0,10);
+            rotatesprite_fs(origin.x + (82<<16), origin.y + (144<<16), 65536L,1024+512,WINDOWBORDER1,24,0,10);
         }
 
         j = 0;
@@ -3149,24 +3211,24 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
                 j |= 1;
 
         if (j)
-            rotatesprite_fs(origin.x + (101<<16), origin.y + (97<<16), 65536L>>1,512,TILE_SAVESHOT,-32,0,4+10+64);
+            rotatesprite_fs(origin.x + (80<<16), origin.y + (97<<16), 65536L>>1,512,TILE_SAVESHOT,-32,0,4+10+64);
         else if (0 < M_SAVE.currentEntry && M_SAVE.currentEntry <= (int32_t)g_nummenusaves)
         {
             if (g_menusaves[M_SAVE.currentEntry-1].brief.isValid())
             {
-                rotatesprite_fs(origin.x + (101<<16), origin.y + (97<<16), 65536L>>1,512,TILE_LOADSHOT,-32,0,4+10+64);
+                rotatesprite_fs(origin.x + (80<<16), origin.y + (97<<16), 65536L>>1,512,TILE_LOADSHOT,-32,0,4+10+64);
 
                 if (g_menusaves[M_SAVE.currentEntry-1].isOldVer)
                 {
-                    menutext_centeralign(origin.x + (101<<16), origin.y + (97<<16), "Previous\nVersion");
+                    menutext_centeralign(origin.x + (80<<16), origin.y + (97<<16), "Previous\nVersion");
 
 #ifndef EDUKE32_SIMPLE_MENU
                     Bsprintf(tempbuf,"Saved: %d.%d.%d.%u %d-bit", savehead.majorver, savehead.minorver,
                              savehead.bytever, savehead.userbytever, 8*savehead.getPtrSize());
-                    mgametext(origin.x + (31<<16), origin.y + (104<<16), tempbuf);
+                    mgametext(origin.x + (10<<16), origin.y + (104<<16), tempbuf);
                     Bsprintf(tempbuf,"Our: %d.%d.%d.%u %d-bit", SV_MAJOR_VER, SV_MINOR_VER, BYTEVERSION,
                              ud.userbytever, (int32_t)(8*sizeof(intptr_t)));
-                    mgametext(origin.x + ((31+16)<<16), origin.y + (114<<16), tempbuf);
+                    mgametext(origin.x + (26<<16), origin.y + (114<<16), tempbuf);
 #endif
 
                     break;
@@ -3174,18 +3236,9 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
             }
         }
         else
-            menutext_centeralign(origin.x + (101<<16), origin.y + (97<<16), "New");
+            menutext_centeralign(origin.x + (80<<16), origin.y + (97<<16), "New");
 
-        if (ud.multimode > 1)
-        {
-            Bsprintf(tempbuf, "Players: %-2d                      ", ud.multimode);
-            mgametextcenter(origin.x, origin.y + (156<<16), tempbuf);
-        }
-
-        Bsprintf(tempbuf,"%s / %s",g_mapInfo[(ud.volume_number*MAXLEVELS) + ud.level_number].name, g_skillNames[ud.player_skill-1]);
-        mgametextcenter(origin.x, origin.y + (168<<16), tempbuf);
-        if (ud.volume_number == 0 && ud.level_number == 7)
-            mgametextcenter(origin.x, origin.y + (180<<16), currentboardfilename);
+        Menu_DrawSaveInfo(origin, ud.multimode, ud.volume_number, ud.level_number, ud.player_skill, currentboardfilename);
         break;
     }
 
@@ -3231,7 +3284,7 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
 
     case MENU_SAVEVERIFY:
         videoFadeToBlack(1);
-        Menu_DrawVerifyPrompt(origin.x, origin.y, "Overwrite previous saved game?");
+        Menu_DrawVerifyPrompt(origin.x, origin.y, M_SAVE.currentEntry == 0 ? "Save current game as new file?" : "Overwrite previous saved game?");
         break;
 
     case MENU_LOADDELVERIFY:
@@ -5026,6 +5079,78 @@ static inline int32_t RedSplit_MenuInGame(void)
     return g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME);
 }
 
+static inline int32_t RedSplit_MenuInputSourceToPad(int32_t const inputSource)
+{
+    return (inputSource >= RN_SPLIT_INPUT_PAD1 && inputSource <= RN_SPLIT_INPUT_PAD5) ? inputSource - RN_SPLIT_INPUT_PAD1 : -1;
+}
+
+static inline int32_t RedSplit_MenuPadToInputSource(int32_t const padIndex)
+{
+    return RN_SPLIT_INPUT_PAD1 + padIndex;
+}
+
+static int32_t RedSplit_MenuInputSourceConnected(int32_t const inputSource)
+{
+    if (inputSource == RN_SPLIT_INPUT_KBM)
+        return 1;
+
+    int32_t const padIndex = RedSplit_MenuInputSourceToPad(inputSource);
+    if (padIndex < 0 || padIndex >= joyGetConnectedGamepadCount())
+        return 0;
+
+    gamepadstate_t state;
+    return joyGetGamepadState(padIndex, &state) >= 0 && state.connected;
+}
+
+static int32_t RedSplit_MenuInputUsedByEarlierPlayer(int32_t const inputSource, int32_t const playerNum)
+{
+    if (inputSource == RN_SPLIT_INPUT_NONE)
+        return 0;
+
+    for (int32_t i = 0; i < playerNum; ++i)
+        if (g_redSplitPlayerInput[i] == inputSource)
+            return 1;
+
+    return 0;
+}
+
+static int32_t RedSplit_MenuFindAvailableInput(int32_t const playerNum)
+{
+    if (playerNum == 0 && !RedSplit_MenuInputUsedByEarlierPlayer(RN_SPLIT_INPUT_KBM, playerNum))
+        return RN_SPLIT_INPUT_KBM;
+
+    int32_t const padCount = min<int32_t>(joyGetConnectedGamepadCount(), RN_SPLIT_INPUT_PAD5 - RN_SPLIT_INPUT_PAD1 + 1);
+    for (int32_t padIndex = 0; padIndex < padCount; ++padIndex)
+    {
+        int32_t const inputSource = RedSplit_MenuPadToInputSource(padIndex);
+        if (!RedSplit_MenuInputUsedByEarlierPlayer(inputSource, playerNum))
+            return inputSource;
+    }
+
+    if (!RedSplit_MenuInputUsedByEarlierPlayer(RN_SPLIT_INPUT_KBM, playerNum))
+        return RN_SPLIT_INPUT_KBM;
+
+    return RN_SPLIT_INPUT_NONE;
+}
+
+void RedSplit_AssignInputsForPlayerCount(int32_t playerCount)
+{
+    playerCount = clamp<int32_t>(playerCount, 1, 4);
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        int32_t const inputSource = g_redSplitPlayerInput[playerNum];
+
+        if (RedSplit_MenuInputSourceConnected(inputSource) && !RedSplit_MenuInputUsedByEarlierPlayer(inputSource, playerNum))
+            continue;
+
+        g_redSplitPlayerInput[playerNum] = RedSplit_MenuFindAvailableInput(playerNum);
+    }
+
+    RedSplit_ResetInputLatches();
+    RedSplit_ResetInputQueues();
+}
+
 static void RedSplit_RebuildConnectChain(int32_t const playerCount)
 {
     for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
@@ -5779,6 +5904,110 @@ static int32_t Menu_EntryRangeDoubleModify(void /*MenuEntry_t *entry, double new
 #endif
 
 static uint32_t save_xxh = 0;
+static bool g_saveMenuNeedsRefresh;
+static bool g_saveMenuActivatedDirectly;
+
+static MenuString_t *Menu_GetCurrentSaveStringEntry(void)
+{
+    if (M_SAVE.currentEntry < 0 || M_SAVE.currentEntry >= M_SAVE.numEntries)
+        return nullptr;
+
+    MenuEntry_t * const entry = M_SAVE.entrylist[M_SAVE.currentEntry];
+    if (entry == nullptr || entry->type != String)
+        return nullptr;
+
+    return (MenuString_t *)entry->entry;
+}
+
+static void Menu_SelectLastUserSave(void)
+{
+    if (!g_lastusersave.isValid())
+        return;
+
+    for (int i = 0; i < g_nummenusaves; ++i)
+    {
+        if (strcmp(g_menusaves[i].brief.path, g_lastusersave.path) == 0)
+        {
+            M_SAVE.currentEntry = i + 1;
+            Menu_AdjustForCurrentEntryAssignmentBlind(&M_SAVE);
+            return;
+        }
+    }
+}
+
+static void Menu_RefreshSaveMenuAfterSave(void)
+{
+    Menu_SaveReadHeaders();
+    Menu_SelectLastUserSave();
+
+    if (0 < M_SAVE.currentEntry && M_SAVE.currentEntry <= (int32_t)g_nummenusaves)
+    {
+        savebrief_t & sv = g_menusaves[M_SAVE.currentEntry - 1].brief;
+        if (sv.isValid())
+            G_LoadSaveHeaderNew(sv.path, &savehead);
+    }
+}
+
+static void Menu_BuildAutoSaveName(char * const name, size_t const nameSize)
+{
+    if (name == nullptr || nameSize == 0)
+        return;
+
+    char const * const levelName = g_mapInfo[ud.volume_number * MAXLEVELS + ud.level_number].name;
+    Bsnprintf(name, nameSize, "%.*s", MAXSAVEGAMENAME, levelName ? levelName : "Unknown");
+}
+
+static void Menu_RemoveSavePlayerCountSuffix(char * const name)
+{
+    if (name == nullptr)
+        return;
+
+    int32_t len = 0;
+    while (len < MAXSAVEGAMENAME && name[len] != '\0' && name[len] != 127)
+        ++len;
+
+    if (len >= 3 && name[len - 3] == ' ' && name[len - 2] >= '1' && name[len - 2] <= '4' && Btoupper(name[len - 1]) == 'P')
+        name[len - 3] = '\0';
+}
+
+static int32_t Menu_SaveCurrentEntry(char const *input)
+{
+    int32_t returnvar = 0;
+    char const * const saveName = input ? input : "";
+    bool const overwriteExistingSave = M_SAVE.currentEntry > 0 && M_SAVE.currentEntry <= (int32_t)g_nummenusaves;
+    savebrief_t & sv = g_lastusersave = overwriteExistingSave ? g_menusaves[M_SAVE.currentEntry - 1].brief : savebrief_t{ saveName };
+
+    // dirty hack... char 127 in last position indicates an auto-filled name
+#ifdef __ANDROID__
+    if (1)
+#else
+    if (overwriteExistingSave || saveName[0] == 0 || (sv.name[MAXSAVEGAMENAME] == 127 &&
+        strncmp(sv.name, saveName, MAXSAVEGAMENAME) == 0 &&
+        save_xxh == XXH32((uint8_t *)sv.name, MAXSAVEGAMENAME, 0xDEADBEEF)))
+#endif
+    {
+        Menu_BuildAutoSaveName(sv.name, MAXSAVEGAMENAMESTRUCT);
+        sv.name[MAXSAVEGAMENAME] = 127;
+        returnvar = -1;
+    }
+    else
+    {
+        strncpy(sv.name, saveName, MAXSAVEGAMENAME);
+        sv.name[MAXSAVEGAMENAME] = 0;
+    }
+
+    int32_t const saveStatus = G_SavePlayerMaybeMulti(sv);
+    if (saveStatus != 0)
+    {
+        save_xxh = 0;
+        return 1;
+    }
+
+    g_quickload = &g_lastusersave;
+    save_xxh = 0;
+
+    return returnvar;
+}
 
 static void Menu_EntryStringActivate(/*MenuEntry_t *entry*/)
 {
@@ -5795,8 +6024,9 @@ static void Menu_EntryStringActivate(/*MenuEntry_t *entry*/)
         }
         else
         {
-            ME_SAVE_NEW.name = nullptr;
             save_xxh = 0;
+            Menu_Change(MENU_SAVEVERIFY);
+            g_saveMenuActivatedDirectly = true;
         }
         break;
 
@@ -5813,34 +6043,8 @@ static int32_t Menu_EntryStringSubmit(/*MenuEntry_t *entry, */char *input)
     {
     case MENU_SAVE:
     {
-        savebrief_t & sv = g_lastusersave = M_SAVE.currentEntry == 0 ? savebrief_t{input} : g_menusaves[M_SAVE.currentEntry-1].brief;
-
-        // dirty hack... char 127 in last position indicates an auto-filled name
-#ifdef __ANDROID__
-        if (1)
-#else
-        if (input[0] == 0 || (sv.name[MAXSAVEGAMENAME] == 127 &&
-            strncmp(sv.name, input, MAXSAVEGAMENAME) == 0 &&
-            save_xxh == XXH32((uint8_t *)sv.name, MAXSAVEGAMENAME, 0xDEADBEEF)))
-#endif
-        {
-            strncpy(sv.name, g_mapInfo[ud.volume_number * MAXLEVELS + ud.level_number].name, MAXSAVEGAMENAME);
-            sv.name[MAXSAVEGAMENAME] = 127;
-            returnvar = -1;
-        }
-        else
-        {
-            strncpy(sv.name, input, MAXSAVEGAMENAME);
-            sv.name[MAXSAVEGAMENAME] = 0;
-        }
-
-        G_SavePlayerMaybeMulti(sv);
-
-        g_quickload = &sv;
-        g_player[myconnectindex].ps->gm = MODE_GAME;
-
-        Menu_Change(MENU_CLOSE);
-        save_xxh = 0;
+        returnvar = Menu_SaveCurrentEntry(input);
+        g_saveMenuNeedsRefresh = returnvar <= 0;
         break;
     }
 
@@ -5952,11 +6156,30 @@ static void Menu_Verify(int32_t input)
         break;
 
     case MENU_SAVEVERIFY:
-        if (!input)
+        if (input)
+        {
+            MenuString_t * const object = Menu_GetCurrentSaveStringEntry();
+            char saveName[MAXSAVEGAMENAMESTRUCT] = {};
+
+            if (object != nullptr)
+            {
+                char const * const currentName = object->editfield ? object->editfield : (object->variable ? object->variable : "");
+                Bstrncpyz(saveName, currentName, sizeof(saveName));
+                object->editfield = nullptr;
+            }
+
+            Menu_StopTextInput();
+            if (Menu_SaveCurrentEntry(saveName) <= 0)
+                Menu_RefreshSaveMenuAfterSave();
+        }
+        else
         {
             save_xxh = 0;
 
-            ((MenuString_t*)M_SAVE.entrylist[M_SAVE.currentEntry]->entry)->editfield = NULL;
+            if (MenuString_t * const object = Menu_GetCurrentSaveStringEntry())
+                object->editfield = nullptr;
+
+            Menu_StopTextInput();
         }
         break;
 
@@ -6396,6 +6619,9 @@ static void Menu_ReadSaveGameHeaders()
 {
     ReadSaveGameHeaders();
 
+    for (int i = 0; i < g_nummenusaves; ++i)
+        Menu_RemoveSavePlayerCountSuffix(g_menusaves[i].brief.name);
+
     int const numloaditems = max<int>(g_nummenusaves, 1), numsaveitems = g_nummenusaves+1;
     ME_LOAD = (MenuEntry_t *)Xrealloc(ME_LOAD, g_nummenusaves * sizeof(MenuEntry_t));
     MEL_LOAD = (MenuEntry_t **)Xrealloc(MEL_LOAD, numloaditems * sizeof(MenuEntry_t *));
@@ -6502,9 +6728,7 @@ static void Menu_AboutToStartDisplaying(Menu_t * m)
 
         if (g_player[myconnectindex].ps->gm&MODE_GAME)
         {
-            g_screenCapture = 1;
-            G_DrawRooms(myconnectindex,65536);
-            g_screenCapture = 0;
+            G_CaptureSaveShot(65536);
         }
         break;
 
@@ -7036,6 +7260,30 @@ static void Menu_RunScrollbar(Menu_t *cm, MenuMenuFormat_t const * const format,
         }
     }
 }
+
+#ifdef _WIN32
+static void Menu_PostDraw(MenuID_t cm, const vec2_t origin)
+{
+    if (cm != MENU_GAMESETUP)
+        return;
+
+    Menu_UpdateRednukemUpdateCheck();
+
+    char text[128];
+    char const *statusText = g_redUpdateStatus;
+
+    if (statusText[0] == '\0')
+    {
+        Bsnprintf(text, sizeof(text), "Version %s", Menu_RednukemDisplayVersion(REDNUKEM_SPLITSCREEN_VERSION));
+        statusText = text;
+    }
+
+    int32_t const y = origin.y + ME_GAMESETUP_CHECKUPDATES.ybottom + (4 << 16) - M_GAMESETUP.scrollPos;
+    creditsminitext(origin.x + (160 << 16), y, statusText, MF_Minifont.pal_selected);
+}
+#else
+static FORCE_INLINE void Menu_PostDraw(MenuID_t, const vec2_t) {}
+#endif
 
 typedef enum MenuMovement_t
 {
@@ -8313,6 +8561,9 @@ static void Menu_Run(Menu_t *cm, const vec2_t origin)
             if ((currentry->type != Option || state != 2) && menu->title != NoTitle)
                 Menu_DrawTopBarCaption(menu->title, origin);
 
+            if (state != 2)
+                Menu_PostDraw(cm->menuID, origin);
+
             break;
         }
     }
@@ -8727,6 +8978,8 @@ static void Menu_RunInput_EntryString_Activate(MenuEntry_t *entry)
 {
     auto *object = (MenuString_t*)entry->entry;
 
+    g_saveMenuActivatedDirectly = false;
+
     if (object->variable)
         strncpy(typebuf, object->variable, TYPEBUFSIZE);
     else
@@ -8738,11 +8991,21 @@ static void Menu_RunInput_EntryString_Activate(MenuEntry_t *entry)
         object->bufsize = TYPEBUFSIZE;
 
     Menu_EntryStringActivate(/*entry*/);
+
+    if (g_saveMenuActivatedDirectly)
+    {
+        g_saveMenuActivatedDirectly = false;
+        object->editfield = nullptr;
+        return;
+    }
+
     Menu_StartTextInput();
 }
 
 static void Menu_RunInput_EntryString_Submit(/*MenuEntry_t *entry, */MenuString_t *object)
 {
+    g_saveMenuNeedsRefresh = false;
+
     if (!Menu_EntryStringSubmit(/*entry, */object->editfield))
     {
         if (object->variable)
@@ -8751,6 +9014,12 @@ static void Menu_RunInput_EntryString_Submit(/*MenuEntry_t *entry, */MenuString_
 
     object->editfield = NULL;
     Menu_StopTextInput();
+
+    if (g_saveMenuNeedsRefresh)
+    {
+        g_saveMenuNeedsRefresh = false;
+        Menu_RefreshSaveMenuAfterSave();
+    }
 }
 
 static void Menu_RunInput_EntryString_Cancel(/*MenuEntry_t *entry, */MenuString_t *object)
@@ -9078,20 +9347,12 @@ static void Menu_RunInput(Menu_t *cm)
             break;
 
         case Verify:
-            if (I_ReturnTrigger() || KB_KeyPressed(sc_N) || Menu_RunInput_MouseReturn())
-            {
-                I_ReturnTriggerClear();
-                KB_ClearKeyDown(sc_N);
-                m_mousecaught = 1;
+        {
+            int32_t const mouseReturn = Menu_RunInput_MouseReturn();
+            int32_t const confirm = I_AdvanceTrigger() || KB_KeyPressed(sc_Y) || (!mouseReturn && Menu_RunInput_MouseAdvance());
+            int32_t const cancel = I_ReturnTrigger() || KB_KeyPressed(sc_N) || mouseReturn;
 
-                Menu_Verify(0);
-
-                Menu_AnimateChange(cm->parentID, cm->parentAnimation);
-
-                S_PlaySound(REALITY ? 0x33 : EXITMENUSOUND);
-            }
-
-            if (I_AdvanceTrigger() || KB_KeyPressed(sc_Y) || Menu_RunInput_MouseAdvance())
+            if (confirm)
             {
                 auto *verify = (MenuVerify_t*)cm->object;
 
@@ -9106,9 +9367,22 @@ static void Menu_RunInput(Menu_t *cm)
 
                 S_PlaySound(RR ? 341 : (REALITY ? 0x33 : PISTOL_BODYHIT));
             }
+            else if (cancel)
+            {
+                I_ReturnTriggerClear();
+                KB_ClearKeyDown(sc_N);
+                m_mousecaught = 1;
+
+                Menu_Verify(0);
+
+                Menu_AnimateChange(cm->parentID, cm->parentAnimation);
+
+                S_PlaySound(REALITY ? 0x33 : EXITMENUSOUND);
+            }
 
             Menu_PreInput(NULL);
             break;
+        }
 
         case CdPlayer:
         {

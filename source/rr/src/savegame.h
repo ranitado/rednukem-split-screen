@@ -126,7 +126,7 @@ int32_t G_SavePlayer(savebrief_t & sv, bool isAutoSave);
 int32_t G_LoadPlayer(savebrief_t & sv);
 int32_t G_LoadSaveHeaderNew(char const *fn, savehead_t *saveh);
 void ReadSaveGameHeaders(void);
-void G_SavePlayerMaybeMulti(savebrief_t & sv, bool isAutoSave = false);
+int32_t G_SavePlayerMaybeMulti(savebrief_t & sv, bool isAutoSave = false);
 int32_t G_LoadPlayerMaybeMulti(savebrief_t & sv);
 
 #ifdef YAX_ENABLE

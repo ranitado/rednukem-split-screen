@@ -21,11 +21,22 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //-------------------------------------------------------------------------
 
 #include "duke3d.h"
+#include "cmdline.h"
 #include "premap.h"
 #include "prlights.h"
 #include "savegame.h"
 
 static OutputFileCounter savecounter;
+
+static char const s_splitScreenSaveDir[] = "saves";
+static char const s_splitScreenSaveDirPrefix[] = "saves/";
+
+static void G_EnsureSplitScreenSaveDir(void)
+{
+    char dir[BMAX_PATH];
+    if (G_ModDirSnprintfLite(dir, ARRAY_SIZE(dir), s_splitScreenSaveDir) < ARRAY_SSIZE(dir)-1)
+        buildvfs_mkdir(dir, 0755);
+}
 
 // For storing pointers in files.
 //  back_p==0: ptr -> "small int"
@@ -142,13 +153,21 @@ uint16_t g_nummenusaves;
 static menusave_t * g_internalsaves;
 static uint16_t g_numinternalsaves;
 
-static void ReadSaveGameHeaders_CACHE1D(BUILDVFS_FIND_REC *f)
+static void ReadSaveGameHeaders_CACHE1D(BUILDVFS_FIND_REC *f, char const * const pathPrefix = nullptr)
 {
     savehead_t h;
 
     for (; f != nullptr; f = f->next)
     {
+        char prefixedName[BMAX_PATH];
         char const * fn = f->name;
+
+        if (pathPrefix != nullptr && pathPrefix[0] != '\0')
+        {
+            Bsnprintf(prefixedName, ARRAY_SIZE(prefixedName), "%s%s", pathPrefix, f->name);
+            fn = prefixedName;
+        }
+
         int32_t fil = kopen4loadfrommod(fn, 0);
         if (fil == -1)
             continue;
@@ -194,9 +213,10 @@ static void ReadSaveGameHeaders_Internal(void)
     static char const DefaultPath[] = "/", SavePattern[] = "*.esv";
 
     BUILDVFS_FIND_REC *findfiles_default = klistpath(DefaultPath, SavePattern, BUILDVFS_FIND_FILE);
+    BUILDVFS_FIND_REC *findfiles_saves = klistpath(s_splitScreenSaveDir, SavePattern, BUILDVFS_FIND_FILE);
 
     // potentially overallocating but programmatically simple
-    int const numfiles = countcache1dfind(findfiles_default);
+    int const numfiles = countcache1dfind(findfiles_default) + countcache1dfind(findfiles_saves);
     size_t const internalsavesize = sizeof(menusave_t) * numfiles;
 
     g_internalsaves = (menusave_t *)Xrealloc(g_internalsaves, internalsavesize);
@@ -207,6 +227,8 @@ static void ReadSaveGameHeaders_Internal(void)
     g_numinternalsaves = 0;
     ReadSaveGameHeaders_CACHE1D(findfiles_default);
     klistfree(findfiles_default);
+    ReadSaveGameHeaders_CACHE1D(findfiles_saves, s_splitScreenSaveDirPrefix);
+    klistfree(findfiles_saves);
 
     g_nummenusaves = 0;
     for (int x = g_numinternalsaves-1; x >= 0; --x)
@@ -325,6 +347,47 @@ static void sv_postudload();
 // hack
 static int different_user_map;
 
+static bool G_IsSupportedLocalSavePlayerCount(int32_t const playerCount)
+{
+    return playerCount >= 1 && playerCount <= 4;
+}
+
+static bool G_IsLocalSplitScreenSave(void)
+{
+    return g_fakeMultiMode > 1;
+}
+
+static bool G_IsSaveBlockedByNetwork(void)
+{
+    return (g_netServer || g_netClient) && !G_IsLocalSplitScreenSave();
+}
+
+static bool G_CanUseLocalSavePlayerCount(int32_t const playerCount)
+{
+    return !G_IsSaveBlockedByNetwork() && G_IsSupportedLocalSavePlayerCount(playerCount);
+}
+
+static int32_t G_GetCurrentLocalSavePlayerCount(void)
+{
+    if (g_fakeMultiMode > 1)
+        return clamp<int32_t>(g_fakeMultiMode, 2, 4);
+
+    return clamp<int32_t>(ud.multimode, 1, MAXPLAYERS);
+}
+
+static void G_ApplyLocalSavePlayerCount(int32_t const playerCount)
+{
+    if (!G_CanUseLocalSavePlayerCount(playerCount))
+        return;
+
+    int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
+
+    RedSplit_SetPlayerCount(clampedPlayerCount);
+
+    ud.multimode = clampedPlayerCount;
+    g_mostConcurrentPlayers = clampedPlayerCount;
+}
+
 // XXX: keyboard input 'blocked' after load fail? (at least ESC?)
 int32_t G_LoadPlayer(savebrief_t & sv)
 {
@@ -338,7 +401,7 @@ int32_t G_LoadPlayer(savebrief_t & sv)
     savehead_t h;
     int status = sv_loadheader(fil, 0, &h);
 
-    if (status < 0 || h.numplayers != ud.multimode)
+    if (status < 0 || (h.numplayers != ud.multimode && !G_CanUseLocalSavePlayerCount(h.numplayers)))
     {
         if (status == -4 || status == -3 || status == 1)
             P_DoQuote(QUOTE_SAVE_BAD_VERSION, g_player[myconnectindex].ps);
@@ -353,7 +416,8 @@ int32_t G_LoadPlayer(savebrief_t & sv)
     }
 
     // some setup first
-    ud.multimode = h.numplayers;
+    G_ApplyLocalSavePlayerCount(h.numplayers);
+    RedSplit_AssignInputsForPlayerCount(h.numplayers);
 
     if (numplayers > 1)
     {
@@ -538,7 +602,8 @@ int32_t G_SavePlayer(savebrief_t & sv, bool isAutoSave)
     }
     else
     {
-        static char const SaveName[] = "save0000.esv";
+        G_EnsureSplitScreenSaveDir();
+        static char const SaveName[] = "saves/save0000.esv";
         int const len = G_ModDirSnprintfLite(temp, ARRAY_SIZE(temp), SaveName);
         if (len >= ARRAY_SSIZE(temp)-1)
         {
@@ -572,6 +637,8 @@ int32_t G_SavePlayer(savebrief_t & sv, bool isAutoSave)
 
     fclose(fil);
 
+    OSD_Printf("Saved: %s\n", temp);
+
     if (!g_netServer && ud.multimode < 2)
     {
             Bstrcpy(apStrings[QUOTE_RESERVED4], "Game Saved");
@@ -598,8 +665,10 @@ saveproblem:
 
 int32_t G_LoadPlayerMaybeMulti(savebrief_t & sv)
 {
-    if (g_netServer || ud.multimode > 1)
+    if (G_IsSaveBlockedByNetwork() || (ud.multimode > 1 && !G_CanUseLocalSavePlayerCount(ud.multimode)))
     {
+        OSD_Printf("G_LoadPlayerMaybeMulti: blocked, fakeMultiMode=%d, ud.multimode=%d, g_netServer=%p, g_netClient=%p\n",
+                   g_fakeMultiMode, ud.multimode, (void *)g_netServer, (void *)g_netClient);
         Bstrcpy(apStrings[QUOTE_RESERVED4], "Multiplayer Loading Not Yet Supported");
         P_DoQuote(QUOTE_RESERVED4, g_player[myconnectindex].ps);
 
@@ -615,18 +684,42 @@ int32_t G_LoadPlayerMaybeMulti(savebrief_t & sv)
     }
 }
 
-void G_SavePlayerMaybeMulti(savebrief_t & sv, bool isAutoSave)
+int32_t G_SavePlayerMaybeMulti(savebrief_t & sv, bool isAutoSave)
 {
     CONFIG_WriteSetup(2);
 
-    if (g_netServer || ud.multimode > 1)
+    int32_t const savePlayerCount = G_GetCurrentLocalSavePlayerCount();
+    bool const blockedByNetwork = G_IsSaveBlockedByNetwork();
+    bool const unsupportedPlayerCount = savePlayerCount > 1 && !G_CanUseLocalSavePlayerCount(savePlayerCount);
+
+    OSD_Printf("G_SavePlayerMaybeMulti: saving \"%s\" path=\"%s\" players=%d fakeMultiMode=%d ud.multimode=%d g_netServer=%p g_netClient=%p\n",
+               sv.name, sv.path, savePlayerCount, g_fakeMultiMode, ud.multimode, (void *)g_netServer, (void *)g_netClient);
+
+    if (blockedByNetwork || unsupportedPlayerCount)
     {
+        OSD_Printf("G_SavePlayerMaybeMulti: blocked, network=%d unsupportedPlayers=%d\n",
+                   blockedByNetwork ? 1 : 0, unsupportedPlayerCount ? 1 : 0);
         Bstrcpy(apStrings[QUOTE_RESERVED4], "Multiplayer Saving Not Yet Supported");
         P_DoQuote(QUOTE_RESERVED4, g_player[myconnectindex].ps);
+        return 127;
     }
     else
     {
-        G_SavePlayer(sv, isAutoSave);
+        G_ApplyLocalSavePlayerCount(savePlayerCount);
+        int32_t const status = G_SavePlayer(sv, isAutoSave);
+
+        if (status == 0 && savePlayerCount > 1)
+        {
+            Bstrcpy(apStrings[QUOTE_RESERVED4], "Game Saved");
+            P_DoQuote(QUOTE_RESERVED4, g_player[myconnectindex].ps);
+        }
+        else if (status != 0)
+        {
+            Bstrcpy(apStrings[QUOTE_RESERVED4], "Save Failed");
+            P_DoQuote(QUOTE_RESERVED4, g_player[myconnectindex].ps);
+        }
+
+        return status;
     }
 }
 
@@ -1894,7 +1987,14 @@ static void sv_restload()
     }
 #undef CPDAT
 
-    if (g_player[myconnectindex].ps)
+    if (g_fakeMultiMode > 1)
+    {
+        int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 2, MAXPLAYERS);
+        for (int32_t i = 0; i < playerCount; ++i)
+            if (g_player[i].ps)
+                g_player[i].ps->auto_aim = ud.config.AutoAim;
+    }
+    else if (g_player[myconnectindex].ps)
         g_player[myconnectindex].ps->auto_aim = ud.config.AutoAim;
 }
 

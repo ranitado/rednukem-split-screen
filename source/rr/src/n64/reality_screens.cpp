@@ -263,6 +263,34 @@ static int32_t RT_BonusSecretRooms(void)
     return maxSecretRooms > 0 ? min<int32_t>(secretRooms, maxSecretRooms) : secretRooms;
 }
 
+static int32_t RT_BonusBabesSaved(void)
+{
+    int32_t babesSaved = 0;
+
+    for (int32_t playerIndex = 0, playerCount = RT_BonusPlayerCount(); playerIndex < playerCount; ++playerIndex)
+    {
+        DukePlayer_t const * const pPlayer = RT_BonusPlayer(playerIndex);
+        if (pPlayer != nullptr)
+            babesSaved += pPlayer->dn64_36e;
+    }
+
+    return babesSaved;
+}
+
+static int32_t RT_BonusMaxBabes(void)
+{
+    int32_t maxBabes = 0;
+
+    for (int32_t playerIndex = 0, playerCount = RT_BonusPlayerCount(); playerIndex < playerCount; ++playerIndex)
+    {
+        DukePlayer_t const * const pPlayer = RT_BonusPlayer(playerIndex);
+        if (pPlayer != nullptr)
+            maxBabes = max<int32_t>(maxBabes, pPlayer->dn64_36d);
+    }
+
+    return maxBabes;
+}
+
 static void RT_DrawBonusStatsText(float alpha, float r, float g, float b, float x, float y, const char *text)
 {
     RT_RotateSpriteSetColor(alpha * r, alpha * g, alpha * b, 256);
@@ -275,25 +303,37 @@ static void RT_DrawBonusStatsNumberRight(float alpha, float r, float g, float b,
     RT_GameTextRight(x, y, text);
 }
 
-static void RT_DrawSplitBonusTable(float alpha, int32_t enemiesLeft)
+static int32_t RT_BonusSplitRevealStep(int32_t const clock)
+{
+    if (clock <= 16 * 4)
+        return 0;
+
+    return clamp<int32_t>(((clock - 16 * 4) / (16 * 4)) + 1, 1, 5);
+}
+
+static void RT_DrawSplitBonusTable(float alpha, int32_t enemiesLeft, int32_t babesLeft, int32_t visibleStep)
 {
     char buf[16];
     int32_t const playerCount = RT_BonusPlayerCount();
     int32_t const labelX = 18;
     int32_t const colStep = playerCount >= 4 ? 39 : 48;
     int32_t const colStart = playerCount >= 4 ? 154 : 166;
-    int32_t const rowHeaderY = 70;
+    int32_t const rowHeaderY = 66;
     int32_t const rowKillsY = rowHeaderY + 14;
     int32_t const rowDeathsY = rowKillsY + 11;
     int32_t const rowSecretsY = rowDeathsY + 11;
-    int32_t const rowEnemiesLeftY = rowSecretsY + 18;
+    int32_t const rowBabesY = rowSecretsY + 11;
+    int32_t const rowEnemiesLeftY = rowBabesY + 18;
     int32_t const rowSecretsLeftY = rowEnemiesLeftY + 11;
+    int32_t const rowBabesLeftY = rowSecretsLeftY + 11;
     int32_t kills[MAXPLAYERS] = {};
     int32_t deaths[MAXPLAYERS] = {};
     int32_t secrets[MAXPLAYERS] = {};
+    int32_t babes[MAXPLAYERS] = {};
     int32_t bestKills = 0;
     int32_t mostDeaths = 0;
     int32_t bestSecrets = 0;
+    int32_t bestBabes = 0;
 
     for (int32_t playerIndex = 0; playerIndex < playerCount; ++playerIndex)
     {
@@ -302,48 +342,86 @@ static void RT_DrawSplitBonusTable(float alpha, int32_t enemiesLeft)
         kills[playerIndex] = pPlayer != nullptr ? pPlayer->actors_killed : 0;
         deaths[playerIndex] = pPlayer != nullptr ? pPlayer->fraggedself : 0;
         secrets[playerIndex] = pPlayer != nullptr ? pPlayer->secret_rooms : 0;
+        babes[playerIndex] = pPlayer != nullptr ? pPlayer->dn64_36e : 0;
         bestKills = max<int32_t>(bestKills, kills[playerIndex]);
         mostDeaths = max<int32_t>(mostDeaths, deaths[playerIndex]);
         bestSecrets = max<int32_t>(bestSecrets, secrets[playerIndex]);
+        bestBabes = max<int32_t>(bestBabes, babes[playerIndex]);
 
         Bsprintf(buf, "P%d", playerIndex + 1);
         RT_DrawBonusStatsText(alpha, 150.f, 200.f, 255.f, colStart + playerIndex * colStep, rowHeaderY, buf);
     }
 
-    RT_DrawBonusStatsText(alpha, 150.f, 255.f, 150.f, labelX, rowKillsY, "ENEMIES KILLED");
-    RT_DrawBonusStatsText(alpha, 255.f, 150.f, 150.f, labelX, rowDeathsY, "DEATHS");
-    RT_DrawBonusStatsText(alpha, 150.f, 255.f, 150.f, labelX, rowSecretsY, "SECRETS FOUND");
+    if (visibleStep >= 1)
+        RT_DrawBonusStatsText(alpha, 150.f, 255.f, 150.f, labelX, rowKillsY, "ENEMIES KILLED");
+    if (visibleStep >= 2)
+        RT_DrawBonusStatsText(alpha, 255.f, 150.f, 150.f, labelX, rowDeathsY, "DEATHS");
+    if (visibleStep >= 3)
+        RT_DrawBonusStatsText(alpha, 150.f, 255.f, 150.f, labelX, rowSecretsY, "SECRETS FOUND");
+    if (visibleStep >= 4)
+        RT_DrawBonusStatsText(alpha, 150.f, 255.f, 150.f, labelX, rowBabesY, "BABES SAVED");
 
     for (int32_t playerIndex = 0; playerIndex < playerCount; ++playerIndex)
     {
         int32_t const valueX = colStart + playerIndex * colStep + 22;
 
-        Bsprintf(buf, "%d", kills[playerIndex]);
-        if (bestKills > 0 && kills[playerIndex] == bestKills)
-            RT_DrawBonusStatsNumberRight(alpha, 150.f, 255.f, 150.f, valueX, rowKillsY, buf);
-        else
-            RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, valueX, rowKillsY, buf);
+        if (visibleStep >= 1)
+        {
+            Bsprintf(buf, "%d", kills[playerIndex]);
+            if (bestKills > 0 && kills[playerIndex] == bestKills)
+                RT_DrawBonusStatsNumberRight(alpha, 150.f, 255.f, 150.f, valueX, rowKillsY, buf);
+            else
+                RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, valueX, rowKillsY, buf);
+        }
 
-        Bsprintf(buf, "%d", deaths[playerIndex]);
-        if (mostDeaths > 0 && deaths[playerIndex] == mostDeaths)
-            RT_DrawBonusStatsNumberRight(alpha, 255.f, 150.f, 150.f, valueX, rowDeathsY, buf);
-        else
-            RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, valueX, rowDeathsY, buf);
+        if (visibleStep >= 2)
+        {
+            Bsprintf(buf, "%d", deaths[playerIndex]);
+            if (mostDeaths > 0 && deaths[playerIndex] == mostDeaths)
+                RT_DrawBonusStatsNumberRight(alpha, 255.f, 150.f, 150.f, valueX, rowDeathsY, buf);
+            else
+                RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, valueX, rowDeathsY, buf);
+        }
 
-        Bsprintf(buf, "%d", secrets[playerIndex]);
-        if (bestSecrets > 0 && secrets[playerIndex] == bestSecrets)
-            RT_DrawBonusStatsNumberRight(alpha, 150.f, 255.f, 150.f, valueX, rowSecretsY, buf);
-        else
-            RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, valueX, rowSecretsY, buf);
+        if (visibleStep >= 3)
+        {
+            Bsprintf(buf, "%d", secrets[playerIndex]);
+            if (bestSecrets > 0 && secrets[playerIndex] == bestSecrets)
+                RT_DrawBonusStatsNumberRight(alpha, 150.f, 255.f, 150.f, valueX, rowSecretsY, buf);
+            else
+                RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, valueX, rowSecretsY, buf);
+        }
+
+        if (visibleStep >= 4)
+        {
+            Bsprintf(buf, "%d", babes[playerIndex]);
+            if (bestBabes > 0 && babes[playerIndex] == bestBabes)
+                RT_DrawBonusStatsNumberRight(alpha, 150.f, 255.f, 150.f, valueX, rowBabesY, buf);
+            else
+                RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, valueX, rowBabesY, buf);
+        }
     }
 
-    RT_DrawBonusStatsText(alpha, 255.f, 150.f, 150.f, labelX, rowEnemiesLeftY, "ENEMIES LEFT");
-    Bsprintf(buf, "%d", enemiesLeft);
-    RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, 160, rowEnemiesLeftY, buf);
+    if (visibleStep >= 5)
+    {
+        RT_DrawBonusStatsText(alpha, 255.f, 150.f, 150.f, labelX, rowEnemiesLeftY, "ENEMIES LEFT");
+        Bsprintf(buf, "%d", enemiesLeft);
+        RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, 160, rowEnemiesLeftY, buf);
+    }
 
-    RT_DrawBonusStatsText(alpha, 255.f, 150.f, 150.f, labelX, rowSecretsLeftY, "SECRETS LEFT");
-    Bsprintf(buf, "%d", max<int32_t>(RT_BonusMaxSecretRooms() - RT_BonusSecretRooms(), 0));
-    RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, 160, rowSecretsLeftY, buf);
+    if (visibleStep >= 5)
+    {
+        RT_DrawBonusStatsText(alpha, 255.f, 150.f, 150.f, labelX, rowSecretsLeftY, "SECRETS LEFT");
+        Bsprintf(buf, "%d", max<int32_t>(RT_BonusMaxSecretRooms() - RT_BonusSecretRooms(), 0));
+        RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, 160, rowSecretsLeftY, buf);
+    }
+
+    if (visibleStep >= 5)
+    {
+        RT_DrawBonusStatsText(alpha, 255.f, 150.f, 150.f, labelX, rowBabesLeftY, "BABES LEFT");
+        Bsprintf(buf, "%d", babesLeft);
+        RT_DrawBonusStatsNumberRight(alpha, 150.f, 200.f, 255.f, 160, rowBabesLeftY, buf);
+    }
 }
 
 
@@ -913,9 +991,9 @@ void RT_Bonus(void)
                     int const showSplitPlayerStats = RT_BonusPlayerCount() > 1;
                     int kills = showSplitPlayerStats ? RT_BonusActorsKilled() : g_player[0].ps->actors_killed;
                     int secrets = showSplitPlayerStats ? RT_BonusSecretRooms() : g_player[0].ps->secret_rooms;
-                    int babes = g_player[0].ps->dn64_36e;
+                    int babes = showSplitPlayerStats ? RT_BonusBabesSaved() : g_player[0].ps->dn64_36e;
                     int secretstotal = g_player[0].ps->max_secret_rooms;
-                    int babestotal = g_player[0].ps->dn64_36d;
+                    int babestotal = showSplitPlayerStats ? RT_BonusMaxBabes() : g_player[0].ps->dn64_36d;
                     int killstotal = 0;
                     for (int i = headspritestat[1]; i != -1; i = nextspritestat[i])
                     {
@@ -943,23 +1021,9 @@ void RT_Bonus(void)
                     */
                     if (showSplitPlayerStats)
                     {
-                        if ((int)totalclock > 16 * 4)
-                            RT_DrawSplitBonusTable(bonus_alpha, killstotal);
-
-                        if ((int)totalclock > 80 * 4)
-                        {
-                            RT_RotateSpriteSetColor(bonus_alpha * 150, bonus_alpha * 255, bonus_alpha * 150, 256);
-                            RT_GameText(0x12, 0x9a, "BABES SAVED");
-                            sprintf(buf, "%d", babes);
-                            RT_GameTextRight(0xa0, 0x9a, buf);
-                        }
-                        if ((int)totalclock > 96 * 4)
-                        {
-                            RT_RotateSpriteSetColor(bonus_alpha * 255, bonus_alpha * 150, bonus_alpha * 150, 256);
-                            RT_GameText(0x12, 0xa5, "BABES LEFT");
-                            sprintf(buf, "%d", babestotal - babes);
-                            RT_GameTextRight(0xa0, 0xa5, buf);
-                        }
+                        int32_t const splitRevealStep = RT_BonusSplitRevealStep((int)totalclock);
+                        if (splitRevealStep > 0)
+                            RT_DrawSplitBonusTable(bonus_alpha, killstotal, max<int32_t>(babestotal - babes, 0), splitRevealStep);
                     }
                     else
                     {
@@ -1006,7 +1070,7 @@ void RT_Bonus(void)
                             RT_GameText(0x10e, 0x96, buf);
                         }
                     }
-                    int cnt = (int)totalclock >> 6;
+                    int cnt = showSplitPlayerStats ? RT_BonusSplitRevealStep((int)totalclock) - 1 : (int)totalclock >> 6;
                     if (soundcnt3 <= cnt && cnt < 7)
                     {
                         S_PlaySound(12);

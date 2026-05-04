@@ -347,6 +347,7 @@ void RT_P_DisplayWeapon(void)
     const int16_t *const weaponFrame = &pPlayer->kickback_pic;
 
     int currentWeapon, quickKickFrame;
+    int kickWeaponX = 0, kickWeaponY = 0, kickWeaponYOffset = 0;
     int v2;
 
 #ifdef SPLITSCREEN_MOD_HACKS
@@ -386,6 +387,10 @@ void RT_P_DisplayWeapon(void)
     weaponYOffset -= (pPlayer->hard_landing << 3);
 
     currentWeapon   = (pPlayer->last_weapon >= 0) ? pPlayer->last_weapon : pPlayer->curr_weapon;
+    kickWeaponX       = weaponX;
+    kickWeaponY       = weaponY;
+    kickWeaponYOffset = weaponYOffset;
+
     if (RT_RedSplitWeaponTweaksActive() && (unsigned)currentWeapon < MAX_WEAPONS)
     {
         weaponX += g_redSplitWeaponPerWeaponOffsetX[currentWeapon];
@@ -409,10 +414,10 @@ void RT_P_DisplayWeapon(void)
         guniqhudid = 100;
 
         if (quickKickFrame < 5 || quickKickFrame > 9)
-            RT_DrawTileScaled(weaponX + 35 + kickOffsetX - (pPlayer->look_ang >> 1), weaponY + 321 - weaponYOffset, KNEE, weaponShade,
+            RT_DrawTileScaled(kickWeaponX + 35 + kickOffsetX - (pPlayer->look_ang >> 1), kickWeaponY + 321 - kickWeaponYOffset, KNEE, weaponShade,
                                 weaponBits | 4 | DRAWEAP_CENTER, weaponPal);
         else
-            RT_DrawTileScaled(weaponX + 115 - 16 + kickOffsetX - (pPlayer->look_ang >> 1), weaponY + 285 - weaponYOffset, KNEE + 1,
+            RT_DrawTileScaled(kickWeaponX + 115 - 16 + kickOffsetX - (pPlayer->look_ang >> 1), kickWeaponY + 285 - kickWeaponYOffset, KNEE + 1,
                                 weaponShade, weaponBits | 4 | DRAWEAP_CENTER, weaponPal);
         guniqhudid = 0;
     }
@@ -982,6 +987,7 @@ void RT_P_ProcessWeapon(int playerNum)
                     if (pPlayer->ammo_amount[GROW_WEAPON] > 0)
                     {
                         (*weaponFrame) = 1;
+                        P_StopWeaponChargeSounds(pPlayer, GROW_WEAPON);
                         A_PlaySound(253, pPlayer->i);
                     }
                     break;
@@ -1282,6 +1288,7 @@ void RT_P_ProcessWeapon(int playerNum)
                 pPlayer->ammo_amount[GROW_WEAPON]--;
 
                 A_Shoot(pPlayer->i, GROWSPARK);
+                P_StopWeaponChargeSounds(pPlayer, GROW_WEAPON);
 
                 pPlayer->dn64_370 = (RT_KRand2()&1) * 2 - 1;
                 pPlayer->visibility = 0;

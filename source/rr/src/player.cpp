@@ -5091,6 +5091,29 @@ void P_AddAmmo(DukePlayer_t * const pPlayer, int const weaponNum, int const addA
         pPlayer->ammo_amount[weaponNum] = pPlayer->max_ammo_amount[weaponNum];
 }
 
+static int32_t P_WeaponChargeSoundForWeapon(int32_t const weaponNum)
+{
+    switch (DYNAMICWEAPONMAP(weaponNum))
+    {
+        case SHRINKER_WEAPON__STATIC: return REALITY ? 9 : SHRINKER_FIRE;
+        case GROW_WEAPON__STATIC:     return REALITY ? 253 : (RR ? 431 : EXPANDERSHOOT);
+    }
+
+    return -1;
+}
+
+void P_StopWeaponChargeSounds(DukePlayer_t *pPlayer, int weaponNum)
+{
+    if (pPlayer == nullptr || (unsigned)pPlayer->i >= MAXSPRITES)
+        return;
+
+    int32_t const soundNum = P_WeaponChargeSoundForWeapon(weaponNum);
+    if (soundNum < 0)
+        return;
+
+    S_StopEnvSound(soundNum, pPlayer->i);
+}
+
 void P_AddWeapon(DukePlayer_t *pPlayer, int weaponNum)
 {
     int8_t curr_weapon = pPlayer->curr_weapon;
@@ -5158,6 +5181,9 @@ void P_AddWeapon(DukePlayer_t *pPlayer, int weaponNum)
 
     if (RR && weaponNum == HANDBOMB_WEAPON)
         pPlayer->last_weapon = -1;
+
+    if (curr_weapon != pPlayer->curr_weapon)
+        P_StopWeaponChargeSounds(pPlayer, pPlayer->curr_weapon);
 
     pPlayer->random_club_frame = 0;
 
@@ -5230,6 +5256,7 @@ void P_CheckWeapon(DukePlayer_t *pPlayer)
         if ((REALITY && (weaponNum == KNEE_WEAPON || weaponNum == HANDREMOTE_WEAPON))
             || ((pPlayer->gotweapon & (1<<weaponNum)) && pPlayer->ammo_amount[weaponNum] > 0))
         {
+            P_StopWeaponChargeSounds(pPlayer, pPlayer->curr_weapon);
             pPlayer->last_weapon = pPlayer->curr_weapon;
             pPlayer->random_club_frame = 0;
             pPlayer->curr_weapon = weaponNum;
@@ -5293,6 +5320,9 @@ void P_CheckWeapon(DukePlayer_t *pPlayer)
     // Found the weapon
 
 found_weapon:
+    if (weaponNum != pPlayer->curr_weapon)
+        P_StopWeaponChargeSounds(pPlayer, pPlayer->curr_weapon);
+
     pPlayer->last_weapon = pPlayer->curr_weapon;
     pPlayer->random_club_frame = 0;
     pPlayer->curr_weapon = weaponNum;
@@ -5906,6 +5936,7 @@ static void P_ProcessWeapon(int playerNum)
                         if (pPlayer->ammo_amount[GROW_WEAPON] > 0)
                         {
                             (*weaponFrame) = 1;
+                            P_StopWeaponChargeSounds(pPlayer, GROW_WEAPON);
                             if (!WW2GI)
                                 A_PlaySound(RR ? 431 : EXPANDERSHOOT, pPlayer->i);
                             else if (PWEAPON(playerNum, pPlayer->curr_weapon, InitialSound) > 0)
@@ -7005,6 +7036,7 @@ static void P_ProcessWeapon(int playerNum)
                     pPlayer->ammo_amount[GROW_WEAPON]--;
 
                     A_Shoot(pPlayer->i, GROWSPARK);
+                    P_StopWeaponChargeSounds(pPlayer, GROW_WEAPON);
 
                     pPlayer->visibility = 0;
                     flashColor = 216+(52<<8)+(20<<16);
@@ -7393,7 +7425,10 @@ static void P_DoJetpack(int const playerNum, int const playerBits, int const pla
         pPlayer->pos.z -= (pPlayer->jetpack_on<<7); //Goin up
     }
     else if (pPlayer->jetpack_on == 11 && !A_CheckSoundPlaying(pPlayer->i, REALITY ? 39 : DUKE_JETPACK_IDLE))
+    {
+        S_StopEnvSound(REALITY ? 38 : DUKE_JETPACK_ON, pPlayer->i);
         A_PlaySound(REALITY ? 39 : DUKE_JETPACK_IDLE, pPlayer->i);
+    }
 
     int const zAdjust = playerShrunk ? 512 : 2048;
 
