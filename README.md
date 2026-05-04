@@ -2,7 +2,7 @@
 
 Rednukem Split-Screen is a source fork of Rednukem/NBlood adding experimental local split-screen support for Duke Nukem 64 on PC.
 
-Current release: `v0.1`
+Current release: `v0.2`
 
 ## Features
 

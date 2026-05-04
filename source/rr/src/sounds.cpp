@@ -628,6 +628,20 @@ static int32_t S_GetSplitSoundPlayer(int32_t const spriteNum, vec3_t const * con
     return bestPlayer;
 }
 
+static int32_t S_IsSplitPlayerSprite(int32_t const spriteNum)
+{
+    if (g_fakeMultiMode < 2 || (unsigned)spriteNum >= MAXSPRITES)
+        return 0;
+
+    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4);
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+        if (g_player[playerNum].ps != nullptr && g_player[playerNum].ps->i == spriteNum)
+            return 1;
+
+    return 0;
+}
+
 static bool S_CalcDistAndAng(int32_t spriteNum, int32_t soundNum, int32_t sectNum, int32_t angle,
                                 const vec3_t *cam, const vec3_t *pos,
                                 int32_t *distPtr, int32_t *angPtr)
@@ -746,6 +760,13 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t *pos)
         S_PlaySound(sndNum);
         return 0;
     }
+
+    if (g_fakeMultiMode >= 2 && (snd.m & (SF_LOOP|SF_MSFX|SF_TALK)) == 0
+        && S_GetSplitSoundPlayer(spriteNum, pos) != screenpeek)
+        return S_PlaySound(sndNum);
+
+    if (S_IsSplitPlayerSprite(spriteNum) && (snd.m & (SF_LOOP|SF_MSFX)) == 0)
+        return S_PlaySound(sndNum);
 
     if (g_fakeMultiMode >= 2 && (sndNum == DUKE_GET || (REALITY && sndNum == 167)))
     {
@@ -940,6 +961,19 @@ int S_PlaySound(int num)
 int A_PlaySound(int soundNum, int spriteNum)
 {
     if (EDUKE32_PREDICT_FALSE((unsigned)soundNum > (unsigned)g_highestSoundIdx)) return -1;
+
+    if (g_fakeMultiMode >= 2 && (unsigned)spriteNum < MAXSPRITES && S_IsSplitPlayerSprite(spriteNum))
+    {
+        if (g_sounds[soundNum].m & SF_LOOP)
+        {
+            if (S_CheckSoundPlaying(spriteNum, soundNum))
+                return -1;
+        }
+        else if ((g_sounds[soundNum].m & (SF_MSFX|SF_TALK)) == 0)
+        {
+            return S_PlaySound(soundNum);
+        }
+    }
 
     return (unsigned)spriteNum >= MAXSPRITES ? S_PlaySound(soundNum) :
         S_PlaySound3D(soundNum, spriteNum, (vec3_t *)&sprite[spriteNum]);

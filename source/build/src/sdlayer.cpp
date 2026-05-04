@@ -2877,6 +2877,11 @@ int32_t handleevents_pollsdl(void)
             case SDL_WINDOWEVENT:
                 switch (ev.window.event)
                 {
+                    case SDL_WINDOWEVENT_CLOSE:
+                        quitevent = 1;
+                        exit(EXIT_SUCCESS);
+                        return -1;
+
                     case SDL_WINDOWEVENT_MINIMIZED:
                         sdl_minimized = true;
                         break;

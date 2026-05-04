@@ -380,6 +380,7 @@ void RT_DrawWeaponWheelForPlayer(int snum, bool drawhud)
 
     int32_t const savedUniqueHudId = guniqhudid;
     guniqhudid = 0;
+    RT_RotateSpriteClearFxColor();
     RT_DrawWeaponWheel(g_player[snum].ps, drawhud);
     guniqhudid = savedUniqueHudId;
 }

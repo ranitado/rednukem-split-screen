@@ -1617,16 +1617,22 @@ int32_t g_redSplitWeaponQuarterLeftOffsetX = 14;
 int32_t g_redSplitWeaponQuarterRightOffsetX = -10;
 int32_t g_redSplitWeaponQuarterOffsetY = 0;
 int32_t g_redSplitWeaponQuarterScalePercent = 55;
-int32_t g_redSplitWeaponFlashWideOffsetX = 26;
-int32_t g_redSplitWeaponFlashWideOffsetY = -15;
+int32_t g_redSplitWeaponPerWeaponOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, -52, 8 };
+int32_t g_redSplitWeaponPerWeaponOffsetY[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, -28, -28 };
+int32_t g_redSplitWeaponFlashWideOffsetX = 13;
+int32_t g_redSplitWeaponFlashWideOffsetY = -14;
 int32_t g_redSplitWeaponFlashWideTopOffsetX = 0;
 int32_t g_redSplitWeaponFlashWideTopOffsetY = 0;
 int32_t g_redSplitWeaponFlashWideBottomOffsetX = 0;
 int32_t g_redSplitWeaponFlashWideBottomOffsetY = 0;
 int32_t g_redSplitWeaponFlashQuarterLeftOffsetX = 16;
 int32_t g_redSplitWeaponFlashQuarterRightOffsetX = 0;
-int32_t g_redSplitWeaponFlashDualLeftOffsetX = 0;
-int32_t g_redSplitWeaponFlashDualRightOffsetX = 0;
+int32_t g_redSplitWeaponFlashDualLeftOffsetX = 37;
+int32_t g_redSplitWeaponFlashDualRightOffsetX = 4;
+int32_t g_redSplitWeaponFlashPistolOffsetX = 0;
+int32_t g_redSplitWeaponFlashPistolOffsetY = 0;
+int32_t g_redSplitWeaponAlienGlowOffsetX = 0;
+int32_t g_redSplitWeaponAlienGlowOffsetY = 0;
 int32_t g_redSplitWeaponAnchor = 1;
 
 enum RedSplitExtraMenuPage_t
@@ -1645,6 +1651,8 @@ static int32_t g_redSplitHudTuningSelection = 0;
 static int32_t g_redSplitWeaponTuningOpen = 0;
 static int32_t g_redSplitWeaponTuningSelection = 0;
 static int32_t g_redSplitWeaponDebugWeapon = PISTOL_WEAPON;
+static int32_t *g_redSplitWeaponDebugOffsetX = &g_redSplitWeaponPerWeaponOffsetX[PISTOL_WEAPON];
+static int32_t *g_redSplitWeaponDebugOffsetY = &g_redSplitWeaponPerWeaponOffsetY[PISTOL_WEAPON];
 static int32_t g_redSplitHudHealthIconTile = 3;
 static int32_t g_redSplitHudHealthIconX = -48;
 static int32_t g_redSplitHudHealthIconY = 87;
@@ -1664,6 +1672,11 @@ static int32_t g_redSplitHudAmmoIconScale = 19;
 static int32_t g_redSplitHudAmmoTextX = 369;
 static int32_t g_redSplitHudAmmoTextY = 88;
 static int32_t g_redSplitHudAmmoTextScale = 66;
+static int32_t g_redSplitExtraMenuBgX = 0;
+static int32_t g_redSplitExtraMenuBgY = 0;
+static int32_t g_redSplitExtraMenuBgW = 320;
+static int32_t g_redSplitExtraMenuBgH = 100;
+static int32_t g_redSplitExtraMenuBgOpacity = 75;
 
 static int32_t const g_redSplitHudHealthIconTiles[] = { FIRSTAID, FIRSTAID_ICON, SIXPAK, COLA, ATOMICHEALTH };
 
@@ -1695,10 +1708,17 @@ static RedSplitHudTuningParam_t g_redSplitHudTuningParams[] = {
     { "Ammo text X", &g_redSplitHudAmmoTextX, -220, 560 },
     { "Ammo text Y", &g_redSplitHudAmmoTextY, -40, 140 },
     { "Ammo text scale", &g_redSplitHudAmmoTextScale, 1, 140 },
+    { "Extra bg X", &g_redSplitExtraMenuBgX, -320, 320 },
+    { "Extra bg Y", &g_redSplitExtraMenuBgY, -100, 100 },
+    { "Extra bg W", &g_redSplitExtraMenuBgW, 20, 420 },
+    { "Extra bg H", &g_redSplitExtraMenuBgH, 20, 180 },
+    { "Extra bg opacity", &g_redSplitExtraMenuBgOpacity, 0, 100 },
 };
 
 static RedSplitHudTuningParam_t g_redSplitWeaponTuningParams[] = {
     { "Weapon", &g_redSplitWeaponDebugWeapon, 0, MAX_WEAPONS - 1 },
+    { "Weapon X", g_redSplitWeaponDebugOffsetX, -220, 220 },
+    { "Weapon Y", g_redSplitWeaponDebugOffsetY, -160, 180 },
     { "Wide X", &g_redSplitWeaponWideOffsetX, -180, 180 },
     { "Wide top Y", &g_redSplitWeaponWideTopOffsetY, -120, 160 },
     { "Wide scale", &g_redSplitWeaponWideScalePercent, 20, 140 },
@@ -1716,6 +1736,10 @@ static RedSplitHudTuningParam_t g_redSplitWeaponTuningParams[] = {
     { "Flash quarter right X", &g_redSplitWeaponFlashQuarterRightOffsetX, -180, 180 },
     { "Flash dual left X", &g_redSplitWeaponFlashDualLeftOffsetX, -180, 180 },
     { "Flash dual right X", &g_redSplitWeaponFlashDualRightOffsetX, -180, 180 },
+    { "Flash pistol X", &g_redSplitWeaponFlashPistolOffsetX, -180, 180 },
+    { "Flash pistol Y", &g_redSplitWeaponFlashPistolOffsetY, -120, 160 },
+    { "Alien glow X", &g_redSplitWeaponAlienGlowOffsetX, -180, 180 },
+    { "Alien glow Y", &g_redSplitWeaponAlienGlowOffsetY, -120, 160 },
     { "Anchor 0L 1S 2R", &g_redSplitWeaponAnchor, 0, 2 },
 };
 
@@ -1765,7 +1789,7 @@ static int32_t RedSplit_ExtraMenuMaxSelection(void)
     switch (g_redSplitExtraMenuPage)
     {
     case REDSPLIT_EXTRA_MENU_PLAYER:
-        return 1;
+        return 2;
     case REDSPLIT_EXTRA_MENU_CONTROLLER:
         return 3;
     default:
@@ -1824,6 +1848,9 @@ void RedSplit_ChangeExtraMenuOption(int32_t const direction)
         }
         case 1:
             g_redSplitAutoRun[playerNum] = !g_redSplitAutoRun[playerNum];
+            break;
+        case 2:
+            g_player[playerNum].ps->weaponswitch ^= 1;
             break;
         }
         break;
@@ -1978,22 +2005,29 @@ static void RedSplit_GetViewport(int32_t const viewIndex, int32_t const playerCo
     }
 }
 
-static void RedSplit_DrawBlackRectangle(RedSplitViewport_t const &view, int32_t const, int32_t const, int32_t const, int32_t const)
+static void RedSplit_DrawBlackRectangle(RedSplitViewport_t const &view, int32_t const x, int32_t const y, int32_t const w, int32_t const h)
 {
-    int32_t const left   = RedSplit_ToVirtualX(view.x1);
-    int32_t const top    = RedSplit_ToVirtualY(view.y1);
-    int32_t const right  = RedSplit_ToVirtualX(view.x2 + 1);
-    int32_t const bottom = RedSplit_ToVirtualY(view.y2 + 1);
+    int32_t const realX1 = view.x1 + scale(x, RedSplit_ViewWidth(view), 320);
+    int32_t const realY1 = view.y1 + scale(y, RedSplit_ViewHeight(view), 100);
+    int32_t const realX2 = view.x1 + scale(x + w, RedSplit_ViewWidth(view), 320);
+    int32_t const realY2 = view.y1 + scale(y + h, RedSplit_ViewHeight(view), 100);
+    int32_t const left   = RedSplit_ToVirtualX(clamp(realX1, view.x1, view.x2 + 1));
+    int32_t const top    = RedSplit_ToVirtualY(clamp(realY1, view.y1, view.y2 + 1));
+    int32_t const right  = RedSplit_ToVirtualX(clamp(realX2, view.x1, view.x2 + 1));
+    int32_t const bottom = RedSplit_ToVirtualY(clamp(realY2, view.y1, view.y2 + 1));
+
+    if (right <= left || bottom <= top)
+        return;
+
     int32_t const xscale = divscale16((right - left) << 16, tilesiz[0].x << 16);
     int32_t const yscale = divscale16((bottom - top) << 16, tilesiz[0].y << 16);
-    int32_t const x      = (left + right) << 15;
-    int32_t const y      = (top + bottom) << 15;
+    int32_t const centerX = (left + right) << 15;
+    int32_t const centerY = (top + bottom) << 15;
+    int32_t const passes = clamp((g_redSplitExtraMenuBgOpacity + 24) / 25, 0, 4);
 
-    // Draw twice with translucency to approximate a darker overlay while keeping the view readable.
-    rotatesprite_(x, y, max(xscale, yscale), 0, 0, 127, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
-                  0, 0, view.x1, view.y1, view.x2, view.y2);
-    rotatesprite_(x, y, max(xscale, yscale), 0, 0, 127, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
-                  0, 0, view.x1, view.y1, view.x2, view.y2);
+    for (int32_t i = 0; i < passes; ++i)
+        rotatesprite_(centerX, centerY, max(xscale, yscale), 0, 0, 127, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
+                      0, 0, view.x1, view.y1, view.x2, view.y2);
 }
 
 static void RedSplit_DrawExtraMenuText(RedSplitViewport_t const &view, int32_t const y, char const * const text, int32_t const selected)
@@ -2162,6 +2196,16 @@ static void RedSplit_DrawHudTuningPanel(void)
     }
 }
 
+static void RedSplit_UpdateWeaponTuningPointers(void)
+{
+    int32_t const weaponNum = clamp<int32_t>(g_redSplitWeaponDebugWeapon, 0, MAX_WEAPONS - 1);
+
+    g_redSplitWeaponDebugOffsetX = &g_redSplitWeaponPerWeaponOffsetX[weaponNum];
+    g_redSplitWeaponDebugOffsetY = &g_redSplitWeaponPerWeaponOffsetY[weaponNum];
+    g_redSplitWeaponTuningParams[1].value = g_redSplitWeaponDebugOffsetX;
+    g_redSplitWeaponTuningParams[2].value = g_redSplitWeaponDebugOffsetY;
+}
+
 static void RedSplit_ApplyDebugWeaponToPlayers(void)
 {
     int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode > 1 ? g_fakeMultiMode : ud.multimode, 1, 4);
@@ -2175,8 +2219,13 @@ static void RedSplit_ApplyDebugWeaponToPlayers(void)
 
         p->gotweapon |= 1 << weaponNum;
         p->curr_weapon = weaponNum;
-        p->last_weapon = weaponNum;
+        p->last_weapon = -1;
         p->dn64_372 = weaponNum;
+        p->kickback_pic = 0;
+        p->weapon_pos = 0;
+        p->holster_weapon = 0;
+        p->random_club_frame = 0;
+        p->hbomb_hold_delay = 0;
 
         if (weaponNum != KNEE_WEAPON)
             p->ammo_amount[weaponNum] = max<int16_t>(p->ammo_amount[weaponNum], p->max_ammo_amount[weaponNum] > 0 ? p->max_ammo_amount[weaponNum] : 50);
@@ -2194,17 +2243,21 @@ static void RedSplit_HandleWeaponTuningInput(void)
     if (!g_redSplitWeaponTuningOpen)
         return;
 
+    RedSplit_UpdateWeaponTuningPointers();
+
     int32_t const paramCount = ARRAY_SIZE(g_redSplitWeaponTuningParams);
 
     if (KB_KeyPressed(sc_OpenBracket))
     {
         g_redSplitWeaponDebugWeapon = (g_redSplitWeaponDebugWeapon + MAX_WEAPONS - 1) % MAX_WEAPONS;
+        RedSplit_UpdateWeaponTuningPointers();
         RedSplit_ApplyDebugWeaponToPlayers();
         KB_ClearKeyDown(sc_OpenBracket);
     }
     else if (KB_KeyPressed(sc_CloseBracket))
     {
         g_redSplitWeaponDebugWeapon = (g_redSplitWeaponDebugWeapon + 1) % MAX_WEAPONS;
+        RedSplit_UpdateWeaponTuningPointers();
         RedSplit_ApplyDebugWeaponToPlayers();
         KB_ClearKeyDown(sc_CloseBracket);
     }
@@ -2251,17 +2304,19 @@ static void RedSplit_DrawWeaponTuningPanel(void)
     if (!g_redSplitWeaponTuningOpen)
         return;
 
-    rotatesprite_(166 << 16, 4 << 16, divscale16(150 << 16, tilesiz[0].x << 16), 0, 0, 95, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
+    RedSplit_UpdateWeaponTuningPointers();
+
+    rotatesprite_(4 << 16, 4 << 16, divscale16(150 << 16, tilesiz[0].x << 16), 0, 0, 95, ud.shadow_pal, 2 | 8 | 16 | 32,
                   0, 0, 0, 0, xdim - 1, ydim - 1);
 
     char line[96];
-    minitext(170, 8, "WEAPON TUNE  , closes  [] weapon", 0, 2 | 8 | 16);
+    minitext(8, 8, "WEAPON TUNE  , closes  [] weapon", 0, 2 | 8 | 16);
 
     for (int32_t i = 0; i < (int32_t)ARRAY_SIZE(g_redSplitWeaponTuningParams); ++i)
     {
         RedSplitHudTuningParam_t const &param = g_redSplitWeaponTuningParams[i];
         Bsprintf(line, "%c %s: %d", i == g_redSplitWeaponTuningSelection ? '>' : ' ', param.name, *param.value);
-        minitext(170, 18 + (i * 6), line, i == g_redSplitWeaponTuningSelection ? 10 : 0, 2 | 8 | 16);
+        minitext(8, 18 + (i * 6), line, i == g_redSplitWeaponTuningSelection ? 10 : 0, 2 | 8 | 16);
     }
 }
 
@@ -2270,10 +2325,10 @@ static void RedSplit_DrawExtraMenuForPlayer(int32_t const playerNum, RedSplitVie
     if (!RedSplit_IsExtraMenuOpenForPlayer(playerNum))
         return;
 
-    RedSplit_DrawBlackRectangle(view, 0, 0, 320, 100);
+    RedSplit_DrawBlackRectangle(view, g_redSplitExtraMenuBgX, g_redSplitExtraMenuBgY, g_redSplitExtraMenuBgW, g_redSplitExtraMenuBgH);
 
     char title[32];
-    char const *options[4] = {};
+    char const *options[5] = {};
     int32_t optionCount = 0;
 
     Bsprintf(title, "Player %d", playerNum + 1);
@@ -2282,12 +2337,14 @@ static void RedSplit_DrawExtraMenuForPlayer(int32_t const playerNum, RedSplitVie
     {
     case REDSPLIT_EXTRA_MENU_PLAYER:
     {
-        static char color[32], autorun[32];
+        static char color[32], autorun[32], pickups[32];
         int32_t const colorIndex = RedSplit_CurrentColorIndex(playerNum);
         Bsprintf(color, "Color: %s", RedSplitColorNames[colorIndex]);
         Bsprintf(autorun, "Auto Run: %s", g_redSplitAutoRun[playerNum] ? "On" : "Off");
+        Bsprintf(pickups, "Equip pickups: %s", (g_player[playerNum].ps != nullptr && (g_player[playerNum].ps->weaponswitch & 1)) ? "If new" : "Never");
         options[optionCount++] = color;
         options[optionCount++] = autorun;
+        options[optionCount++] = pickups;
         break;
     }
     case REDSPLIT_EXTRA_MENU_CONTROLLER:
@@ -2388,9 +2445,6 @@ static bool G_DrawMvpLocalSplitScreen(int32_t const smoothRatio)
 {
     if (g_fakeMultiMode < 2 || ud.multimode < 2)
         return false;
-
-    RedSplit_HandleHudTuningInput();
-    RedSplit_HandleWeaponTuningInput();
 
     int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4);
 
@@ -4732,7 +4786,7 @@ rr_badguy:
 
             fallthrough__;
         case ACCESSCARD__STATIC:
-            if ((g_netServer || ud.multimode > 1) && !GTFLAGS(GAMETYPE_ACCESSCARDSPRITES) && pSprite->picnum == ACCESSCARD)
+            if ((g_netServer || (ud.multimode > 1 && g_fakeMultiMode < 2)) && !GTFLAGS(GAMETYPE_ACCESSCARDSPRITES) && pSprite->picnum == ACCESSCARD)
             {
                 pSprite->xrepeat = pSprite->yrepeat = 0;
                 changespritestat(newSprite, STAT_MISC);
@@ -9706,6 +9760,9 @@ MAIN_LOOP_RESTART:
         {
             int const smoothRatio = calc_smoothratio(totalclock, ototalclock);
 
+            RedSplit_HandleHudTuningInput();
+            RedSplit_HandleWeaponTuningInput();
+
             bool const splitScreenRendered = G_DrawMvpLocalSplitScreen(smoothRatio);
             if (!splitScreenRendered)
             {
@@ -9713,6 +9770,8 @@ MAIN_LOOP_RESTART:
                 if (videoGetRenderMode() >= REND_POLYMOST)
                     G_DrawBackground();
                 G_DisplayRest(smoothRatio);
+                RedSplit_DrawHudTuningPanel();
+                RedSplit_DrawWeaponTuningPanel();
             }
             videoNextPage();
 

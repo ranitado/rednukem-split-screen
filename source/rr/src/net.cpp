@@ -28,6 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "savegame.h"
 #include "input.h"
 #include "cmdline.h"
+#include "menus.h"
 
 #include "enet.h"
 #include "lz4.h"
@@ -2017,6 +2018,9 @@ static uint32_t RedSplit_BuildMenuBits(gamepadstate_t const &state, int32_t cons
 
 static int32_t RedSplit_HandleExtraMenuPressed(int32_t const playerNum, uint32_t const menuPressed)
 {
+    if (menuPressed != 0)
+        Menu_SuppressMouseHoverFromGamepad();
+
     if (playerNum <= 0)
         return 0;
 
@@ -2076,6 +2080,7 @@ int32_t RedSplit_PollExtraMenuInputs(void)
 
                 if (menuPressed & BIT(RN_PAD_START))
                 {
+                    Menu_SuppressMouseHoverFromGamepad();
                     RedSplit_OpenPauseMenuFromExtra();
                     I_EscapeTriggerClear();
                     return 1;
@@ -2131,6 +2136,14 @@ static void RedSplit_BuildGamepadInput(int32_t playerNum, int32_t padIndex, inpu
     s_redSplitPrevMenuBits[playerNum] = menuBits;
     s_redSplitPrevGameplayBits[playerNum] = menuBits;
 
+    if (playerNum == 0 && g_redSplitExtraMenuPlayer > 0 && (menuPressed & BIT(RN_PAD_START)))
+    {
+        Menu_SuppressMouseHoverFromGamepad();
+        RedSplit_OpenPauseMenuFromExtra();
+        I_EscapeTriggerClear();
+        return;
+    }
+
     if (RedSplit_HandleExtraMenuPressed(playerNum, menuPressed))
         return;
 
@@ -2143,8 +2156,9 @@ static void RedSplit_BuildGamepadInput(int32_t playerNum, int32_t padIndex, inpu
     input_t input {};
     input.fvel = clamp(-(leftY * keyMove) / 32767, -REDSPLIT_MAXVEL, REDSPLIT_MAXVEL);
     input.svel = clamp(-(leftX * keyMove) / 32767, -REDSPLIT_MAXSVEL, REDSPLIT_MAXSVEL);
-    int32_t const lookXScale = runHeld ? (REDSPLIT_NORMALTURN << 1) / 5 : (REDSPLIT_NORMALTURN << 1) * g_redSplitLookSensitivityX[playerNum] / 5;
-    int32_t const lookYScale = runHeld ? (REDSPLIT_NORMALTURN << 1) / 5 : (REDSPLIT_NORMALTURN << 1) * g_redSplitLookSensitivityY[playerNum] / 5;
+    int32_t const precisionHeld = autoRun && runHeld;
+    int32_t const lookXScale = precisionHeld ? (REDSPLIT_NORMALTURN << 1) / 5 : (REDSPLIT_NORMALTURN << 1) * g_redSplitLookSensitivityX[playerNum] / 5;
+    int32_t const lookYScale = precisionHeld ? (REDSPLIT_NORMALTURN << 1) / 5 : (REDSPLIT_NORMALTURN << 1) * g_redSplitLookSensitivityY[playerNum] / 5;
     int32_t const lookY = g_redSplitInvertAim[playerNum] ? rightY : -rightY;
     input.q16avel = fix16_clamp(fix16_from_int((rightX * lookXScale) / 16384), F16(-REDSPLIT_MAXANGVEL), F16(REDSPLIT_MAXANGVEL));
     input.q16horz = fix16_clamp(fix16_from_int((lookY * lookYScale) / 32767), F16(-REDSPLIT_MAXHORIZ), F16(REDSPLIT_MAXHORIZ));

@@ -509,6 +509,7 @@ void Menu_Init(void);
 void Menu_Open(uint8_t playerID);
 void Menu_Close(uint8_t playerID);
 void M_DisplayMenus(void);
+void Menu_SuppressMouseHoverFromGamepad(void);
 
 extern MenuFont_t MF_Redfont, MF_Bluefont, MF_Minifont;
 

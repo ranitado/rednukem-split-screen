@@ -1549,6 +1549,11 @@ static MenuEntry_t *MEL_NETWORK[] = {
     &ME_NETWORK_HOSTGAME,
 };
 
+static int32_t g_redSplitPlayerSetupPlayer = 0;
+static char const *MEOSN_PLAYER_SELECTOR[] = { "Player 1", "Player 2", "Player 3", "Player 4" };
+static MenuOptionSet_t MEOS_PLAYER_SELECTOR = MAKE_MENUOPTIONSET( MEOSN_PLAYER_SELECTOR, NULL, 0x2 );
+static MenuOption_t MEO_PLAYER_SELECTOR = MAKE_MENUOPTION( &MF_Bluefont, &MEOS_PLAYER_SELECTOR, &g_redSplitPlayerSetupPlayer );
+static MenuEntry_t ME_PLAYER_SELECTOR = MAKE_MENUENTRY( "Player", &MF_Bluefont, &MEF_PlayerNarrow, &MEO_PLAYER_SELECTOR, Option );
 static MenuString_t MEO_PLAYER_NAME = MAKE_MENUSTRING( szPlayerName, &MF_Bluefont, MAXPLAYERNAME, 0 );
 static MenuEntry_t ME_PLAYER_NAME = MAKE_MENUENTRY( "Name", &MF_Bluefont, &MEF_PlayerNarrow, &MEO_PLAYER_NAME, String );
 static char const *MEOSN_PLAYER_COLOR[] = { "Auto", "Blue", "Red", "Green", "Gray", "Dark gray", "Dark green", "Brown", "Dark blue", "Bright red", "Yellow", };
@@ -1566,6 +1571,8 @@ static MenuEntry_t ME_PLAYER_MACROS = MAKE_MENUENTRY( "Multiplayer macros", &MF_
 #endif
 
 static MenuEntry_t *MEL_PLAYER[] = {
+    &ME_PLAYER_SELECTOR,
+    &ME_Space8_Bluefont,
     &ME_PLAYER_NAME,
     &ME_Space4_Bluefont,
     &ME_PLAYER_COLOR,
@@ -2456,6 +2463,42 @@ static void Menu_Run(Menu_t *cm, vec2_t origin);
 
 static void Menu_BlackRectangle(int32_t x, int32_t y, int32_t width, int32_t height, int32_t orientation);
 
+static int32_t RedSplit_PlayerSetupPlayer(void)
+{
+    return clamp<int32_t>(g_redSplitPlayerSetupPlayer, 0, MAXPLAYERS - 1);
+}
+
+static void RedSplit_SyncPlayerSetupMenuData(void)
+{
+    int32_t const playerNum = RedSplit_PlayerSetupPlayer();
+    DukePlayer_t * const ps = g_player[playerNum].ps;
+
+    ud.color = g_player[playerNum].pcolor;
+    ud.team = g_player[playerNum].pteam;
+
+    if (ps != nullptr)
+        ud.weaponswitch = (ud.weaponswitch & ~(1 | 4)) | (ps->weaponswitch & 1);
+}
+
+static void RedSplit_ApplyPlayerSetupMenuData(void)
+{
+    int32_t const playerNum = RedSplit_PlayerSetupPlayer();
+    DukePlayer_t * const ps = g_player[playerNum].ps;
+
+    g_player[playerNum].pcolor = ud.color;
+    g_player[playerNum].pteam = ud.team;
+
+    if (ps != nullptr)
+    {
+        ps->palookup = g_player[playerNum].pcolor;
+        ps->weaponswitch = (ps->weaponswitch & ~(1 | 4)) | (ud.weaponswitch & 1);
+        ps->team = g_player[playerNum].pteam;
+
+        if ((unsigned)ps->i < MAXSPRITES && sprite[ps->i].picnum == APLAYER && sprite[ps->i].pal != 1)
+            sprite[ps->i].pal = g_player[playerNum].pcolor;
+    }
+}
+
 /*
 At present, no true difference is planned between Menu_Pre() and Menu_PreDraw().
 They are separate for purposes of organization.
@@ -2468,6 +2511,10 @@ static void Menu_Pre(MenuID_t cm)
 
     switch (cm)
     {
+    case MENU_PLAYER:
+        RedSplit_SyncPlayerSetupMenuData();
+        break;
+
     case MENU_MAIN_INGAME:
         MenuEntry_DisableOnCondition(&ME_MAIN_LOADGAME, (RRRA && ud.player_skill == 4) || (RR && !RRRA && ud.player_skill == 5));
         MenuEntry_DisableOnCondition(&ME_MAIN_SAVEGAME, ud.recstat == 2 || (RRRA && ud.player_skill == 4) || (RR && !RRRA && ud.player_skill == 5));
@@ -4679,6 +4726,8 @@ void RedSplit_SetPlayerCount(int32_t const playerCount)
     {
         G_MaybeAllocPlayer(playerNum);
         g_player[playerNum].playerquitflag = 1;
+        if (g_player[playerNum].ps != nullptr)
+            g_player[playerNum].ps->weaponswitch |= 1;
     }
 
     RedSplit_RebuildConnectChain(clampedPlayerCount);
@@ -5273,13 +5322,16 @@ static void Menu_EntryOptionDidModify(MenuEntry_t *entry)
     int domodechange = 0;
 #endif
 
-    if (entry == &ME_GAMESETUP_AIM_AUTO ||
+    if (entry == &ME_PLAYER_SELECTOR)
+        RedSplit_SyncPlayerSetupMenuData();
+    else if (entry == &ME_PLAYER_WEAPSWITCH_PICKUP ||
+             entry == &ME_PLAYER_COLOR ||
+             entry == &ME_PLAYER_TEAM)
+        RedSplit_ApplyPlayerSetupMenuData();
+    else if (entry == &ME_GAMESETUP_AIM_AUTO ||
         entry == &ME_GAMESETUP_AIM_AUTO_DN64 ||
         entry == &ME_GAMESETUP_WEAPSWITCH_PICKUP ||
-        entry == &ME_PLAYER_WEAPSWITCH_PICKUP ||
-        entry == &ME_PLAYER_NAME ||
-        entry == &ME_PLAYER_COLOR ||
-        entry == &ME_PLAYER_TEAM)
+        entry == &ME_PLAYER_NAME)
         G_UpdatePlayerFromMenu();
     else if (entry == &ME_DISPLAYSETUP_UPSCALING)
     {
@@ -5479,7 +5531,12 @@ static int32_t Menu_EntryOptionSource(MenuEntry_t *entry, int32_t currentValue)
     if (entry == &ME_GAMESETUP_WEAPSWITCH_PICKUP)
         return (ud.weaponswitch & 1) ? ((ud.weaponswitch & 4) ? 2 : 1) : 0;
     else if (entry == &ME_PLAYER_WEAPSWITCH_PICKUP)
-        return (ud.weaponswitch & 1) ? 1 : 0;
+    {
+        int32_t const playerNum = RedSplit_PlayerSetupPlayer();
+        DukePlayer_t const * const ps = g_player[playerNum].ps;
+        int32_t const weaponswitch = ps != nullptr ? ps->weaponswitch : ud.weaponswitch;
+        return (weaponswitch & 1) ? 1 : 0;
+    }
     else if (entry == &ME_SOUND_DUKETALK)
         return ud.config.VoiceToggle & 1;
     else if (entry == &ME_NETOPTIONS_MONSTERS)
@@ -5882,6 +5939,19 @@ static Menu_t* Menu_FindFiltered(MenuID_t query)
 }
 
 MenuAnimation_t m_animation;
+#if !defined EDUKE32_TOUCH_DEVICES
+static int32_t m_redSplitMouseHoverRefreshTicks;
+#endif
+
+void Menu_SuppressMouseHoverFromGamepad(void)
+{
+#if !defined EDUKE32_TOUCH_DEVICES
+    m_mouselastactivity = -M_MOUSETIMEOUT;
+    m_mousewake_watchpoint = 0;
+    m_menuchange_watchpoint = 0;
+    m_redSplitMouseHoverRefreshTicks = 0;
+#endif
+}
 
 int32_t Menu_Anim_SinOutRight(MenuAnimation_t *animdata)
 {
@@ -6251,8 +6321,18 @@ int Menu_Change(MenuID_t cm)
     Menu_ChangingTo(m_currentMenu);
 
 #if !defined EDUKE32_TOUCH_DEVICES
+    int32_t const mouseWasActive = MOUSEACTIVECONDITION;
     m_menuchange_watchpoint = 2;
-    m_mouselastactivity = (int32_t)totalclock;
+    if (mouseWasActive)
+    {
+        m_mouselastactivity = (int32_t)totalclock;
+        m_redSplitMouseHoverRefreshTicks = 35;
+    }
+    else
+    {
+        m_mouselastactivity = -M_MOUSETIMEOUT;
+        m_redSplitMouseHoverRefreshTicks = 0;
+    }
 #endif
 
     return 0;
@@ -8415,6 +8495,11 @@ static void Menu_RunInput_FileSelect_Select(MenuFileSelect_t *object)
 
 static void Menu_RunInput(Menu_t *cm)
 {
+    if (I_AdvanceTrigger() || I_ReturnTrigger() || I_EscapeTrigger()
+        || I_MenuUp() || I_MenuDown() || I_MenuLeft() || I_MenuRight()
+        || I_PanelUp() || I_PanelDown())
+        Menu_SuppressMouseHoverFromGamepad();
+
     switch (cm->type)
     {
         case Panel:
@@ -9200,6 +9285,15 @@ void M_DisplayMenus(void)
     int32_t mousestatus = mouseReadAbs(&m_mousepos, &g_mouseAbs);
     if (mousestatus && g_mouseClickState == MOUSE_PRESSED)
         m_mousedownpos = m_mousepos;
+
+#if !defined EDUKE32_TOUCH_DEVICES
+    if (mousestatus && m_redSplitMouseHoverRefreshTicks > 0)
+    {
+        m_mousewake_watchpoint = 1;
+        m_mouselastactivity = (int32_t)totalclock;
+        --m_redSplitMouseHoverRefreshTicks;
+    }
+#endif
 
     Menu_RunInput(m_currentMenu);
 

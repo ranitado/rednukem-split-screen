@@ -154,6 +154,14 @@ static inline void RT_DrawWeaponTileWithID(int uniqueID, int weaponX, int weapon
     guniqhudid       = lastUniqueID;
 }
 
+static inline void RT_DrawWeaponTileWithIDGrouped(int uniqueID, int weaponX, int weaponY, int weaponTile, int weaponShade,
+                                                  int weaponBits, int p, int groupX, int groupY, int weaponScale = 65536)
+{
+    RT_RedSplitWeaponGroupBegin(groupX, groupY);
+    RT_DrawWeaponTileWithID(uniqueID, weaponX, weaponY, weaponTile, weaponShade, weaponBits, p, weaponScale);
+    RT_RedSplitWeaponGroupEnd();
+}
+
 static int RT_P_DisplayKnee(int kneeShade)
 {
     static int8_t const       knee_y[] = { 0, -8, -16, -32, -64, -84, -108, -108, -108, -72, -32, -8 };
@@ -364,6 +372,11 @@ void RT_P_DisplayWeapon(void)
     weaponYOffset -= (pPlayer->hard_landing << 3);
 
     currentWeapon   = (pPlayer->last_weapon >= 0) ? pPlayer->last_weapon : pPlayer->curr_weapon;
+    if ((unsigned)currentWeapon < MAX_WEAPONS)
+    {
+        weaponX += g_redSplitWeaponPerWeaponOffsetX[currentWeapon];
+        weaponY += g_redSplitWeaponPerWeaponOffsetY[currentWeapon];
+    }
     hudweap.gunposy     = weaponYOffset;
     hudweap.lookhoriz   = weaponY;
     hudweap.cur         = currentWeapon;
@@ -462,6 +475,7 @@ void RT_P_DisplayWeapon(void)
 
         case RPG_WEAPON__STATIC:
         case BOAT_WEAPON__STATIC:
+        {
             if (*weaponFrame < 8)
             {
                 weaponX -= sintable[(1024 + ((*weaponFrame) << 7)) & 2047] >> 10;
@@ -471,29 +485,34 @@ void RT_P_DisplayWeapon(void)
             if (!(duke3d_globalflags & DUKE3D_NO_WIDESCREEN_PINNING))
                 weaponBits |= 512;
 
-            RT_DrawWeaponTileWithID(currentWeapon << 2, weaponX + 249, (weaponY << 1) + 190 - weaponYOffset, RPGGUN+1, weaponShade,
-                                    weaponBits, weaponPal);
+            int const rpgGroupX = weaponX + 249;
+            int const rpgGroupY = (weaponY << 1) + 189 - weaponYOffset;
+
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 2, weaponX + 249, (weaponY << 1) + 190 - weaponYOffset, RPGGUN+1, weaponShade,
+                                           weaponBits, weaponPal, rpgGroupX, rpgGroupY);
 
             if (*weaponFrame > 0)
             {
-                RT_DrawWeaponTileWithID(currentWeapon << 1, weaponX + 249 + max(79 - ((*weaponFrame) << 1), 47),
-                                        (weaponY << 1) + 189 - weaponYOffset + max(0, *weaponFrame * 3 - 60),
-                                        (currentWeapon == RPG_WEAPON) ? 3792 : 3789, weaponShade, weaponBits, weaponPal);
+                RT_DrawWeaponTileWithIDGrouped(currentWeapon << 1, weaponX + 249 + max(79 - ((*weaponFrame) << 1), 47),
+                                               (weaponY << 1) + 189 - weaponYOffset + max(0, *weaponFrame * 3 - 60),
+                                               (currentWeapon == RPG_WEAPON) ? 3792 : 3789, weaponShade, weaponBits, weaponPal,
+                                               rpgGroupX, rpgGroupY);
             }
 
-            RT_DrawWeaponTileWithID(currentWeapon, weaponX + 249, (weaponY << 1) + 189 - weaponYOffset, RPGGUN, weaponShade,
-                                    weaponBits, weaponPal);
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon, weaponX + 249, (weaponY << 1) + 189 - weaponYOffset, RPGGUN, weaponShade,
+                                           weaponBits, weaponPal, rpgGroupX, rpgGroupY);
 
             if (*weaponFrame == 0)
             {
                 if (currentWeapon == RPG_WEAPON)
-                    RT_DrawWeaponTileWithID(currentWeapon << 3, weaponX + 246, (weaponY << 1) + 226 - weaponYOffset,
-                                            3790, -32, weaponBits, weaponPal);
+                    RT_DrawWeaponTileWithIDGrouped(currentWeapon << 3, weaponX + 246, (weaponY << 1) + 226 - weaponYOffset,
+                                                   3790, -32, weaponBits, weaponPal, rpgGroupX, rpgGroupY);
                 else
-                    RT_DrawWeaponTileWithID(currentWeapon << 3, weaponX + 255, (weaponY << 1) + 230 - weaponYOffset,
-                                            3791, -32, weaponBits, weaponPal);
+                    RT_DrawWeaponTileWithIDGrouped(currentWeapon << 3, weaponX + 255, (weaponY << 1) + 230 - weaponYOffset,
+                                                   3791, -32, weaponBits, weaponPal, rpgGroupX, rpgGroupY);
             }
             break;
+        }
 
         case SHOTGUN_WEAPON__STATIC:
         case MOTORCYCLE_WEAPON__STATIC:
@@ -576,7 +595,7 @@ void RT_P_DisplayWeapon(void)
                 
                 float siz = ((RT_FakeKRand() & 255) * (1.f/256.f) + 0.7);
 
-                RT_DrawTileFlash(weaponX + 215 - halfLookAng, weaponY + 205 - weaponYOffset, 0xf4f, siz, siz, 0, 12);
+                RT_DrawTileFlash(weaponX + 215 - halfLookAng, weaponY + 205 - weaponYOffset, 0xf4f, siz, siz, 0, 12, currentWeapon);
             }
 
             RT_DrawWeaponTileWithID(currentWeapon, weaponX + 235 - (pPlayer->look_ang >> 1), weaponY + 265 - weaponYOffset,
@@ -593,7 +612,7 @@ void RT_P_DisplayWeapon(void)
                 
                 float siz = ((RT_FakeKRand() & 255) * (1.f/256.f) + 0.7);
 
-                RT_DrawTileFlash(-weaponX + 105 - halfLookAng, weaponY + 205 - weaponYOffset, 0xf4f, siz, siz, 4, 12);
+                RT_DrawTileFlash(-weaponX + 105 - halfLookAng, weaponY + 205 - weaponYOffset, 0xf4f, siz, siz, 4, 12, currentWeapon);
             }
             RT_DrawWeaponTileWithID(currentWeapon<<1, -weaponX + 85 - (pPlayer->look_ang >> 1), weaponY + 265 - weaponYOffset,
                                     CHAINGUN, weaponShade, weaponBits|4, weaponPal);
@@ -614,7 +633,7 @@ void RT_P_DisplayWeapon(void)
                 {
                     float siz = ((RT_FakeKRand() & 127) * (1.f/256.f) + 0.75);
 
-                    RT_DrawTileFlash(pistolOffset + 30 - halfLookAng, weaponY + 205 - weaponYOffset, 0xf4f, siz, siz, 0, 1);
+                    RT_DrawTileFlash(pistolOffset + 30 - halfLookAng, weaponY + 205 - weaponYOffset, 0xf4f, siz, siz, 0, 1, currentWeapon);
                 }
 
                 RT_DrawWeaponTileWithID(currentWeapon, (pistolOffset - (pPlayer->look_ang >> 1))+115, (weaponY + 285 - weaponYOffset),
@@ -740,7 +759,7 @@ void RT_P_DisplayWeapon(void)
                 float sizx = ((RT_FakeKRand() & 255) * (1.f/256.f) + 1.5f) * siz;
                 float sizy = ((RT_FakeKRand() & 255) * (1.f/256.f) + 1.5f) * siz;
 
-                RT_DrawTileFlash(weaponX + 175 - halfLookAng, weaponY + 215 - weaponYOffset, 0xf01, sizx, sizy, RT_FakeKRand()&255, 4);
+                RT_DrawTileFlash(weaponX + 175 - halfLookAng, weaponY + 215 - weaponYOffset, 0xf01, sizx, sizy, RT_FakeKRand()&255, 4, currentWeapon);
             }
             RT_DrawWeaponTileWithID(currentWeapon, weaponX + 155 - (pPlayer->look_ang >> 1), weaponY + 290 - weaponYOffset,
                                     FREEZE, weaponShade, weaponBits, weaponPal);
@@ -748,6 +767,7 @@ void RT_P_DisplayWeapon(void)
 
         case GROW_WEAPON__STATIC:
         case SHRINKER_WEAPON__STATIC:
+        {
             weaponX += 28;
             weaponY += 18;
 
@@ -756,16 +776,25 @@ void RT_P_DisplayWeapon(void)
                 weaponX += RT_FakeKRand() & 3;
                 weaponYOffset += (RT_FakeKRand() & 3);
             }
-            RT_DrawWeaponTileWithID(currentWeapon, weaponX + 206 - halfLookAng, weaponY + 227 - weaponYOffset,
-                                    SHRINKER, weaponShade, weaponBits, weaponPal);
-            RT_DrawWeaponTileWithID(currentWeapon << 2, weaponX + 149 - halfLookAng, weaponY + 214 - weaponYOffset,
-                                    3884, pPlayer->ammo_amount[GROW_WEAPON] > 0 ? -32 : weaponShade + 12, weaponBits, 2);
-            RT_DrawWeaponTileWithID(currentWeapon << 3, weaponX + 155 - halfLookAng, weaponY + 221 - weaponYOffset,
-                                    3886, pPlayer->ammo_amount[SHRINKER_WEAPON] > 0 ? -32 : weaponShade + 12, weaponBits, 6);
-            RT_DrawWeaponTileWithID(currentWeapon << 1, weaponX + 171 - halfLookAng, weaponY + 203 - weaponYOffset,
-                                    3885, (*weaponFrame) > 0 ? -32 : -(sintable[pPlayer->random_club_frame & 2047] >> 10), weaponBits,
-                                    currentWeapon == GROW_WEAPON ? 2 : 6);
+            int const alienGroupX = weaponX + 206 - halfLookAng;
+            int const alienGroupY = weaponY + 227 - weaponYOffset;
+
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon, alienGroupX, alienGroupY,
+                                           SHRINKER, weaponShade, weaponBits, weaponPal, alienGroupX, alienGroupY);
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 2, weaponX + 149 + g_redSplitWeaponAlienGlowOffsetX - halfLookAng,
+                                           weaponY + 214 + g_redSplitWeaponAlienGlowOffsetY - weaponYOffset,
+                                           3884, pPlayer->ammo_amount[GROW_WEAPON] > 0 ? -32 : weaponShade + 12, weaponBits, 2,
+                                           alienGroupX, alienGroupY);
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 3, weaponX + 155 + g_redSplitWeaponAlienGlowOffsetX - halfLookAng,
+                                           weaponY + 221 + g_redSplitWeaponAlienGlowOffsetY - weaponYOffset,
+                                           3886, pPlayer->ammo_amount[SHRINKER_WEAPON] > 0 ? -32 : weaponShade + 12, weaponBits, 6,
+                                           alienGroupX, alienGroupY);
+            RT_DrawWeaponTileWithIDGrouped(currentWeapon << 1, weaponX + 171 + g_redSplitWeaponAlienGlowOffsetX - halfLookAng,
+                                           weaponY + 203 + g_redSplitWeaponAlienGlowOffsetY - weaponYOffset,
+                                           3885, (*weaponFrame) > 0 ? -32 : -(sintable[pPlayer->random_club_frame & 2047] >> 10), weaponBits,
+                                           currentWeapon == GROW_WEAPON ? 2 : 6, alienGroupX, alienGroupY);
             break;
+        }
         }
     }
 
@@ -998,10 +1027,13 @@ void RT_P_ProcessWeapon(int playerNum)
             if ((*weaponFrame) == 10)
             {
                 (*weaponFrame) = 0;
-                int weapon = HANDBOMB_WEAPON;
-                if (pPlayer->ammo_amount[weapon] > 0)
+                if (pPlayer->ammo_amount[HANDBOMB_WEAPON] > 0)
                 {
-                    P_AddWeapon(pPlayer, weapon);
+                    pPlayer->curr_weapon = HANDBOMB_WEAPON;
+                    pPlayer->wantweaponfire = HANDBOMB_WEAPON;
+                    pPlayer->dn64_372 = HANDBOMB_WEAPON;
+                    pPlayer->last_weapon = -1;
+                    pPlayer->weapon_pos = WEAPON_POS_RAISE;
                 }
                 else
                 {

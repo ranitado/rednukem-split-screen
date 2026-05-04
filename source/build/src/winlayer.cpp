@@ -3240,6 +3240,7 @@ static LRESULT CALLBACK WndProcCallback(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
     {
         quitevent = 1;
         PostQuitMessage(0);
+        exit(EXIT_SUCCESS);
         return 0;
     }
 

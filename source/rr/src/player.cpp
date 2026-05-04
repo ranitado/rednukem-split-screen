@@ -3490,7 +3490,7 @@ void P_GetInput(int playerNum)
     int const playerRunning = (ud.runkey_mode) ? (BUTTON(gamefunc_Run) | ud.auto_run) : (ud.auto_run ^ BUTTON(gamefunc_Run));
     int const turnAmount = playerRunning ? (NORMALTURN << 1) : NORMALTURN;
     constexpr int const analogTurnAmount = (NORMALTURN << 1);
-    int const keyMove    = playerRunning ? (NORMALKEYMOVE << 1) : NORMALKEYMOVE;
+    int const keyMove    = playerRunning ? (NORMALKEYMOVE << 1) : scale(NORMALKEYMOVE, 120, 100);
     constexpr int const analogExtent = 32767; // KEEPINSYNC sdlayer.cpp
 
     input_t input {};
@@ -4422,7 +4422,7 @@ void P_DHGetInput(int const playerNum)
     int const playerJump = BUTTON(gamefunc_Jump) && !(pPlayer->cursectnum >= 0 && sector[pPlayer->cursectnum].hitag == 2003);
     int const turnAmount = playerCrouch ? 2 : (playerRunning ? 16 : 8);
     constexpr int const analogTurnAmount = 16;
-    int const keyMove    = playerCrouch ? 3 : (playerRunning ? 24 : 14);
+    int const keyMove    = playerCrouch ? 3 : (playerRunning ? 24 : 17);
     constexpr int const analogExtent = 32767; // KEEPINSYNC sdlayer.cpp
 
     input_t input {};

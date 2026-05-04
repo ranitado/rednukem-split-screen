@@ -15,6 +15,7 @@ float rt_viewhorizang;
 
 static int rt_globalpicnum = -1;
 static vec2f_t rt_uvscale;
+static int rt_flashweaponid = -1;
 
 static tspritetype rt_tsprite, *rt_tspriteptr;
 
@@ -66,6 +67,22 @@ static inline float RT_RedSplitWeaponAnchorX(float scaledX, float viewX1, float 
     default:
         return scaledX;
     }
+}
+
+static bool  rt_redSplitWeaponGroupActive;
+static float rt_redSplitWeaponGroupX;
+static float rt_redSplitWeaponGroupY;
+
+void RT_RedSplitWeaponGroupBegin(float const x, float const y)
+{
+    rt_redSplitWeaponGroupActive = true;
+    rt_redSplitWeaponGroupX = x;
+    rt_redSplitWeaponGroupY = y;
+}
+
+void RT_RedSplitWeaponGroupEnd(void)
+{
+    rt_redSplitWeaponGroupActive = false;
 }
 
 struct maskdraw_t {
@@ -1026,6 +1043,17 @@ void RT_DisplayTileWorld(float x, float y, float sx, float sy, int16_t picnum, i
         float mappedCenterX = RT_RedSplitWeaponAnchorX(viewX1 + (centerX / (float)xdim) * viewW, viewX1, viewX2, centerX);
         float mappedCenterY = viewY1 + (centerY / (float)ydim) * viewH;
 
+        if (rt_redSplitWeaponGroupActive)
+        {
+            float const groupCenterX = rt_redSplitWeaponGroupX * sclx + xo;
+            float const groupCenterY = rt_redSplitWeaponGroupY * scly;
+            float const mappedGroupX = RT_RedSplitWeaponAnchorX(viewX1 + (groupCenterX / (float)xdim) * viewW, viewX1, viewX2, groupCenterX);
+            float const mappedGroupY = viewY1 + (groupCenterY / (float)ydim) * viewH;
+
+            mappedCenterX = mappedGroupX + ((mappedCenterX - mappedGroupX) * splitScale);
+            mappedCenterY = mappedGroupY + ((mappedCenterY - mappedGroupY) * splitScale);
+        }
+
         if (wideHalfView)
         {
             mappedCenterX += g_redSplitWeaponWideOffsetX * sclx;
@@ -1039,7 +1067,13 @@ void RT_DisplayTileWorld(float x, float y, float sx, float sy, int16_t picnum, i
                 if (picnum == 0xf4f)
                 {
                     mappedCenterX += g_redSplitWeaponFlashWideOffsetX * sclx;
-                    mappedCenterX += (centerX < ((float)xdim * 0.5f) ? g_redSplitWeaponFlashDualLeftOffsetX : g_redSplitWeaponFlashDualRightOffsetX) * sclx;
+                    if (rt_flashweaponid == CHAINGUN_WEAPON)
+                        mappedCenterX += (centerX < ((float)xdim * 0.5f) ? g_redSplitWeaponFlashDualLeftOffsetX : g_redSplitWeaponFlashDualRightOffsetX) * sclx;
+                    else if (rt_flashweaponid == PISTOL_WEAPON || rt_flashweaponid == BOWLINGBALL_WEAPON)
+                    {
+                        mappedCenterX += g_redSplitWeaponFlashPistolOffsetX * sclx;
+                        mappedCenterY += g_redSplitWeaponFlashPistolOffsetY * scly;
+                    }
                     if (g_redSplitHudDrawingView == 0)
                     {
                         mappedCenterX += g_redSplitWeaponFlashWideTopOffsetX * sclx;
@@ -4252,6 +4286,17 @@ void RT_RotateSprite(float x, float y, float sx, float sy, int tilenum, int orie
         float mappedCenterX = RT_RedSplitWeaponAnchorX(viewX1 + (centerX / (float)xdim) * viewW, viewX1, viewX2, centerX);
         float mappedCenterY = viewY1 + (centerY / (float)ydim) * viewH;
 
+        if (rt_redSplitWeaponGroupActive)
+        {
+            float const groupCenterX = rt_redSplitWeaponGroupX * scl + xo;
+            float const groupCenterY = rt_redSplitWeaponGroupY * scl;
+            float const mappedGroupX = RT_RedSplitWeaponAnchorX(viewX1 + (groupCenterX / (float)xdim) * viewW, viewX1, viewX2, groupCenterX);
+            float const mappedGroupY = viewY1 + (groupCenterY / (float)ydim) * viewH;
+
+            mappedCenterX = mappedGroupX + ((mappedCenterX - mappedGroupX) * splitScale);
+            mappedCenterY = mappedGroupY + ((mappedCenterY - mappedGroupY) * splitScale);
+        }
+
         if (wideHalfView && weaponTile && !pipebombTile)
         {
             if (guniqhudid == CHAINGUN_WEAPON)
@@ -4268,7 +4313,13 @@ void RT_RotateSprite(float x, float y, float sx, float sy, int tilenum, int orie
         if (wideHalfView && weaponFlash)
         {
             mappedCenterX += g_redSplitWeaponFlashWideOffsetX * scl;
-            mappedCenterX += (centerX < ((float)xdim * 0.5f) ? g_redSplitWeaponFlashDualLeftOffsetX : g_redSplitWeaponFlashDualRightOffsetX) * scl;
+            if (rt_flashweaponid == CHAINGUN_WEAPON)
+                mappedCenterX += (centerX < ((float)xdim * 0.5f) ? g_redSplitWeaponFlashDualLeftOffsetX : g_redSplitWeaponFlashDualRightOffsetX) * scl;
+            else if (rt_flashweaponid == PISTOL_WEAPON || rt_flashweaponid == BOWLINGBALL_WEAPON)
+            {
+                mappedCenterX += g_redSplitWeaponFlashPistolOffsetX * scl;
+                mappedCenterY += g_redSplitWeaponFlashPistolOffsetY * scl;
+            }
             if (g_redSplitHudDrawingView == 0)
             {
                 mappedCenterX += g_redSplitWeaponFlashWideTopOffsetX * scl;
@@ -4291,7 +4342,13 @@ void RT_RotateSprite(float x, float y, float sx, float sy, int tilenum, int orie
         if (quarterView && weaponFlash)
         {
             mappedCenterX += (viewX1 < (float)xdim * 0.25f ? g_redSplitWeaponFlashQuarterLeftOffsetX : g_redSplitWeaponFlashQuarterRightOffsetX) * scl;
-            mappedCenterX += (centerX < ((float)xdim * 0.5f) ? g_redSplitWeaponFlashDualLeftOffsetX : g_redSplitWeaponFlashDualRightOffsetX) * scl;
+            if (rt_flashweaponid == CHAINGUN_WEAPON)
+                mappedCenterX += (centerX < ((float)xdim * 0.5f) ? g_redSplitWeaponFlashDualLeftOffsetX : g_redSplitWeaponFlashDualRightOffsetX) * scl;
+            else if (rt_flashweaponid == PISTOL_WEAPON || rt_flashweaponid == BOWLINGBALL_WEAPON)
+            {
+                mappedCenterX += g_redSplitWeaponFlashPistolOffsetX * scl;
+                mappedCenterY += g_redSplitWeaponFlashPistolOffsetY * scl;
+            }
         }
 
         vx1 = mappedCenterX - halfW;
@@ -4428,7 +4485,7 @@ void RT_RotateSpriteText(float x, float y, float sx, float sy, int tilenum, int 
 #endif
 }
 
-void RT_DrawTileFlash(int x, int y, int picnum, float sx, float sy, int orientation, int color)
+void RT_DrawTileFlash(int x, int y, int picnum, float sx, float sy, int orientation, int color, int weaponID)
 {
 #ifdef USE_OPENGL
     sx *= 3.f;
@@ -4439,8 +4496,18 @@ void RT_DrawTileFlash(int x, int y, int picnum, float sx, float sy, int orientat
         setfxcolor(colortable[color][0].x, colortable[color][0].y, colortable[color][0].z,
             colortable[color][1].x, colortable[color][1].y, colortable[color][1].z);
     buildgl_setDisabled(GL_DEPTH_TEST);
+    int const lastFlashWeaponID = rt_flashweaponid;
+    rt_flashweaponid = weaponID;
     RT_DisplayTileWorld(x, y, sx, sy, picnum, orientation);
+    rt_flashweaponid = lastFlashWeaponID;
     unsetfxcolor();
+#endif
+}
+
+void RT_RotateSpriteClearFxColor(void)
+{
+#ifdef USE_OPENGL
+    rt_fxtile = 0;
 #endif
 }
 
