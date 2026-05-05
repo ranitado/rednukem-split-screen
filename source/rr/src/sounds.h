@@ -91,6 +91,7 @@ void S_SoundShutdown(void);
 void S_SoundStartup(void);
 void S_StopEnvSound(int32_t num,int32_t i);
 void S_StopAllSounds(void);
+void S_StopAllNonMusicSounds(void);
 void S_StopMusic(void);
 void S_Update(void);
 void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset);

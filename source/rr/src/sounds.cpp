@@ -1047,6 +1047,20 @@ void S_StopAllSounds(void)
     FX_StopAllSounds();
 }
 
+void S_StopAllNonMusicSounds(void)
+{
+    for (int i = 0; i <= g_highestSoundIdx; ++i)
+    {
+        for (auto &voice : g_sounds[i].voices)
+        {
+            if (voice.id > FX_Ok)
+                FX_StopSound(voice.id);
+        }
+    }
+
+    S_Cleanup();
+}
+
 void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
 {
     if ((unsigned)soundNum > (unsigned)g_highestSoundIdx || g_sounds[soundNum].num <= 0)

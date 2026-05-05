@@ -122,6 +122,54 @@ extern char forcegl;
 
 void M32RunScript(const char *s) { UNREFERENCED_PARAMETER(s); };  // needed for linking since it's referenced from build/src/osd.c
 
+static void RedSplit_DelayGlobalAmbientSoundsAfterResume(void)
+{
+    for (int spriteNum = headspritestat[STAT_FX]; spriteNum >= 0; spriteNum = nextspritestat[spriteNum])
+    {
+        spritetype const *const pSprite = &sprite[spriteNum];
+        int const soundNum = pSprite->lotag;
+
+        if (pSprite->picnum != MUSICANDSFX || (unsigned)soundNum > (unsigned)g_highestSoundIdx)
+            continue;
+
+        if (g_sounds[soundNum].m & SF_GLOBAL)
+            actor[spriteNum].t_data[4] = GAMETICSPERSEC * 8 + ((spriteNum * 37) % (GAMETICSPERSEC * 8));
+    }
+}
+
+static bool RedSplit_HandleInactiveResumeAudio(void)
+{
+    static char wasActive = 1;
+    static uint32_t lastTickMs = 0;
+
+    uint32_t const nowMs = timerGetTicks();
+    bool const longSleepGap = lastTickMs != 0 && (uint32_t)(nowMs - lastTickMs) > 2000;
+    lastTickMs = nowMs;
+
+    if (!appactive)
+    {
+        if (wasActive)
+            S_PauseSounds(true);
+
+        ototalclock = totalclock;
+        lockclock = (int32_t)totalclock;
+        wasActive = 0;
+        return true;
+    }
+
+    if (!wasActive || longSleepGap)
+    {
+        S_PauseSounds(false);
+        S_StopAllNonMusicSounds();
+        RedSplit_DelayGlobalAmbientSoundsAfterResume();
+        ototalclock = totalclock;
+        lockclock = (int32_t)totalclock;
+    }
+
+    wasActive = 1;
+    return false;
+}
+
 const char *G_DefaultRtsFile(void)
 {
     if (DUKE)
@@ -10116,6 +10164,12 @@ MAIN_LOOP_RESTART:
         if (quitevent)
         {
             app_exit(EXIT_SUCCESS);
+        }
+
+        if (!g_netClient && !g_netServer && RedSplit_HandleInactiveResumeAudio())
+        {
+            idle();
+            continue;
         }
 
         Net_GetPackets();
