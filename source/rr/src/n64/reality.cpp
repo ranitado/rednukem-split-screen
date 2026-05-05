@@ -230,13 +230,18 @@ void RT_Init(void)
 
 #define DN64WSGRP "dn64widescreen.pk3"
 #define DN64WSDEF "duke64_widescreen.def"
+#define DN64SPLITTHUMBSDEF "splitscreen_levelthumbs.def"
 
     if (initgroupfile(DN64WSGRP) != -1)
     {
         G_AddDefModule(DN64WSDEF);
     }
+
+    if (testkopen(DN64SPLITTHUMBSDEF, 0))
+        G_AddDefModule(DN64SPLITTHUMBSDEF);
 #undef DN64WSGRP
 #undef DN64WSDEF
+#undef DN64SPLITTHUMBSDEF
 }
 
 struct {

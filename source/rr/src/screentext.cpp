@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "compat.h"
 #include "sbar.h"
 #include "menus.h"
+#include "cmdline.h"
 
 // get the string length until the next '\n'
 int32_t G_GetStringLineLength(const char *text, const char *end, const int32_t iter)
@@ -1068,9 +1069,11 @@ void G_PrintGameQuotes(int32_t snum)
 {
     const DukePlayer_t *const ps = g_player[snum].ps;
     const int32_t reserved_quote = (ps->ftq >= QUOTE_RESERVED && ps->ftq <= QUOTE_RESERVED3);
+    const int32_t redSplitQuoteText = (g_fakeMultiMode >= 2 && g_redSplitHudDrawingView >= 0);
     // NOTE: QUOTE_RESERVED4 is not included.
 
     int32_t const ybase = (fragbarheight()<<16) + text_ypos() + (REALITY ? (4<<16) : 0);
+    int32_t const redSplitQuoteY = 2<<16;
     int32_t height = 0;
     int32_t k = ps->fta;
 
@@ -1091,45 +1094,30 @@ void G_PrintGameQuotes(int32_t snum)
             break;
         }
 
-        int32_t y = ybase;
-        if (reserved_quote)
+        int32_t y = redSplitQuoteText ? redSplitQuoteY : ybase;
+        if (!redSplitQuoteText && reserved_quote)
         {
-#ifdef SPLITSCREEN_MOD_HACKS
-            if (!g_fakeMultiMode)
-                y = 140<<16;
-            else
-                y = 70<<16;
-#else
             y = 140<<16;
-#endif
         }
 
         int32_t pal = 0;
         int32_t x = 160<<16;
 
-#ifdef SPLITSCREEN_MOD_HACKS
-        if (g_fakeMultiMode)
+        if (redSplitQuoteText)
         {
             pal = g_player[snum].pcolor;
-            if (g_redSplitHudDrawingView >= 0)
-            {
-                int32_t const viewWidth = g_redSplitHudX2 - g_redSplitHudX1 + 1;
-                if (viewWidth <= (xdim / 2))
-                    x = scale(g_redSplitHudX1 + 8, 320, xdim) << 16;
-                else
-                    x = scale((g_redSplitHudX1 + g_redSplitHudX2 + 1) / 2, 320, xdim) << 16;
-                y = text_ypos() + (REALITY ? (6<<16) : 0);
-            }
+            int32_t const viewWidth = g_redSplitHudX2 - g_redSplitHudX1 + 1;
+            if (viewWidth <= (xdim / 2))
+                x = scale(g_redSplitHudX1 + 8, 320, xdim) << 16;
+            else
+                x = scale((g_redSplitHudX1 + g_redSplitHudX2 + 1) / 2, 320, xdim) << 16;
         }
-#endif
         if (REALITY)
             RT_RotateSpriteSetColor(64, 200, 200, 256 - texta(k));
         int32_t const quoteFlags =
-#ifdef SPLITSCREEN_MOD_HACKS
-            (g_fakeMultiMode && g_redSplitHudDrawingView >= 0 && (g_redSplitHudX2 - g_redSplitHudX1 + 1) <= (xdim / 2))
+            (redSplitQuoteText && (g_redSplitHudX2 - g_redSplitHudX1 + 1) <= (xdim / 2))
                 ? (REALITY ? TEXT_N64NOPAL : 0)
                 :
-#endif
                 (TEXT_XCENTER | (REALITY ? TEXT_N64NOPAL : 0));
         int32_t const savedRedSplitQuoteTextDrawing = g_redSplitQuoteTextDrawing;
         if (g_redSplitHudDrawingView >= 0)
@@ -1142,9 +1130,9 @@ void G_PrintGameQuotes(int32_t snum)
 
     // userquotes
 
-    int32_t y = ybase;
+    int32_t y = redSplitQuoteText ? redSplitQuoteY : ybase;
 
-    if (k > 1 && !reserved_quote)
+    if (!redSplitQuoteText && k > 1 && !reserved_quote)
         y += k <= 8 ? (height * (k-1))>>3 : height;
 
     for (size_t i = MAXUSERQUOTES-1; i < MAXUSERQUOTES; --i)
@@ -1158,7 +1146,12 @@ void G_PrintGameQuotes(int32_t snum)
         
         if (REALITY)
             RT_RotateSpriteSetColor(64, 200, 200, 256 - texta(k));
-        height = mpgametext(mpgametext_x, y, user_quote[i], textsh(k), texto(k), texta(k), TEXT_LINEWRAP | (REALITY ? TEXT_N64NOPAL : 0)).y + textsc(1<<16);
+        int32_t const savedRedSplitQuoteTextDrawing = g_redSplitQuoteTextDrawing;
+        int32_t const quoteX = redSplitQuoteText ? (1<<16) : mpgametext_x;
+        if (g_redSplitHudDrawingView >= 0)
+            g_redSplitQuoteTextDrawing = 2;
+        height = mpgametext(quoteX, y, user_quote[i], textsh(k), texto(k), texta(k), TEXT_LINEWRAP | (REALITY ? TEXT_N64NOPAL : 0)).y + textsc(1<<16);
+        g_redSplitQuoteTextDrawing = savedRedSplitQuoteTextDrawing;
         y += k <= 4 ? (height * (k-1))>>2 : height;
     }
 

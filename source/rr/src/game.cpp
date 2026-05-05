@@ -76,6 +76,8 @@ const char* AppTechnicalName = APPBASENAME;
 
 int32_t g_quitDeadline = 0;
 
+void M_RecordReplayCurrentLevelCompleted(void);
+
 int32_t g_cameraDistance = 0, g_cameraClock = 0;
 static int32_t g_quickExit;
 static int32_t g_redSplitPlayerQuakeTime[MAXPLAYERS] = {};
@@ -1407,7 +1409,9 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
             break;
         }
 
-        CAMERA(q16horiz) = fix16_clamp(CAMERA(q16horiz), F16(HORIZ_MIN), F16(HORIZ_MAX));
+        CAMERA(q16horiz) = fix16_clamp(CAMERA(q16horiz),
+                                        F16(REALITY ? REALITY_HORIZ_MIN : HORIZ_MIN),
+                                        F16(REALITY ? REALITY_HORIZ_MAX : HORIZ_MAX));
 
         G_HandleMirror(CAMERA(pos.x), CAMERA(pos.y), CAMERA(pos.z), CAMERA(q16ang), CAMERA(q16horiz), smoothRatio);
 #ifdef LEGACY_ROR
@@ -1916,11 +1920,7 @@ static int32_t g_redSplitHudAmmoTextScale = 66;
 static int32_t g_redSplitHudAccessIconX = 347;
 static int32_t g_redSplitHudAccessIconY = 71;
 static int32_t g_redSplitHudAccessIconScale = 45;
-static int32_t g_redSplitExtraMenuBgX = 0;
-static int32_t g_redSplitExtraMenuBgY = 0;
-static int32_t g_redSplitExtraMenuBgW = 320;
-static int32_t g_redSplitExtraMenuBgH = 100;
-static int32_t g_redSplitExtraMenuBgOpacity = 75;
+static int32_t g_redSplitExtraMenuBgOpacity = 80;
 
 static int32_t const g_redSplitHudHealthIconTiles[] = { FIRSTAID, FIRSTAID_ICON, SIXPAK, COLA, ATOMICHEALTH };
 
@@ -1955,10 +1955,6 @@ static RedSplitHudTuningParam_t g_redSplitHudTuningParams[] = {
     { "Access icon X", &g_redSplitHudAccessIconX, -220, 560 },
     { "Access icon Y", &g_redSplitHudAccessIconY, -40, 140 },
     { "Access icon scale", &g_redSplitHudAccessIconScale, 1, 140 },
-    { "Extra bg X", &g_redSplitExtraMenuBgX, -320, 320 },
-    { "Extra bg Y", &g_redSplitExtraMenuBgY, -100, 100 },
-    { "Extra bg W", &g_redSplitExtraMenuBgW, 20, 420 },
-    { "Extra bg H", &g_redSplitExtraMenuBgH, 20, 180 },
     { "Extra bg opacity", &g_redSplitExtraMenuBgOpacity, 0, 100 },
 };
 
@@ -2229,6 +2225,40 @@ static int32_t RedSplit_ViewScalePercent(RedSplitViewport_t const &view, int32_t
     return scale(basePercent, min(widthPercent, heightPercent), 100);
 }
 
+static bool RedSplit_DrawScreenBlackRectangle(int32_t const left, int32_t const top, int32_t const right, int32_t const bottom)
+{
+#ifdef USE_OPENGL
+    if (videoGetRenderMode() >= REND_POLYMOST && in3dmode())
+    {
+        int32_t const opacity = clamp(g_redSplitExtraMenuBgOpacity, 0, 100);
+
+        if (opacity <= 0)
+            return true;
+
+        renderDisableFog();
+        polymostSet2dView();
+        buildgl_setDisabled(GL_TEXTURE_2D);
+        buildgl_setDisabled(GL_ALPHA_TEST);
+        buildgl_setDisabled(GL_DEPTH_TEST);
+        buildgl_setEnabled(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glColor4f(0.f, 0.f, 0.f, (float)opacity * (1.f / 100.f));
+        glRecti(left, top, right, bottom);
+        glColor4f(1.f, 1.f, 1.f, 1.f);
+        buildgl_setEnabled(GL_TEXTURE_2D);
+        renderEnableFog();
+        return true;
+    }
+#else
+    UNREFERENCED_PARAMETER(left);
+    UNREFERENCED_PARAMETER(top);
+    UNREFERENCED_PARAMETER(right);
+    UNREFERENCED_PARAMETER(bottom);
+#endif
+
+    return false;
+}
+
 static void RedSplit_GetViewport(int32_t const viewIndex, int32_t const playerCount, RedSplitViewport_t * const view)
 {
     int32_t const halfW = xdim / 2;
@@ -2276,30 +2306,42 @@ static void RedSplit_DrawBlackRectangle(RedSplitViewport_t const &view, int32_t 
     int32_t const realY1 = view.y1 + scale(y, RedSplit_ViewHeight(view), 100);
     int32_t const realX2 = view.x1 + scale(x + w, RedSplit_ViewWidth(view), 320);
     int32_t const realY2 = view.y1 + scale(y + h, RedSplit_ViewHeight(view), 100);
-    int32_t const left   = RedSplit_ToVirtualX(clamp(realX1, view.x1, view.x2 + 1));
-    int32_t const top    = RedSplit_ToVirtualY(clamp(realY1, view.y1, view.y2 + 1));
-    int32_t const right  = RedSplit_ToVirtualX(clamp(realX2, view.x1, view.x2 + 1));
-    int32_t const bottom = RedSplit_ToVirtualY(clamp(realY2, view.y1, view.y2 + 1));
+    int32_t const screenLeft   = clamp(realX1, view.x1, view.x2 + 1);
+    int32_t const screenTop    = clamp(realY1, view.y1, view.y2 + 1);
+    int32_t const screenRight  = clamp(realX2, view.x1, view.x2 + 1);
+    int32_t const screenBottom = clamp(realY2, view.y1, view.y2 + 1);
+
+    if (screenRight <= screenLeft || screenBottom <= screenTop)
+        return;
+
+    if (RedSplit_DrawScreenBlackRectangle(screenLeft, screenTop, screenRight, screenBottom))
+        return;
+
+    int32_t const left   = RedSplit_ToVirtualX(screenLeft);
+    int32_t const top    = RedSplit_ToVirtualY(screenTop);
+    int32_t const right  = RedSplit_ToVirtualX(screenRight);
+    int32_t const bottom = RedSplit_ToVirtualY(screenBottom);
 
     if (right <= left || bottom <= top)
         return;
 
     int32_t const xscale = divscale16((right - left) << 16, tilesiz[0].x << 16);
     int32_t const yscale = divscale16((bottom - top) << 16, tilesiz[0].y << 16);
-    int32_t const centerX = (left + right) << 15;
-    int32_t const centerY = (top + bottom) << 15;
+    int32_t const topLeftX = left << 16;
+    int32_t const topLeftY = top << 16;
     int32_t const passes = clamp((g_redSplitExtraMenuBgOpacity + 24) / 25, 0, 4);
 
     for (int32_t i = 0; i < passes; ++i)
-        rotatesprite_(centerX, centerY, max(xscale, yscale), 0, 0, 127, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
+        rotatesprite_(topLeftX, topLeftY, max(xscale, yscale), 0, 0, 127, ud.shadow_pal, 1 | 2 | 8 | 16 | 32,
                       0, 0, view.x1, view.y1, view.x2, view.y2);
 }
 
-static void RedSplit_DrawExtraMenuText(RedSplitViewport_t const &view, int32_t const y, char const * const text, int32_t const selected)
+static void RedSplit_DrawExtraMenuText(RedSplitViewport_t const &view, int32_t const y, char const * const text, int32_t const selected,
+                                       int32_t const baseScalePercent = 95)
 {
     int32_t shade = selected ? (sintable[((int32_t)totalclock << 5) & 2047] >> 12) : MF_Redfont.shade_deselected;
     int32_t pal = selected ? MF_Redfont.pal_selected : MF_Redfont.pal_deselected;
-    int32_t const scalePercent = max<int32_t>(RedSplit_ViewScalePercent(view, 95), RedSplit_ViewWidth(view) <= xdim / 2 ? 60 : 50);
+    int32_t const scalePercent = max<int32_t>(RedSplit_ViewScalePercent(view, baseScalePercent), RedSplit_ViewWidth(view) <= xdim / 2 ? 56 : 48);
     int32_t const zoom = scale(MF_Redfont.zoom, scalePercent, 100);
 
     G_ScreenText(MF_Redfont.tilenum, RedSplit_ViewXFrom320(view, 160) << 16, RedSplit_ViewYFrom100(view, y) << 16, zoom, 0, 0, text, shade, pal,
@@ -2394,8 +2436,8 @@ static int32_t RedSplit_HudAccessPal(int32_t const accessBit)
 static void RedSplit_DrawMinimalHudAccessCards(DukePlayer_t const * const p, RedSplitViewport_t const &view)
 {
     static int32_t const cardBits[] = { 1, 2, 4 };
-    static int32_t const cardOffsetX[] = { 6, 0, 0 };
-    static int32_t const cardOffsetY[] = { -8, -2, 6 };
+    static int32_t const cardOffsetX[] = { 0, 0, 0 };
+    static int32_t const cardOffsetY[] = { -2, -2, -2 };
 
     int32_t const accessBits = RedSplit_HudAccessBits(p);
 
@@ -2451,6 +2493,10 @@ static void RedSplit_DrawMinimalHudForPlayer(int32_t const playerNum, RedSplitVi
 
 static void RedSplit_HandleHudTuningInput(void)
 {
+#ifdef NDEBUG
+    return;
+#endif
+
     if (KB_KeyPressed(sc_Period))
     {
         g_redSplitHudTuningOpen = !g_redSplitHudTuningOpen;
@@ -2497,6 +2543,10 @@ static void RedSplit_HandleHudTuningInput(void)
 
 static void RedSplit_DrawHudTuningPanel(void)
 {
+#ifdef NDEBUG
+    return;
+#endif
+
     if (!g_redSplitHudTuningOpen)
         return;
 
@@ -2570,6 +2620,10 @@ static void RedSplit_ApplyDebugWeaponToPlayers(void)
 
 static void RedSplit_HandleWeaponTuningInput(void)
 {
+#ifdef NDEBUG
+    return;
+#endif
+
     if (KB_KeyPressed(sc_Comma))
     {
         g_redSplitWeaponTuningOpen = !g_redSplitWeaponTuningOpen;
@@ -2642,6 +2696,10 @@ static void RedSplit_HandleWeaponTuningInput(void)
 
 static void RedSplit_DrawWeaponTuningPanel(void)
 {
+#ifdef NDEBUG
+    return;
+#endif
+
     if (!g_redSplitWeaponTuningOpen)
         return;
 
@@ -2669,7 +2727,7 @@ static void RedSplit_DrawExtraMenuForPlayer(int32_t const playerNum, RedSplitVie
     if (!RedSplit_IsExtraMenuOpenForPlayer(playerNum))
         return;
 
-    RedSplit_DrawBlackRectangle(view, g_redSplitExtraMenuBgX, g_redSplitExtraMenuBgY, g_redSplitExtraMenuBgW, g_redSplitExtraMenuBgH);
+    RedSplit_DrawBlackRectangle(view, 0, 0, 320, 100);
 
     char title[32];
     char const *options[5] = {};
@@ -2712,11 +2770,11 @@ static void RedSplit_DrawExtraMenuForPlayer(int32_t const playerNum, RedSplitVie
         break;
     }
 
-    RedSplit_DrawExtraMenuText(view, 20, title, 1);
+    RedSplit_DrawExtraMenuText(view, 11, title, 1, 95);
 
     for (int32_t i = 0; i < optionCount; ++i)
     {
-        RedSplit_DrawExtraMenuText(view, 42 + (i * 14), options[i], i == g_redSplitExtraMenuSelection);
+        RedSplit_DrawExtraMenuText(view, 33 + (i * 15) - min<int32_t>(i, 2), options[i], i == g_redSplitExtraMenuSelection, 82);
     }
 }
 
@@ -2810,6 +2868,9 @@ static bool G_DrawMvpLocalSplitScreen(int32_t const smoothRatio)
         g_redSplitDrawingView = playerNum;
         videoSetViewableArea(view.x1, view.y1, view.x2, view.y2);
         RedSplit_SetOpenGLViewportForView(view);
+        P_UpdateScreenPal(g_player[playerNum].ps);
+        if (videoGetRenderMode() == REND_CLASSIC)
+            videoSetPalette(ud.brightness >> 2, g_player[playerNum].ps->palette, 0);
         G_DrawRooms(playerNum, smoothRatio);
         RedSplit_SetFullOpenGLViewportWithViewScissor(view);
         g_redSplitHudDrawingView = playerNum;
@@ -2851,6 +2912,8 @@ static bool G_DrawMvpLocalSplitScreen(int32_t const smoothRatio)
     g_redSplitHudDrawingView = -1;
     screenpeek = savedScreenPeek;
     videoSetViewableArea(savedWindowXY1.x, savedWindowXY1.y, savedWindowXY2.x, savedWindowXY2.y);
+    if (videoGetRenderMode() == REND_CLASSIC && (unsigned)savedScreenPeek < MAXPLAYERS && g_player[savedScreenPeek].ps != nullptr)
+        videoSetPalette(ud.brightness >> 2, g_player[savedScreenPeek].ps->palette, 0);
 #ifdef USE_OPENGL
     if (videoGetRenderMode() >= REND_POLYMOST)
     {
@@ -9415,6 +9478,8 @@ static int G_EndOfLevel(void)
                 G_BonusScreenRRRA(0);
         }
 
+        M_RecordReplayCurrentLevelCompleted();
+
         if (REALITY)
         {
             ud.eog = rt_levelnum == 27;
@@ -10096,6 +10161,16 @@ MAIN_LOOP_RESTART:
         static bool frameJustDrawn;
         char gameUpdate = false;
         double const gameUpdateStartTime = timerGetFractionalTicks();
+
+        if (!g_netClient && !g_netServer && ud.recstat != 2)
+        {
+            int32_t const clockDelta = (int32_t)(totalclock - ototalclock);
+            if (ud.pause_on || (g_player[myconnectindex].ps->gm & MODE_MENU))
+                ototalclock = totalclock;
+            else if (clockDelta > TICRATE * 2)
+                ototalclock = totalclock - TICSPERFRAME;
+        }
+
         if (((g_netClient || g_netServer) || !(g_player[myconnectindex].ps->gm & (MODE_MENU|MODE_DEMO))) && totalclock >= ototalclock+TICSPERFRAME)
         {
             do

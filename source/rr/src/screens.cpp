@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "osdfuncs.h"
 #include "demo.h"
 #include "mdsprite.h"
+#include "cmdline.h"
 
 #ifdef __ANDROID__
 #include "android.h"
@@ -264,8 +265,75 @@ static int32_t gtextsc(int32_t sc)
 
 ////////// DISPLAYREST //////////
 
+static int32_t G_GetWideRedSplitCameraViewport(int32_t *x1, int32_t *y1, int32_t *x2, int32_t *y2)
+{
+    if (g_fakeMultiMode < 2 || g_redSplitHudDrawingView < 0)
+        return 0;
+
+    int32_t const viewWidth  = g_redSplitHudX2 - g_redSplitHudX1 + 1;
+    int32_t const viewHeight = g_redSplitHudY2 - g_redSplitHudY1 + 1;
+
+    if (viewWidth <= 0 || viewHeight <= 0 || viewWidth <= viewHeight * 2)
+        return 0;
+
+    *x1 = g_redSplitHudX1;
+    *y1 = g_redSplitHudY1;
+    *x2 = g_redSplitHudX2;
+    *y2 = g_redSplitHudY2;
+    return 1;
+}
+
+static void G_DrawWideRedSplitCameraSprite(int32_t const viewX1, int32_t const viewY1, int32_t const viewX2, int32_t const viewY2,
+                                           int32_t const x, int32_t const y, int32_t const z, int16_t const a, int16_t const picnum,
+                                           int8_t const dashade, char const dapalnum, int32_t const dastat)
+{
+    int32_t const viewWidth     = viewX2 - viewX1 + 1;
+    int32_t const viewHeight    = viewY2 - viewY1 + 1;
+    int32_t const scaleToHeight = divscale16(viewHeight, 200);
+    int32_t const virtualWidth  = mulscale16(320 << 16, scaleToHeight);
+    int32_t const originX       = (viewX1 << 16) + (((viewWidth << 16) - virtualWidth) >> 1);
+    int32_t const originY       = viewY1 << 16;
+    int32_t const xFull         = x < 0 ? -(klabs(x) << 16) : x << 16;
+    int32_t const sx            = originX + mulscale16(xFull, scaleToHeight);
+    int32_t const sy            = originY + mulscale16(y << 16, scaleToHeight);
+    int32_t const sz            = mulscale16(z, scaleToHeight);
+
+    rotatesprite(sx, sy, sz, a, picnum, dashade, dapalnum, dastat & ~RS_AUTO, viewX1, viewY1, viewX2, viewY2);
+}
+
+static int32_t G_DrawWideRedSplitCameraText(int16_t const i)
+{
+    int32_t viewX1, viewY1, viewX2, viewY2;
+    if (!G_GetWideRedSplitCameraViewport(&viewX1, &viewY1, &viewX2, &viewY2))
+        return 0;
+
+    if (!T1(i))
+    {
+        G_DrawWideRedSplitCameraSprite(viewX1, viewY1, viewX2, viewY2, 24, 33, 65536L, 0, CAMCORNER, 0, 0, 2);
+        G_DrawWideRedSplitCameraSprite(viewX1, viewY1, viewX2, viewY2, 320-26, 34, 65536L, 0, CAMCORNER+1, 0, 0, 2);
+        G_DrawWideRedSplitCameraSprite(viewX1, viewY1, viewX2, viewY2, 22, 163, 65536L, 512, CAMCORNER+1, 0, 0, 2+4);
+        G_DrawWideRedSplitCameraSprite(viewX1, viewY1, viewX2, viewY2, 310-10, 163, 65536L, 512, CAMCORNER+1, 0, 0, 2);
+
+        if ((int32_t)totalclock & 16)
+            G_DrawWideRedSplitCameraSprite(viewX1, viewY1, viewX2, viewY2, 46, 32, 65536L, 0, CAMLIGHT, 0, 0, 2);
+    }
+    else
+    {
+        int32_t flipbits = ((int32_t)totalclock << 1) & 48;
+
+        for (bssize_t x=-64; x<394; x+=64)
+            for (bssize_t y=0; y<200; y+=64)
+                G_DrawWideRedSplitCameraSprite(viewX1, viewY1, viewX2, viewY2, x, y, 65536L, 0, STATIC, 0, 0, 2+flipbits);
+    }
+
+    return 1;
+}
+
 static void G_DrawCameraText(int16_t i)
 {
+    if (G_DrawWideRedSplitCameraText(i))
+        return;
+
     if (!T1(i))
     {
         rotatesprite_win(24<<16, 33<<16, 65536L, 0, CAMCORNER, 0, 0, 2);

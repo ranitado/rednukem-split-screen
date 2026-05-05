@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5
+
+* Adds the in-game Levels menu with level thumbnails, per-save progress, best times, and secret tracking.
+* Improves split-screen save/load metadata and save previews.
+* Improves Duke Nukem 64 split-screen pause and simplified extra-player menu behavior.
+* Improves split-screen notifications, obituaries, camera effects, palette effects, access card HUD icons, and level-end results.
+* Fixes several local co-op issues around new game flow, player join/disconnect, pickup/audio routing, weapon switching, final exit buttons, and player-specific input.
+* Removes HUD/weapon debug tuning panels from Release builds.
+* Note: 3 and 4 player split-screen modes are still experimental and need more optimization; that work is planned for upcoming versions.
+
 ## v0.4
 
 * Improves split-screen save/load flow, including clearer prompts, larger save entries, refreshed save lists, and split-screen screenshots.

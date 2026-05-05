@@ -45,7 +45,7 @@ droidinput_t droidinput;
 #define MENU_MARGIN_CENTER  160
 #define MENU_HEIGHT_CENTER  100
 
-#define REDNUKEM_SPLITSCREEN_VERSION "v0.4"
+#define REDNUKEM_SPLITSCREEN_VERSION "v0.5"
 
 int32_t g_skillSoundVoice = -1;
 
@@ -57,6 +57,20 @@ int32_t g_skillSoundVoice = -1;
 
 void RedSplit_SetPlayerCount(int32_t const playerCount);
 extern void app_exit(int returnCode);
+
+static int32_t g_redSplitPendingNewGamePlayerCount = 1;
+
+static void Menu_PopulateReplayLevelMenu(void);
+static void Menu_DrawReplayLevelDetails(vec2_t const origin);
+static int32_t Menu_MoveReplayLevelSelection(int32_t direction);
+static int32_t Menu_CanUseReplayLevels(void);
+static int32_t Menu_IsReplayLevelCurrent(int32_t entryIndex);
+static void Menu_UpdateCurrentReplayLevelProgress(void);
+static int32_t Menu_GetReplayCampaignSecretTotal(void);
+static void Menu_StartReplayLevel(void);
+void M_ResetReplayCampaignProgress(void);
+void M_RecordReplayCurrentLevelCompleted(void);
+void M_RecordReplayCurrentLevelProgress(void);
 
 #ifdef _WIN32
 enum RednukemUpdateInstallMode_t
@@ -216,8 +230,81 @@ static void Menu_DrawSaveInfoLine(vec2_t const origin, int32_t const line, char 
     mgametext(origin.x + (4 << 16), origin.y + ((150 + line * 10) << 16), text);
 }
 
+static int32_t Menu_ReadReplayProgressSecretTotalPath(char const * const fn)
+{
+    if (fn == nullptr || fn[0] == '\0')
+        return -1;
+
+    char progressMeta[BMAX_PATH + 16];
+    Bsnprintf(progressMeta, sizeof(progressMeta), "%s.progress", fn);
+
+    BFILE * const fp = Bfopen(progressMeta, "rb");
+    if (fp == nullptr)
+        return -1;
+
+    int32_t totalSecrets = 0;
+    int32_t fileAddon = INT32_MIN;
+    char line[160] = {};
+
+    while (Bfgets(line, sizeof(line), fp) != nullptr)
+    {
+        int32_t addon = 0;
+        if (Bsscanf(line, "addon %d", &addon) == 1)
+        {
+            fileAddon = addon;
+            continue;
+        }
+
+        int32_t volumeIndex = 0, levelIndex = 0, played = 0, completed = 0, secrets = 0, maxSecrets = 0, bestTime = 0;
+        int32_t fieldCount = Bsscanf(line, "level %d %d %d %d %d %d %d",
+                                     &volumeIndex, &levelIndex, &played, &completed, &secrets, &maxSecrets, &bestTime);
+
+        if (fieldCount == 6)
+            bestTime = 0;
+        else if (fieldCount == 5)
+        {
+            completed = 0;
+            bestTime = 0;
+            fieldCount = Bsscanf(line, "level %d %d %d %d %d",
+                                 &volumeIndex, &levelIndex, &played, &secrets, &maxSecrets);
+        }
+
+        if ((fieldCount == 7 || fieldCount == 6 || fieldCount == 5) && played &&
+            (unsigned)volumeIndex < MAXVOLUMES && (unsigned)levelIndex < MAXLEVELS)
+        {
+            int32_t clampedSecrets = max<int32_t>(secrets, 0);
+            int32_t const clampedMaxSecrets = max<int32_t>(maxSecrets, 0);
+            if (clampedMaxSecrets > 0)
+                clampedSecrets = min<int32_t>(clampedSecrets, clampedMaxSecrets);
+
+            totalSecrets += clampedSecrets;
+        }
+    }
+
+    Bfclose(fp);
+
+    if (fileAddon != INT32_MIN && fileAddon != g_addonNum)
+        return -1;
+
+    return totalSecrets;
+}
+
+static int32_t Menu_ReadReplayProgressSecretTotal(char const * const fn)
+{
+    int32_t total = Menu_ReadReplayProgressSecretTotalPath(fn);
+    if (total >= 0)
+        return total;
+
+    char modPath[BMAX_PATH];
+    if (G_ModDirSnprintf(modPath, sizeof(modPath), "%s", fn) == 0)
+        total = Menu_ReadReplayProgressSecretTotalPath(modPath);
+
+    return total;
+}
+
 static void Menu_DrawSaveInfo(vec2_t const origin, int32_t const players, int32_t const volumeNum,
-                              int32_t const levelNum, int32_t const skill, char const * const boardFilename)
+                              int32_t const levelNum, int32_t const skill, char const * const boardFilename,
+                              char const * const savePath)
 {
     char buf[128];
     int32_t line = 0;
@@ -233,6 +320,15 @@ static void Menu_DrawSaveInfo(vec2_t const origin, int32_t const players, int32_
 
     Bsnprintf(buf, sizeof(buf), "Difficulty: %s", Menu_SaveInfoSkillName(skill));
     Menu_DrawSaveInfoLine(origin, line++, buf);
+
+    int32_t const totalSecrets = savePath != nullptr && savePath[0] != '\0'
+        ? Menu_ReadReplayProgressSecretTotal(savePath)
+        : Menu_GetReplayCampaignSecretTotal();
+    if (totalSecrets >= 0)
+    {
+        Bsnprintf(buf, sizeof(buf), "Secrets: %d", totalSecrets);
+        Menu_DrawSaveInfoLine(origin, line++, buf);
+    }
 
     if (volumeNum == 0 && levelNum == 7 && boardFilename != nullptr && boardFilename[0] != '\0')
     {
@@ -460,11 +556,26 @@ MenuFont_t MF_Minifont =              { { 4<<16, 5<<16 },   { 1<<16, 1<<16 },   
 static MenuFont_t MF_LoadSavefont =   { { 5<<16, 7<<16 },   { 0, 0 },           65536,              10<<16,             110<<16,            32768, 32768, 32768, 0,
                                         -1,                 10,                 0,                  0,                  10,                 10,                  16,
                                         0,                  0,                  16 };
+static MenuFont_t MF_ReplayRedfont;
+static MenuFont_t MF_ReplayBluefont;
+
+static void Menu_UpdateReplayLevelFonts(void)
+{
+    MF_ReplayRedfont = MF_Redfont;
+    MF_ReplayBluefont = MF_Redfont;
+
+    MF_ReplayRedfont.pal = MF_ReplayRedfont.pal_selected = MF_ReplayRedfont.pal_deselected = 0;
+    MF_ReplayRedfont.pal_selected_right = MF_ReplayRedfont.pal_deselected_right = 0;
+
+    MF_ReplayBluefont.pal = MF_ReplayBluefont.pal_selected = MF_ReplayBluefont.pal_deselected = MF_Bluefont.pal;
+    MF_ReplayBluefont.pal_selected_right = MF_ReplayBluefont.pal_deselected_right = MF_Bluefont.pal;
+}
 
 
 static MenuMenuFormat_t MMF_Top_Main =             { {  MENU_MARGIN_CENTER<<16, 55<<16, }, -(170<<16) };
 static MenuMenuFormat_t MMF_Top_Episode =          { {  MENU_MARGIN_CENTER<<16, 48<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_Top_Skill =            { {  MENU_MARGIN_CENTER<<16, 58<<16, }, -(190<<16) };
+static MenuMenuFormat_t MMF_Top_LevelReplay =      { {  MENU_MARGIN_CENTER<<16, 163<<16, }, 178<<16 };
 static MenuMenuFormat_t MMF_Top_Options =          { {  MENU_MARGIN_CENTER<<16, 38<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_Top_Joystick_Network = { {  MENU_MARGIN_CENTER<<16, 70<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_BigOptions =           { {    MENU_MARGIN_WIDE<<16, 38<<16, }, -(190<<16) };
@@ -487,6 +598,7 @@ static MenuEntryFormat_t MEF_Null =             {     0,      0,          0 };
 static MenuEntryFormat_t MEF_MainMenu =         { 4<<16,      0,          0 };
 static MenuEntryFormat_t MEF_OptionsMenu =      { 7<<16,      0,          0 };
 static MenuEntryFormat_t MEF_CenterMenu =       { 7<<16,      0,          0 };
+static MenuEntryFormat_t MEF_LevelReplay =      { 4<<16,      0,          0 };
 static MenuEntryFormat_t MEF_BigOptions_Apply = { 4<<16, 16<<16, -(260<<16) };
 static MenuEntryFormat_t MEF_BigOptionsRt =     { 4<<16,      0, -(260<<16) };
 static MenuEntryFormat_t MEF_BigOptionsRtSections = { 3<<16,      0, -(260<<16) };
@@ -585,6 +697,7 @@ MAKE_MENU_TOP_ENTRYLINK( s_NewGame, MEF_MainMenu, MAIN_NEWGAME_INGAME, MENU_NEWG
 static MenuLink_t MEO_MAIN_NEWGAME_NETWORK = { MENU_NETWORK, MA_Advance, };
 MAKE_MENU_TOP_ENTRYLINK( s_SaveGame, MEF_MainMenu, MAIN_SAVEGAME, MENU_SAVE );
 MAKE_MENU_TOP_ENTRYLINK( s_LoadGame, MEF_MainMenu, MAIN_LOADGAME, MENU_LOAD );
+MAKE_MENU_TOP_ENTRYLINK( "Levels", MEF_MainMenu, MAIN_LEVELS, MENU_LEVELREPLAY );
 MAKE_MENU_TOP_ENTRYLINK( s_Options, MEF_MainMenu, MAIN_OPTIONS, MENU_OPTIONS );
 MAKE_MENU_TOP_ENTRYLINK("Help", MEF_MainMenu, MAIN_HELP, MENU_STORY);
 #ifndef EDUKE32_SIMPLE_MENU
@@ -612,6 +725,7 @@ static MenuEntry_t *MEL_MAIN[] = {
 };
 
 static MenuEntry_t *MEL_MAIN_INGAME[] = {
+    &ME_MAIN_LEVELS,
 #ifdef EDUKE32_SIMPLE_MENU
     &ME_MAIN_RESUMEGAME,
 #else
@@ -628,7 +742,7 @@ static MenuEntry_t *MEL_MAIN_INGAME[] = {
 };
 
 // Episode and Skill will be dynamically generated after CONs are parsed
-static MenuLink_t MEO_NEWGAMEMODE_SINGLE = { MENU_EPISODE, MA_Advance, };
+static MenuLink_t MEO_NEWGAMEMODE_SINGLE = { MENU_SKILL, MA_Advance, };
 static MenuEntry_t ME_NEWGAMEMODE_SINGLE = MAKE_MENUENTRY( "Single Player", &MF_Redfont, &MEF_CenterMenu, &MEO_NEWGAMEMODE_SINGLE, Link );
 static MenuLink_t MEO_NEWGAMEMODE_COOP = { MENU_COOPPLAYERS, MA_Advance, };
 static MenuEntry_t ME_NEWGAMEMODE_COOP = MAKE_MENUENTRY( "Coop", &MF_Redfont, &MEF_CenterMenu, &MEO_NEWGAMEMODE_COOP, Link );
@@ -637,7 +751,7 @@ static MenuEntry_t *MEL_NEWGAMEMODE[] = {
     &ME_NEWGAMEMODE_COOP,
 };
 
-static MenuLink_t MEO_COOPPLAYERS = { MENU_EPISODE, MA_Advance, };
+static MenuLink_t MEO_COOPPLAYERS = { MENU_SKILL, MA_Advance, };
 static MenuEntry_t ME_COOPPLAYERS_2 = MAKE_MENUENTRY( "2 Players", &MF_Redfont, &MEF_CenterMenu, &MEO_COOPPLAYERS, Link );
 static MenuEntry_t ME_COOPPLAYERS_3 = MAKE_MENUENTRY( "3 Players", &MF_Redfont, &MEF_CenterMenu, &MEO_COOPPLAYERS, Link );
 static MenuEntry_t ME_COOPPLAYERS_4 = MAKE_MENUENTRY( "4 Players", &MF_Redfont, &MEF_CenterMenu, &MEO_COOPPLAYERS, Link );
@@ -658,6 +772,28 @@ static MenuEntry_t *MEL_EPISODE[MAXVOLUMES+2]; // +2 for spacer and User Map
 static MenuEntry_t ME_SKILL_TEMPLATE = MAKE_MENUENTRY( NULL, &MF_Redfont, &MEF_CenterMenu, &MEO_NULL, Link );
 static MenuEntry_t ME_SKILL[MAXSKILLS];
 static MenuEntry_t *MEL_SKILL[MAXSKILLS];
+
+static MenuLink_t MEO_REPLAY_LEVEL_GOTO = { MENU_LEVELREPLAYVERIFY, MA_Advance, };
+static MenuEntry_t ME_REPLAY_LEVEL_GOTO = MAKE_MENUENTRY( "Go To Level", &MF_Redfont, &MEF_LevelReplay, &MEO_REPLAY_LEVEL_GOTO, Link );
+static MenuEntry_t *MEL_REPLAY_LEVEL[] = {
+    &ME_REPLAY_LEVEL_GOTO,
+};
+
+static char g_replayLevelNames[MAXVOLUMES * MAXLEVELS][96];
+static int32_t g_replayLevelVolumes[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelIndices[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelSecrets[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelMaxSecrets[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelBestTimes[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelCount = 0;
+static int32_t g_replayLevelSelectedIndex = 0;
+static int32_t g_replayLevelSecretTotalCache[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelReached[MAXVOLUMES];
+static int32_t g_replayLevelPlayed[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelCompleted[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelCampaignSecrets[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelCampaignMaxSecrets[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelCampaignBestTimes[MAXVOLUMES * MAXLEVELS];
 
 #ifdef EDUKE32_SIMPLE_MENU
 static MenuLink_t MEO_GAMESETUP_SAVESETUP = { MENU_SAVESETUP, MA_Advance, };
@@ -1802,6 +1938,7 @@ static MenuMenu_t M_NEWGAMEMODE = MAKE_MENUMENU( "Select Mode", &MMF_Top_Episode
 static MenuMenu_t M_COOPPLAYERS = MAKE_MENUMENU( "Coop Players", &MMF_Top_Episode, MEL_COOPPLAYERS );
 static MenuMenu_t M_EPISODE = MAKE_MENUMENU( "Select An Episode", &MMF_Top_Episode, MEL_EPISODE );
 static MenuMenu_t M_SKILL = MAKE_MENUMENU( "Select Skill", &MMF_Top_Skill, MEL_SKILL );
+static MenuMenu_t M_LEVELREPLAY = MAKE_MENUMENU( "Levels", &MMF_Top_LevelReplay, MEL_REPLAY_LEVEL );
 #ifndef EDUKE32_SIMPLE_MENU
 static MenuMenu_t M_GAMESETUP = MAKE_MENUMENU( "Game Setup", &MMF_BigOptions, MEL_GAMESETUP );
 #endif
@@ -1905,6 +2042,9 @@ static MenuVerify_t M_NEWVERIFY = { CURSOR_CENTER_2LINE, MENU_NEWGAMEMODE, MA_Ad
 static MenuVerify_t M_SAVEVERIFY = { CURSOR_CENTER_2LINE, MENU_SAVE, MA_None, };
 static MenuVerify_t M_SAVEDELVERIFY = { CURSOR_CENTER_3LINE, MENU_SAVE, MA_None, };
 static MenuVerify_t M_RESETPLAYER = { CURSOR_CENTER_3LINE, MENU_CLOSE, MA_None, };
+// Verify prompts draw the previous menu recursively, so leaving this prompt
+// animated can make the prompt recurse into itself after Back/confirm.
+static MenuVerify_t M_LEVELREPLAYVERIFY = { CURSOR_CENTER_3LINE, MENU_CLOSE, MA_None, };
 
 static MenuVerify_t M_COLCORRRESETVERIFY = { CURSOR_CENTER_2LINE, MENU_COLCORR, MA_None, };
 static MenuVerify_t M_JOYSTANDARDVERIFY = { CURSOR_CENTER_2LINE, MENU_JOYSTICKSETUP, MA_None, };
@@ -1931,7 +2071,7 @@ static Menu_t Menus[] = {
     { &M_COOPPLAYERS, MENU_COOPPLAYERS, MENU_NEWGAMEMODE, MA_Return, Menu },
     { &M_EPISODE, MENU_EPISODE, MENU_NEWGAMEMODE, MA_Return, Menu },
     { &M_USERMAP, MENU_USERMAP, MENU_EPISODE, MA_Return, FileSelect },
-    { &M_SKILL, MENU_SKILL, MENU_EPISODE, MA_Return, Menu },
+    { &M_SKILL, MENU_SKILL, MENU_PREVIOUS, MA_Return, Menu },
 #ifndef EDUKE32_SIMPLE_MENU
     { &M_GAMESETUP, MENU_GAMESETUP, MENU_OPTIONS, MA_Return, Menu },
 #endif
@@ -2031,6 +2171,8 @@ static Menu_t Menus[] = {
     { &M_JOYSTANDARDVERIFY, MENU_JOYDEFAULTVERIFY, MENU_JOYSTICKSETUP, MA_None, Verify },
     { &M_ADULTPASSWORD, MENU_ADULTPASSWORD, MENU_GAMESETUP, MA_None, TextForm },
     { &M_RESETPLAYER, MENU_RESETPLAYER, MENU_CLOSE, MA_None, Verify },
+    { &M_LEVELREPLAY, MENU_LEVELREPLAY, MENU_MAIN_INGAME, MA_Return, Menu },
+    { &M_LEVELREPLAYVERIFY, MENU_LEVELREPLAYVERIFY, MENU_LEVELREPLAY, MA_None, Verify },
     { &M_BUYDUKE, MENU_BUYDUKE, MENU_EPISODE, MA_Return, Message },
     { &M_NETWORK, MENU_NETWORK, MENU_MAIN, MA_Return, Menu },
     { &M_PLAYER, MENU_PLAYER, MENU_OPTIONS, MA_Return, Menu },
@@ -2202,6 +2344,8 @@ void Menu_Init(void)
     MF_Minifont.emptychar.y = tilesiz[MF_Minifont.tilenum].y<<16;
     if (!minitext_lowercase)
         MF_Minifont.textflags |= TEXT_UPPERCASE;
+
+    M_ResetReplayCampaignProgress();
 
     // prepare gamefuncs and keys
     MEOSN_Gamefuncs[0] = MenuGameFuncNone;
@@ -2530,13 +2674,14 @@ void Menu_Init(void)
         M_MAIN.numEntries = 4;
         M_MAIN.format = &MMF_Top_MainRT;
 
-        MEL_MAIN_INGAME[0] = &ME_MAIN_NEWGAME_INGAME;
-        MEL_MAIN_INGAME[1] = &ME_MAIN_SAVEGAME;
-        MEL_MAIN_INGAME[2] = &ME_MAIN_LOADGAME;
-        MEL_MAIN_INGAME[3] = &ME_MAIN_OPTIONS;
-        MEL_MAIN_INGAME[4] = &ME_MAIN_QUITTOTITLE;
-        MEL_MAIN_INGAME[5] = &ME_MAIN_QUITGAME;
-        M_MAIN_INGAME.numEntries = 6;
+        MEL_MAIN_INGAME[0] = &ME_MAIN_LEVELS;
+        MEL_MAIN_INGAME[1] = &ME_MAIN_NEWGAME_INGAME;
+        MEL_MAIN_INGAME[2] = &ME_MAIN_SAVEGAME;
+        MEL_MAIN_INGAME[3] = &ME_MAIN_LOADGAME;
+        MEL_MAIN_INGAME[4] = &ME_MAIN_OPTIONS;
+        MEL_MAIN_INGAME[5] = &ME_MAIN_QUITTOTITLE;
+        MEL_MAIN_INGAME[6] = &ME_MAIN_QUITGAME;
+        M_MAIN_INGAME.numEntries = 7;
 
         MF_Redfont.pal_selected = 6;
         MF_Redfont.pal_deselected = 0;
@@ -2565,6 +2710,7 @@ void Menu_Init(void)
         }
     }
 
+    Menu_UpdateReplayLevelFonts();
     Menu_UpdateLoadSaveFont();
 }
 
@@ -2628,6 +2774,7 @@ static void Menu_Pre(MenuID_t cm)
     case MENU_MAIN_INGAME:
         MenuEntry_DisableOnCondition(&ME_MAIN_LOADGAME, (RRRA && ud.player_skill == 4) || (RR && !RRRA && ud.player_skill == 5));
         MenuEntry_DisableOnCondition(&ME_MAIN_SAVEGAME, ud.recstat == 2 || (RRRA && ud.player_skill == 4) || (RR && !RRRA && ud.player_skill == 5));
+        MenuEntry_HideOnCondition(&ME_MAIN_LEVELS, !Menu_CanUseReplayLevels());
         MenuEntry_DisableOnCondition(&ME_MAIN_QUITTOTITLE, g_netServer || numplayers > 1);
         fallthrough__;
     case MENU_MAIN:
@@ -2965,6 +3112,7 @@ static void Menu_PreDrawBackground(MenuID_t cm, const vec2_t origin)
 
     case MENU_LOAD:
     case MENU_SAVE:
+    case MENU_LEVELREPLAY:
     case MENU_CREDITS4:
     case MENU_CREDITS5:
     case MENU_CREDITS6:
@@ -3166,6 +3314,14 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
         }
         break;
 
+    case MENU_LEVELREPLAY:
+    {
+        vec2_t detailOrigin = origin;
+        detailOrigin.y -= 5<<16;
+        Menu_DrawReplayLevelDetails(detailOrigin);
+        break;
+    }
+
     case MENU_RESETPLAYER:
         videoFadeToBlack(1);
         Bsprintf(tempbuf, "Load last game:\n\"%s\"", g_quickload->name);
@@ -3213,7 +3369,7 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
                 break;
             }
 
-            Menu_DrawSaveInfo(origin, savehead.numplayers, savehead.volnum, savehead.levnum, savehead.skill, savehead.boardfn);
+            Menu_DrawSaveInfo(origin, savehead.numplayers, savehead.volnum, savehead.levnum, savehead.skill, savehead.boardfn, msv.brief.path);
         }
         break;
     }
@@ -3258,14 +3414,15 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
                     break;
                 }
 
-                Menu_DrawSaveInfo(origin, savehead.numplayers, savehead.volnum, savehead.levnum, savehead.skill, savehead.boardfn);
+                Menu_DrawSaveInfo(origin, savehead.numplayers, savehead.volnum, savehead.levnum, savehead.skill, savehead.boardfn,
+                                  g_menusaves[M_SAVE.currentEntry-1].brief.path);
             }
         }
         else
         {
             // New Slot previews the game currently being saved. Existing slots preview their own stored shot.
             rotatesprite_fs(origin.x + (80<<16), origin.y + (97<<16), 65536L>>1,512,TILE_SAVESHOT,-32,0,4+10+64);
-            Menu_DrawSaveInfo(origin, ud.multimode, ud.volume_number, ud.level_number, ud.player_skill, currentboardfilename);
+            Menu_DrawSaveInfo(origin, ud.multimode, ud.volume_number, ud.level_number, ud.player_skill, currentboardfilename, nullptr);
         }
 
         break;
@@ -3314,6 +3471,11 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
     case MENU_SAVEVERIFY:
         videoFadeToBlack(1);
         Menu_DrawVerifyPrompt(origin.x, origin.y, M_SAVE.currentEntry == 0 ? "Save current game as new file?" : "Overwrite previous saved game?");
+        break;
+
+    case MENU_LEVELREPLAYVERIFY:
+        videoFadeToBlack(1);
+        Menu_DrawVerifyPrompt(origin.x, origin.y, "Start selected level?\nCurrent progress will be lost.", 2);
         break;
 
     case MENU_LOADDELVERIFY:
@@ -4239,6 +4401,21 @@ static void Menu_PreInput(MenuEntry_t *entry)
         }
         break;
 
+    case MENU_LEVELREPLAY:
+        if (I_MenuLeft())
+        {
+            I_MenuLeftClear();
+            if (Menu_MoveReplayLevelSelection(-1))
+                S_PlaySound(KICK_HIT);
+        }
+        else if (I_MenuRight())
+        {
+            I_MenuRightClear();
+            if (Menu_MoveReplayLevelSelection(1))
+                S_PlaySound(KICK_HIT);
+        }
+        break;
+
     default:
         break;
     }
@@ -5090,12 +5267,16 @@ static void Menu_StartGameWithoutSkill(void)
     ud.m_respawn_items = 0;
     ud.m_respawn_inventory = 0;
 
-    if (g_fakeMultiMode > 1)
-        ud.multimode = g_fakeMultiMode;
-    else
-        ud.multimode = 1;
+    RedSplit_SetPlayerCount(g_redSplitPendingNewGamePlayerCount);
+    M_ResetReplayCampaignProgress();
 
     G_NewGame_EnterLevel();
+}
+
+static void Menu_PrepareNewGameFirstLevel(void)
+{
+    ud.m_volume_number = 0;
+    ud.m_level_number = 0;
 }
 
 static inline int32_t RedSplit_MenuCurrentPlayerCount(void)
@@ -5353,6 +5534,7 @@ void RedSplit_SetPlayerCount(int32_t const playerCount)
 {
     int32_t const oldPlayerCount = RedSplit_MenuCurrentPlayerCount();
     int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
+    int32_t const inGame = RedSplit_MenuInGame();
 
     g_fakeMultiMode = clampedPlayerCount > 1 ? clampedPlayerCount : 0;
     ud.multimode = clampedPlayerCount;
@@ -5375,17 +5557,49 @@ void RedSplit_SetPlayerCount(int32_t const playerCount)
     RedSplit_RebuildConnectChain(clampedPlayerCount);
     RedSplit_ResetInputQueues();
 
-    if (RedSplit_MenuInGame())
+    if (inGame)
     {
         for (int32_t playerNum = oldPlayerCount; playerNum < clampedPlayerCount; ++playerNum)
             RedSplit_InitJoinedPlayerInGame(playerNum);
 
         for (int32_t playerNum = clampedPlayerCount; playerNum < oldPlayerCount; ++playerNum)
             RedSplit_HidePlayerSprite(playerNum);
+
+        if (oldPlayerCount < 2 && clampedPlayerCount > 1 && g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_MENU))
+        {
+            ready2send = 1;
+            totalclock = ototalclock;
+            CAMERACLOCK = (int32_t)totalclock;
+            CAMERADIST = 65536;
+
+            if (!ud.pause_on)
+                S_PauseSounds(false);
+        }
     }
 
     RedSplit_ResetInputLatches();
     RedSplit_ResetInputQueues();
+}
+
+static void RedSplit_TransferDisconnectedPlayerAccess(int32_t const playerNum)
+{
+    if (playerNum <= 0 || playerNum >= MAXPLAYERS || g_player[0].ps == nullptr || g_player[playerNum].ps == nullptr)
+        return;
+
+    DukePlayer_t * const target = g_player[0].ps;
+    DukePlayer_t * const source = g_player[playerNum].ps;
+
+    target->got_access |= source->got_access;
+    for (int32_t keyNum = 1; keyNum <= 3; ++keyNum)
+        target->keys[keyNum] |= source->keys[keyNum];
+
+    source->got_access = 0;
+    for (int32_t keyNum = 1; keyNum <= 3; ++keyNum)
+        source->keys[keyNum] = 0;
+
+    source->access_incs = 0;
+    source->access_spritenum = -1;
+    source->access_wallnum = -1;
 }
 
 void RedSplit_DisconnectPlayer(int32_t const playerNum)
@@ -5398,6 +5612,7 @@ void RedSplit_DisconnectPlayer(int32_t const playerNum)
     int32_t spriteToHide = g_player[playerNum].ps != nullptr ? g_player[playerNum].ps->i : -1;
 
     RedSplit_CloseExtraMenu();
+    RedSplit_TransferDisconnectedPlayerAccess(playerNum);
 
     if (playerNum != lastPlayer && g_player[playerNum].ps != nullptr && g_player[lastPlayer].ps != nullptr)
     {
@@ -5522,16 +5737,25 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
 
     case MENU_NEWGAMEMODE:
         if (entry == &ME_NEWGAMEMODE_SINGLE)
-            RedSplit_SetPlayerCount(1);
+        {
+            g_redSplitPendingNewGamePlayerCount = 1;
+            Menu_PrepareNewGameFirstLevel();
+            if (g_skillCnt == 0)
+                Menu_StartGameWithoutSkill();
+        }
         break;
 
     case MENU_COOPPLAYERS:
         if (entry == &ME_COOPPLAYERS_2)
-            RedSplit_SetPlayerCount(2);
+            g_redSplitPendingNewGamePlayerCount = 2;
         else if (entry == &ME_COOPPLAYERS_3)
-            RedSplit_SetPlayerCount(3);
+            g_redSplitPendingNewGamePlayerCount = 3;
         else if (entry == &ME_COOPPLAYERS_4)
-            RedSplit_SetPlayerCount(4);
+            g_redSplitPendingNewGamePlayerCount = 4;
+
+        Menu_PrepareNewGameFirstLevel();
+        if (g_skillCnt == 0)
+            Menu_StartGameWithoutSkill();
         break;
 
     case MENU_PLAYERINPUT:
@@ -5638,10 +5862,8 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
         ud.m_respawn_items = 0;
         ud.m_respawn_inventory = 0;
 
-        if (g_fakeMultiMode > 1)
-            ud.multimode = g_fakeMultiMode;
-        else
-            ud.multimode = 1;
+        RedSplit_SetPlayerCount(g_redSplitPendingNewGamePlayerCount);
+        M_ResetReplayCampaignProgress();
 
         G_NewGame_EnterLevel();
         break;
@@ -6209,6 +6431,674 @@ static int32_t Menu_SaveCurrentEntry(char const *input)
     return returnvar;
 }
 
+static void Menu_GetCurrentCampaignSecrets(int32_t * const secrets, int32_t * const maxSecrets)
+{
+    int32_t found = 0;
+    int32_t maxFound = 0;
+    int32_t const playerCount = (REALITY && g_fakeMultiMode > 1) ? clamp<int32_t>(g_fakeMultiMode, 2, 4) : 1;
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        DukePlayer_t const * const pPlayer = g_player[playerNum].ps;
+        if (pPlayer == nullptr)
+            continue;
+
+        found += pPlayer->secret_rooms;
+        maxFound = max<int32_t>(maxFound, pPlayer->max_secret_rooms);
+    }
+
+    if (maxFound > 0)
+        found = min<int32_t>(found, maxFound);
+
+    if (secrets != nullptr)
+        *secrets = found;
+    if (maxSecrets != nullptr)
+        *maxSecrets = maxFound;
+}
+
+static int32_t Menu_ReadReplayProgressMetadataPath(char const * const fn)
+{
+    if (fn == nullptr || fn[0] == '\0')
+        return -1;
+
+    char progressMeta[BMAX_PATH + 16];
+    Bsnprintf(progressMeta, sizeof(progressMeta), "%s.progress", fn);
+
+    BFILE * const fp = Bfopen(progressMeta, "rb");
+    if (fp == nullptr)
+        return -1;
+
+    int32_t fileAddon = INT32_MIN;
+    char line[160] = {};
+
+    while (Bfgets(line, sizeof(line), fp) != nullptr)
+    {
+        int32_t addon = 0;
+        if (Bsscanf(line, "addon %d", &addon) == 1)
+        {
+            fileAddon = addon;
+            continue;
+        }
+
+        int32_t volumeIndex = 0, levelIndex = 0, played = 0, completed = 0, secrets = 0, maxSecrets = 0, bestTime = 0;
+        int32_t fieldCount = Bsscanf(line, "level %d %d %d %d %d %d %d",
+                                     &volumeIndex, &levelIndex, &played, &completed, &secrets, &maxSecrets, &bestTime);
+
+        if (fieldCount == 6)
+            bestTime = 0;
+        else if (fieldCount == 5)
+        {
+            completed = 0;
+            bestTime = 0;
+            fieldCount = Bsscanf(line, "level %d %d %d %d %d",
+                                 &volumeIndex, &levelIndex, &played, &secrets, &maxSecrets);
+        }
+
+        if ((fieldCount == 7 || fieldCount == 6 || fieldCount == 5) && played &&
+            (unsigned)volumeIndex < MAXVOLUMES && (unsigned)levelIndex < MAXLEVELS)
+        {
+            int32_t const progressIndex = volumeIndex * MAXLEVELS + levelIndex;
+            int32_t const clampedMaxSecrets = max<int32_t>(maxSecrets, 0);
+            int32_t clampedSecrets = max<int32_t>(secrets, 0);
+            if (clampedMaxSecrets > 0)
+                clampedSecrets = min<int32_t>(clampedSecrets, clampedMaxSecrets);
+
+            g_replayLevelPlayed[progressIndex] = 1;
+            g_replayLevelCompleted[progressIndex] = completed != 0;
+            g_replayLevelCampaignSecrets[progressIndex] = clampedSecrets;
+            g_replayLevelCampaignMaxSecrets[progressIndex] = clampedMaxSecrets;
+            g_replayLevelCampaignBestTimes[progressIndex] = max<int32_t>(bestTime, 0);
+            g_replayLevelReached[volumeIndex] = max<int32_t>(g_replayLevelReached[volumeIndex], levelIndex);
+        }
+    }
+
+    Bfclose(fp);
+
+    if (fileAddon != INT32_MIN && fileAddon != g_addonNum)
+    {
+        M_ResetReplayCampaignProgress();
+        return -1;
+    }
+
+    return 0;
+}
+
+void M_LoadReplayProgressMetadata(char const *fn)
+{
+    M_ResetReplayCampaignProgress();
+
+    if (Menu_ReadReplayProgressMetadataPath(fn) == 0)
+        return;
+
+    char modPath[BMAX_PATH];
+    if (G_ModDirSnprintf(modPath, sizeof(modPath), "%s", fn) == 0)
+        Menu_ReadReplayProgressMetadataPath(modPath);
+}
+
+void M_WriteReplayProgressMetadata(char const *fn)
+{
+    if (fn == nullptr || fn[0] == '\0')
+        return;
+
+    M_RecordReplayCurrentLevelProgress();
+
+    char progressMeta[BMAX_PATH + 16];
+    Bsnprintf(progressMeta, sizeof(progressMeta), "%s.progress", fn);
+
+    BFILE * const fp = Bfopen(progressMeta, "wb");
+    if (fp == nullptr)
+        return;
+
+    Bfprintf(fp, "addon %d\n", g_addonNum);
+
+    for (int32_t volumeIndex = 0; volumeIndex < MAXVOLUMES; ++volumeIndex)
+    {
+        for (int32_t levelIndex = 0; levelIndex < MAXLEVELS; ++levelIndex)
+        {
+            int32_t const progressIndex = volumeIndex * MAXLEVELS + levelIndex;
+            if (!g_replayLevelPlayed[progressIndex])
+                continue;
+
+            int32_t writeMaxSecrets = max<int32_t>(g_replayLevelCampaignMaxSecrets[progressIndex], 0);
+            int32_t writeSecrets = max<int32_t>(g_replayLevelCampaignSecrets[progressIndex], 0);
+            if (writeMaxSecrets > 0)
+                writeSecrets = min<int32_t>(writeSecrets, writeMaxSecrets);
+
+            Bfprintf(fp, "level %d %d %d %d %d %d %d\n",
+                     volumeIndex, levelIndex, 1, g_replayLevelCompleted[progressIndex] != 0,
+                     writeSecrets, writeMaxSecrets, max<int32_t>(g_replayLevelCampaignBestTimes[progressIndex], 0));
+        }
+    }
+
+    Bfclose(fp);
+}
+
+void M_ResetReplayCampaignProgress(void)
+{
+    for (auto &level : g_replayLevelReached)
+        level = -1;
+    for (auto &played : g_replayLevelPlayed)
+        played = 0;
+    for (auto &completed : g_replayLevelCompleted)
+        completed = 0;
+    for (auto &secrets : g_replayLevelCampaignSecrets)
+        secrets = 0;
+    for (auto &maxSecrets : g_replayLevelCampaignMaxSecrets)
+        maxSecrets = 0;
+    for (auto &bestTime : g_replayLevelCampaignBestTimes)
+        bestTime = 0;
+    for (auto &total : g_replayLevelSecretTotalCache)
+        total = -2;
+}
+
+static void Menu_RecordReplayLevelReached(int32_t const volumeIndex, int32_t const levelIndex)
+{
+    if ((unsigned)volumeIndex >= MAXVOLUMES || (unsigned)levelIndex >= MAXLEVELS)
+        return;
+
+    g_replayLevelReached[volumeIndex] = max<int32_t>(g_replayLevelReached[volumeIndex], levelIndex);
+}
+
+static int32_t Menu_GetReplayLevelReached(int32_t const volumeIndex)
+{
+    if ((unsigned)volumeIndex >= MAXVOLUMES)
+        return -1;
+
+    return g_replayLevelReached[volumeIndex];
+}
+
+static void Menu_RecordReplayLevelProgress(int32_t const volumeIndex, int32_t const levelIndex,
+                                           int32_t const secrets, int32_t const maxSecrets)
+{
+    if ((unsigned)volumeIndex >= MAXVOLUMES || (unsigned)levelIndex >= MAXLEVELS)
+        return;
+
+    int32_t const progressIndex = volumeIndex * MAXLEVELS + levelIndex;
+    int32_t clampedMaxSecrets = max<int32_t>(maxSecrets, 0);
+    int32_t clampedSecrets = max<int32_t>(secrets, 0);
+    if (clampedMaxSecrets > 0)
+        clampedSecrets = min<int32_t>(clampedSecrets, clampedMaxSecrets);
+
+    g_replayLevelPlayed[progressIndex] = 1;
+    g_replayLevelCampaignSecrets[progressIndex] = max<int32_t>(g_replayLevelCampaignSecrets[progressIndex], clampedSecrets);
+    g_replayLevelCampaignMaxSecrets[progressIndex] = max<int32_t>(g_replayLevelCampaignMaxSecrets[progressIndex], clampedMaxSecrets);
+
+    Menu_RecordReplayLevelReached(volumeIndex, levelIndex);
+}
+
+static void Menu_RecordReplayLevelCompleted(int32_t const volumeIndex, int32_t const levelIndex, int32_t const bestTime)
+{
+    if ((unsigned)volumeIndex >= MAXVOLUMES || (unsigned)levelIndex >= MAXLEVELS)
+        return;
+
+    int32_t secrets = 0, maxSecrets = 0;
+    Menu_GetCurrentCampaignSecrets(&secrets, &maxSecrets);
+    Menu_RecordReplayLevelProgress(volumeIndex, levelIndex, secrets, maxSecrets);
+
+    int32_t const progressIndex = volumeIndex * MAXLEVELS + levelIndex;
+    g_replayLevelCompleted[progressIndex] = 1;
+
+    if (bestTime > 0 && (g_replayLevelCampaignBestTimes[progressIndex] <= 0 || bestTime < g_replayLevelCampaignBestTimes[progressIndex]))
+        g_replayLevelCampaignBestTimes[progressIndex] = bestTime;
+}
+
+static int32_t Menu_GetReplayLevelProgress(int32_t const volumeIndex, int32_t const levelIndex,
+                                           int32_t * const secrets, int32_t * const maxSecrets, int32_t * const bestTime)
+{
+    if (secrets != nullptr)
+        *secrets = 0;
+    if (maxSecrets != nullptr)
+        *maxSecrets = 0;
+    if (bestTime != nullptr)
+        *bestTime = 0;
+
+    if ((unsigned)volumeIndex >= MAXVOLUMES || (unsigned)levelIndex >= MAXLEVELS)
+        return 0;
+
+    int32_t const progressIndex = volumeIndex * MAXLEVELS + levelIndex;
+    int32_t storedSecrets = g_replayLevelCampaignSecrets[progressIndex];
+    int32_t storedMaxSecrets = g_replayLevelCampaignMaxSecrets[progressIndex];
+    if (storedMaxSecrets > 0)
+        storedSecrets = min<int32_t>(storedSecrets, storedMaxSecrets);
+
+    if (secrets != nullptr)
+        *secrets = storedSecrets;
+    if (maxSecrets != nullptr)
+        *maxSecrets = storedMaxSecrets;
+    if (bestTime != nullptr)
+        *bestTime = g_replayLevelCampaignBestTimes[progressIndex];
+
+    return g_replayLevelPlayed[progressIndex];
+}
+
+static int32_t Menu_CountMapSecretSectors(char const * const filename)
+{
+    if (filename == nullptr || filename[0] == '\0')
+        return -1;
+
+    buildvfs_kfd fil = kopen4loadfrommod(filename, 0);
+    if (fil == buildvfs_kfd_invalid)
+        return -1;
+
+    int32_t secretCount = -1;
+    int32_t mapVersion = 0;
+
+    do
+    {
+        if (kread_and_test(fil, &mapVersion, 4))
+            break;
+
+        mapVersion = B_LITTLE32(mapVersion);
+        if (mapVersion != 7)
+            break;
+
+        if (klseek_and_test(fil, 4 + 4 + 4 + 2 + 2, SEEK_CUR))
+            break;
+
+        int16_t numMapSectors = 0;
+        if (kread_and_test(fil, &numMapSectors, sizeof(numMapSectors)))
+            break;
+
+        numMapSectors = B_LITTLE16(numMapSectors);
+        if ((unsigned)numMapSectors >= MAXSECTORS + 1)
+            break;
+
+        secretCount = 0;
+        for (int32_t sectorIndex = 0; sectorIndex < numMapSectors; ++sectorIndex)
+        {
+            sectortypev7 mapSector;
+            if (kread_and_test(fil, &mapSector, sizeof(mapSector)))
+            {
+                secretCount = -1;
+                break;
+            }
+
+            if (B_LITTLE16(mapSector.lotag) == 32767)
+                ++secretCount;
+        }
+    } while (0);
+
+    kclose(fil);
+    return secretCount;
+}
+
+static int32_t Menu_GetReplayLevelMapSecretTotal(int32_t const volumeIndex, int32_t const levelIndex)
+{
+    if ((unsigned)volumeIndex >= MAXVOLUMES || (unsigned)levelIndex >= MAXLEVELS)
+        return -1;
+
+    int32_t const cacheIndex = volumeIndex * MAXLEVELS + levelIndex;
+    if (g_replayLevelSecretTotalCache[cacheIndex] != -2)
+        return g_replayLevelSecretTotalCache[cacheIndex];
+
+    auto const &mapInfo = g_mapInfo[cacheIndex];
+    g_replayLevelSecretTotalCache[cacheIndex] = Menu_CountMapSecretSectors(mapInfo.filename);
+    return g_replayLevelSecretTotalCache[cacheIndex];
+}
+
+static int32_t Menu_CanUseReplayLevels(void)
+{
+    DukePlayer_t const * const ps = g_player[myconnectindex].ps;
+    return ps != nullptr && (ps->gm & MODE_GAME) && !G_HaveUserMap() && !g_netServer && !g_netClient;
+}
+
+static void Menu_UpdateCurrentReplayLevelProgress(void)
+{
+    if (!Menu_CanUseReplayLevels())
+        return;
+
+    int32_t secrets = 0, maxSecrets = 0;
+    Menu_GetCurrentCampaignSecrets(&secrets, &maxSecrets);
+    Menu_RecordReplayLevelProgress(ud.volume_number, ud.level_number, secrets, maxSecrets);
+}
+
+static int32_t Menu_GetReplayCampaignSecretTotal(void)
+{
+    Menu_UpdateCurrentReplayLevelProgress();
+
+    int32_t total = 0;
+    for (int32_t volumeIndex = 0; volumeIndex < MAXVOLUMES; ++volumeIndex)
+    {
+        for (int32_t levelIndex = 0; levelIndex < MAXLEVELS; ++levelIndex)
+        {
+            int32_t const progressIndex = volumeIndex * MAXLEVELS + levelIndex;
+            if (!g_replayLevelPlayed[progressIndex])
+                continue;
+
+            int32_t clampedSecrets = max<int32_t>(g_replayLevelCampaignSecrets[progressIndex], 0);
+            int32_t const clampedMaxSecrets = max<int32_t>(g_replayLevelCampaignMaxSecrets[progressIndex], 0);
+            if (clampedMaxSecrets > 0)
+                clampedSecrets = min<int32_t>(clampedSecrets, clampedMaxSecrets);
+
+            total += clampedSecrets;
+        }
+    }
+
+    return total;
+}
+
+void M_RecordReplayCurrentLevelProgress(void)
+{
+    Menu_UpdateCurrentReplayLevelProgress();
+}
+
+void M_RecordReplayCurrentLevelCompleted(void)
+{
+    if (!Menu_CanUseReplayLevels())
+        return;
+
+    int32_t const completedLevel = ud.last_level > 0 ? ud.last_level - 1 : ud.level_number;
+    int32_t const bestTime = g_player[myconnectindex].ps != nullptr ? g_player[myconnectindex].ps->player_par : 0;
+    Menu_RecordReplayLevelCompleted(ud.volume_number, completedLevel, bestTime);
+}
+
+static int32_t Menu_IsReplayLevelCurrent(int32_t const entryIndex)
+{
+    return (unsigned)entryIndex < (unsigned)g_replayLevelCount
+        && g_replayLevelVolumes[entryIndex] == ud.volume_number
+        && g_replayLevelIndices[entryIndex] == ud.level_number;
+}
+
+static void Menu_UpdateReplayLevelActionEntry(void)
+{
+    if (g_replayLevelCount <= 0)
+    {
+        ME_REPLAY_LEVEL_GOTO.name = "Go To Level";
+        ME_REPLAY_LEVEL_GOTO.font = &MF_Redfont;
+        ME_REPLAY_LEVEL_GOTO.flags &= ~(MEF_Disabled | MEF_LookDisabled);
+        return;
+    }
+
+    int32_t const entryIndex = clamp<int32_t>(g_replayLevelSelectedIndex, 0, g_replayLevelCount - 1);
+    int32_t const isCurrentLevel = Menu_IsReplayLevelCurrent(entryIndex);
+
+    ME_REPLAY_LEVEL_GOTO.name = isCurrentLevel ? "Current Level" : "Go To Level";
+    ME_REPLAY_LEVEL_GOTO.font = isCurrentLevel ? &MF_ReplayBluefont : &MF_ReplayRedfont;
+    ME_REPLAY_LEVEL_GOTO.flags &= ~(MEF_Disabled | MEF_LookDisabled);
+}
+
+static int32_t Menu_ReplayLevelHasValidInfo(int32_t const volumeIndex, int32_t const levelIndex)
+{
+    if ((unsigned)volumeIndex >= MAXVOLUMES || (unsigned)levelIndex >= MAXLEVELS)
+        return 0;
+
+    auto const &mapInfo = g_mapInfo[volumeIndex * MAXLEVELS + levelIndex];
+    return mapInfo.name != nullptr && mapInfo.name[0] != '\0';
+}
+
+static void Menu_PopulateReplayLevelMenu(void)
+{
+    Menu_UpdateCurrentReplayLevelProgress();
+
+    int32_t entryCount = 0;
+    int32_t selectedEntry = 0;
+
+    for (int32_t volumeIndex = 0; volumeIndex < g_volumeCnt && entryCount < ARRAY_SSIZE(g_replayLevelNames); ++volumeIndex)
+    {
+        int32_t maxReachedLevel = Menu_GetReplayLevelReached(volumeIndex);
+        if (volumeIndex == ud.volume_number)
+            maxReachedLevel = max<int32_t>(maxReachedLevel, ud.level_number);
+
+        if (maxReachedLevel < 0)
+            continue;
+
+        for (int32_t levelIndex = 0; levelIndex <= maxReachedLevel && levelIndex < MAXLEVELS && entryCount < ARRAY_SSIZE(g_replayLevelNames); ++levelIndex)
+        {
+            if (!Menu_ReplayLevelHasValidInfo(volumeIndex, levelIndex))
+                continue;
+
+            int32_t secrets = 0, maxSecrets = 0, bestTime = 0;
+            Menu_GetReplayLevelProgress(volumeIndex, levelIndex, &secrets, &maxSecrets, &bestTime);
+
+            if (maxSecrets <= 0)
+            {
+                int32_t const mapSecretTotal = Menu_GetReplayLevelMapSecretTotal(volumeIndex, levelIndex);
+                if (mapSecretTotal >= 0)
+                    maxSecrets = mapSecretTotal;
+            }
+
+            if (volumeIndex == ud.volume_number && levelIndex == ud.level_number)
+            {
+                int32_t currentSecrets = 0, currentMaxSecrets = 0;
+                Menu_GetCurrentCampaignSecrets(&currentSecrets, &currentMaxSecrets);
+
+                secrets = max<int32_t>(secrets, currentSecrets);
+                maxSecrets = max<int32_t>(maxSecrets, currentMaxSecrets);
+                if (maxSecrets > 0)
+                    secrets = min<int32_t>(secrets, maxSecrets);
+            }
+
+            auto const &mapInfo = g_mapInfo[volumeIndex * MAXLEVELS + levelIndex];
+            Bsnprintf(g_replayLevelNames[entryCount], sizeof(g_replayLevelNames[entryCount]), "%s", mapInfo.name);
+
+            g_replayLevelVolumes[entryCount] = volumeIndex;
+            g_replayLevelIndices[entryCount] = levelIndex;
+            g_replayLevelSecrets[entryCount] = secrets;
+            g_replayLevelMaxSecrets[entryCount] = maxSecrets;
+            g_replayLevelBestTimes[entryCount] = bestTime;
+
+            if (volumeIndex == ud.volume_number && levelIndex == ud.level_number)
+                selectedEntry = entryCount;
+
+            ++entryCount;
+        }
+    }
+
+    if (entryCount <= 0)
+    {
+        int32_t const currentVolume = clamp<int32_t>(ud.volume_number, 0, max<int32_t>(g_volumeCnt - 1, 0));
+        int32_t const currentLevel = clamp<int32_t>(ud.level_number, 0, MAXLEVELS - 1);
+        auto const &mapInfo = g_mapInfo[currentVolume * MAXLEVELS + currentLevel];
+        int32_t secrets = 0, maxSecrets = 0;
+
+        Menu_GetCurrentCampaignSecrets(&secrets, &maxSecrets);
+
+        if (mapInfo.name != nullptr && mapInfo.name[0] != '\0')
+            Bsnprintf(g_replayLevelNames[0], sizeof(g_replayLevelNames[0]), "%s", mapInfo.name);
+        else
+            Bsnprintf(g_replayLevelNames[0], sizeof(g_replayLevelNames[0]), "Current Level");
+
+        g_replayLevelVolumes[0] = currentVolume;
+        g_replayLevelIndices[0] = currentLevel;
+        g_replayLevelSecrets[0] = secrets;
+        g_replayLevelMaxSecrets[0] = maxSecrets;
+        g_replayLevelBestTimes[0] = 0;
+        entryCount = 1;
+        selectedEntry = 0;
+    }
+
+    g_replayLevelCount = entryCount;
+    g_replayLevelSelectedIndex = clamp<int32_t>(selectedEntry, 0, entryCount - 1);
+    Menu_UpdateReplayLevelActionEntry();
+    M_LEVELREPLAY.numEntries = ARRAY_SSIZE(MEL_REPLAY_LEVEL);
+    M_LEVELREPLAY.currentEntry = 0;
+    Menu_AdjustForCurrentEntryAssignmentBlind(&M_LEVELREPLAY);
+}
+
+static int32_t Menu_MoveReplayLevelSelection(int32_t const direction)
+{
+    if (g_replayLevelCount <= 1 || direction == 0)
+        return 0;
+
+    int32_t const previousIndex = g_replayLevelSelectedIndex;
+    g_replayLevelSelectedIndex = clamp<int32_t>(g_replayLevelSelectedIndex + direction, 0, g_replayLevelCount - 1);
+
+    if (g_replayLevelSelectedIndex == previousIndex)
+        return 0;
+
+    Menu_UpdateReplayLevelActionEntry();
+    return 1;
+}
+
+static int32_t Menu_GetReplayLevelThumbnailTile(int32_t const entryIndex)
+{
+    if ((unsigned)entryIndex >= (unsigned)g_replayLevelCount)
+        return -1;
+
+    int32_t const levelIndex = g_replayLevelIndices[entryIndex];
+
+    if (REALITY)
+    {
+        if (levelIndex <= 6)
+            return 20000 + levelIndex;
+        if (levelIndex >= 8 && levelIndex <= 18)
+            return 20016 + (levelIndex - 8);
+        if (levelIndex >= 19 && levelIndex <= 29)
+            return 20032 + (levelIndex - 19);
+        if (levelIndex >= 30 && levelIndex <= 33)
+            return 20048 + (levelIndex - 30);
+        return -1;
+    }
+
+    return 20000 + (g_replayLevelVolumes[entryIndex] * 16) + levelIndex;
+}
+
+static int32_t Menu_GetRealityEpisodeForLevel(int32_t const levelIndex)
+{
+    if (levelIndex >= 19)
+        return 2;
+    if (levelIndex >= 8)
+        return 1;
+    return 0;
+}
+
+static char const *Menu_GetReplayEpisodeName(int32_t const entryIndex)
+{
+    int32_t episode = g_replayLevelVolumes[entryIndex];
+
+    if (REALITY)
+        episode = Menu_GetRealityEpisodeForLevel(g_replayLevelIndices[entryIndex]);
+
+    episode = clamp<int32_t>(episode, 0, MAXVOLUMES - 1);
+    return g_volumeNames[episode][0] != '\0' ? g_volumeNames[episode] : "Unknown";
+}
+
+static void Menu_FormatReplayBestTime(char * const buffer, size_t const bufferSize, int32_t const bestTime)
+{
+    if (bestTime <= 0)
+    {
+        Bsnprintf(buffer, bufferSize, "Best time: --:--");
+        return;
+    }
+
+    Bsnprintf(buffer, bufferSize, "Best time: %d:%02d.%02d",
+              bestTime / (REALGAMETICSPERSEC * 60),
+              (bestTime / REALGAMETICSPERSEC) % 60,
+              ((bestTime % REALGAMETICSPERSEC) * 33) / 10);
+}
+
+static void Menu_DrawReplayLevelPanelBackground(vec2_t const origin)
+{
+    Menu_BlackRectangle(origin.x, origin.y + (74<<16), 320<<16, 80<<16, 1|32);
+}
+
+static int32_t xdim_from_320_16(int32_t x);
+static int32_t ydim_from_200_16(int32_t y);
+
+static void Menu_DrawReplayLevelArrow(int32_t const x, int32_t const y, int32_t const direction)
+{
+    int32_t const z = 49152;
+    int32_t const posx = tilesiz[SELECTDIR].y * z;
+    int32_t const clipWidth = max<int32_t>((posx>>17)<<16, 14<<16);
+    int32_t const clipLeft = x - (clipWidth>>1);
+    int32_t const x1 = xdim_from_320_16(clipLeft);
+    int32_t const y1 = ydim_from_200_16(y - (14<<16));
+    int32_t const x2 = xdim_from_320_16(clipLeft + clipWidth);
+    int32_t const y2 = ydim_from_200_16(y + (14<<16));
+    int32_t const angle = direction < 0 ? 512 : 1536;
+    int32_t const spriteX = direction < 0 ? clipLeft + posx : clipLeft + clipWidth - posx;
+
+    rotatesprite_(spriteX, y, z, angle, SELECTDIR, Menu_CursorShade(), 0, 2|8|16, 0, 0, x1, y1, x2, y2);
+}
+
+static void Menu_DrawReplayLevelDetails(vec2_t const origin)
+{
+    if (g_replayLevelCount <= 0)
+        return;
+
+    int32_t const entryIndex = clamp<int32_t>(g_replayLevelSelectedIndex, 0, g_replayLevelCount - 1);
+    int32_t const thumbX = 24;
+    int32_t const thumbY = 78;
+    int32_t const thumbW = 128;
+    int32_t const thumbH = 72;
+    int32_t const infoX = 166;
+    int32_t const infoY = 80;
+
+    Menu_DrawReplayLevelPanelBackground(origin);
+
+    G_ScreenText(MF_Redfont.tilenum, origin.x + (160<<16), origin.y + (45<<16), MF_Redfont.zoom, 0, 0,
+                 g_replayLevelNames[entryIndex], 0, MF_ReplayRedfont.pal, 2|8|16|ROTATESPRITE_FULL16, 0,
+                 MF_Redfont.emptychar.x, MF_Redfont.emptychar.y, MF_Redfont.between.x, MF_Redfont.between.y,
+                 MF_Redfont.textflags | TEXT_XCENTER, 0, 0, xdim-1, ydim-1);
+
+    if (g_replayLevelCount > 1)
+    {
+        int32_t const leftX = origin.x + (34<<16);
+        int32_t const rightX = origin.x + (286<<16);
+        int32_t const arrowY = origin.y + (50<<16);
+        int32_t const rightArrowY = arrowY + (14<<16);
+        int32_t const canMoveLeft = entryIndex > 0;
+        int32_t const canMoveRight = entryIndex < g_replayLevelCount - 1;
+
+        if (canMoveLeft)
+            Menu_DrawReplayLevelArrow(leftX, arrowY, -1);
+        if (canMoveRight)
+            Menu_DrawReplayLevelArrow(rightX, rightArrowY, 1);
+    }
+
+    int32_t const thumbnailTile = Menu_GetReplayLevelThumbnailTile(entryIndex);
+    if (thumbnailTile >= 0 && tilesiz[thumbnailTile].x > 0 && tilesiz[thumbnailTile].y > 0)
+    {
+        rotatesprite_fs(origin.x + ((thumbX + (thumbW>>1))<<16), origin.y + ((thumbY + (thumbH>>1))<<16),
+                        divscale16(thumbW, tilesiz[thumbnailTile].x), 0, thumbnailTile, 0, 0, 2|8);
+    }
+    else
+    {
+        creditsminitext(origin.x + ((thumbX + (thumbW>>1))<<16), origin.y + ((thumbY + 27)<<16), "LEVEL", 8);
+        creditsminitext(origin.x + ((thumbX + (thumbW>>1))<<16), origin.y + ((thumbY + 38)<<16), "THUMBNAIL", 8);
+    }
+
+    char tempbuf[128];
+    mgametext(origin.x + (infoX<<16), origin.y + (infoY<<16), Menu_GetReplayEpisodeName(entryIndex));
+
+    Bsnprintf(tempbuf, sizeof(tempbuf), "Level %d", g_replayLevelIndices[entryIndex] + 1);
+    mgametext(origin.x + (infoX<<16), origin.y + ((infoY + 13)<<16), tempbuf);
+
+    Bsnprintf(tempbuf, sizeof(tempbuf), "Secrets: %d/%d", g_replayLevelSecrets[entryIndex], g_replayLevelMaxSecrets[entryIndex]);
+    mgametext(origin.x + (infoX<<16), origin.y + ((infoY + 26)<<16), tempbuf);
+
+    Menu_FormatReplayBestTime(tempbuf, sizeof(tempbuf), g_replayLevelBestTimes[entryIndex]);
+    mgametext(origin.x + (infoX<<16), origin.y + ((infoY + 39)<<16), tempbuf);
+
+    if (!Menu_IsReplayLevelCurrent(entryIndex))
+    {
+        mminitext(origin.x + (infoX<<16), origin.y + ((infoY + 56)<<16), "Starting this level", 8);
+        mminitext(origin.x + (infoX<<16), origin.y + ((infoY + 66)<<16), "loses current progress", 8);
+    }
+}
+
+static void Menu_StartReplayLevel(void)
+{
+    if (g_replayLevelCount <= 0)
+        return;
+
+    int32_t const entryIndex = clamp<int32_t>(g_replayLevelSelectedIndex, 0, g_replayLevelCount - 1);
+    if (Menu_IsReplayLevelCurrent(entryIndex))
+        return;
+
+    int32_t const playerCount = RedSplit_MenuCurrentPlayerCount();
+    ud.m_volume_number = ud.volume_number = g_replayLevelVolumes[entryIndex];
+    ud.m_level_number = ud.level_number = g_replayLevelIndices[entryIndex];
+    ud.m_player_skill = max<int32_t>(ud.player_skill, 1);
+    ud.m_coop = ud.coop;
+    ud.m_ffire = ud.ffire;
+
+    RedSplit_AssignInputsForPlayerCount(playerCount);
+    RedSplit_SetPlayerCount(playerCount);
+    Menu_Change(MENU_CLOSE);
+    G_NewGame_EnterLevel();
+}
+
 static void Menu_EntryStringActivate(/*MenuEntry_t *entry*/)
 {
     switch (g_currentMenu)
@@ -6398,6 +7288,11 @@ static void Menu_Verify(int32_t input)
             Menu_SaveReadHeaders();
             M_SAVE.currentEntry = clamp(M_SAVE.currentEntry, 0, (int32_t)g_nummenusaves);
         }
+        break;
+
+    case MENU_LEVELREPLAYVERIFY:
+        if (input)
+            Menu_StartReplayLevel();
         break;
 
     case MENU_COLCORRRESETVERIFY:
@@ -6932,6 +7827,10 @@ static void Menu_AboutToStartDisplaying(Menu_t * m)
         {
             G_CaptureSaveShot(65536);
         }
+        break;
+
+    case MENU_LEVELREPLAY:
+        Menu_PopulateReplayLevelMenu();
         break;
 
     case MENU_JOYSTICKSETUP:
@@ -7621,7 +8520,7 @@ static int32_t M_RunMenu_Menu(Menu_t *cm, MenuMenu_t *menu, MenuEntry_t *current
             if (entry->format->width < 0)
                 status |= MT_XRight;
 
-            if (dodraw && (status & MT_Selected) && state != 1)
+            if (dodraw && (status & MT_Selected) && state != 1 && cm->menuID != MENU_LEVELREPLAY)
             {
                 if (status & MT_XCenter)
                 {
@@ -8467,6 +9366,7 @@ static void Menu_Recurse(MenuID_t cm, const vec2_t origin)
     case MENU_LOADDELVERIFY:
     case MENU_SAVEVERIFY:
     case MENU_SAVEDELVERIFY:
+    case MENU_LEVELREPLAYVERIFY:
     case MENU_COLCORRRESETVERIFY:
     case MENU_JOYDEFAULTVERIFY:
     case MENU_ADULTPASSWORD:
@@ -8850,6 +9750,9 @@ static void Menu_RunInput_EntryLink_Activate(MenuEntry_t *entry)
         S_PlaySound(REALITY ? 0x33 : PISTOL_BODYHIT);
         return;
     }
+
+    if (entry == &ME_REPLAY_LEVEL_GOTO && Menu_IsReplayLevelCurrent(g_replayLevelSelectedIndex))
+        return;
 
 #ifdef _WIN32
     if (entry == &ME_GAMESETUP_CHECKUPDATES)

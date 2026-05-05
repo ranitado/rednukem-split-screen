@@ -41,6 +41,8 @@ extern int32_t g_mostConcurrentPlayers;
 
 #define HORIZ_MIN                   -99
 #define HORIZ_MAX                   299
+#define REALITY_HORIZ_MIN           -122
+#define REALITY_HORIZ_MAX           322
 #define AUTO_AIM_ANGLE              48
 #define PHEIGHT_DUKE                (38<<8)
 #define PHEIGHT_RR                  (40<<8);

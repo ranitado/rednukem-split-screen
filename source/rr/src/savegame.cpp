@@ -28,6 +28,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 static OutputFileCounter savecounter;
 
+void M_LoadReplayProgressMetadata(char const *fn);
+void M_WriteReplayProgressMetadata(char const *fn);
+void M_RecordReplayCurrentLevelProgress(void);
+
 static char const s_splitScreenSaveDir[] = "saves";
 static char const s_splitScreenSaveDirPrefix[] = "saves/";
 
@@ -472,6 +476,8 @@ int32_t G_LoadPlayer(savebrief_t & sv)
 
     sv_postudload();  // ud.m_XXX = ud.XXX
     kclose(fil);
+    M_LoadReplayProgressMetadata(sv.path);
+    M_RecordReplayCurrentLevelProgress();
 
     return 0;
 }
@@ -546,6 +552,10 @@ void G_DeleteSave(savebrief_t const & sv)
     }
 
     unlink(temp);
+
+    char progressMeta[BMAX_PATH + 16];
+    Bsnprintf(progressMeta, sizeof(progressMeta), "%s.progress", temp);
+    unlink(progressMeta);
 }
 
 void G_DeleteOldSaves(void)
@@ -626,6 +636,7 @@ int32_t G_SavePlayer(savebrief_t & sv, bool isAutoSave)
 
     // temporary hack
     ud.user_map = G_HaveUserMap();
+    M_RecordReplayCurrentLevelProgress();
 
 #ifdef POLYMER
     if (videoGetRenderMode() == REND_POLYMER)
@@ -636,6 +647,7 @@ int32_t G_SavePlayer(savebrief_t & sv, bool isAutoSave)
     sv_saveandmakesnapshot(fil, sv.name, 0, 0, 0, 0, isAutoSave);
 
     fclose(fil);
+    M_WriteReplayProgressMetadata(temp);
 
     OSD_Printf("Saved: %s\n", temp);
 

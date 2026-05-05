@@ -4861,7 +4861,7 @@ static int P_FindNearbyNukeButton(DukePlayer_t const * const pPlayer)
     if (!REALITY || pPlayer == nullptr || pPlayer->cursectnum < 0)
         return -1;
 
-    static int const maxNukeButtonUseDist = 492; // 60% shorter than the previous helper range.
+    static int const maxNukeButtonUseDist = 344; // 30% shorter than the previous helper range.
     int bestSprite = -1;
     int bestDist = INT32_MAX;
     int const playerAng = fix16_to_int(pPlayer->q16ang);

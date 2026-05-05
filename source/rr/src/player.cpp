@@ -42,6 +42,47 @@ extern int32_t g_levelTextTime, ticrandomseed;
 int32_t g_numObituaries = 0;
 int32_t g_numSelfObituaries = 0;
 
+static int32_t g_newWeaponPickupSwitchLockUntil[MAXPLAYERS];
+static int32_t g_redSplitDeathRespawnClock[MAXPLAYERS];
+
+static int32_t P_GetPlayerIndexFromPs(DukePlayer_t const * const pPlayer)
+{
+    for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
+        if (g_player[playerNum].ps == pPlayer)
+            return playerNum;
+
+    return -1;
+}
+
+static bool P_NewWeaponPickupSwitchAllowed(DukePlayer_t const * const pPlayer)
+{
+    int32_t const playerNum = P_GetPlayerIndexFromPs(pPlayer);
+
+    if (playerNum < 0)
+        return true;
+
+    int32_t const now = (int32_t)totalclock;
+
+    if ((int32_t)(g_newWeaponPickupSwitchLockUntil[playerNum] - now) > 0)
+        return false;
+
+    g_newWeaponPickupSwitchLockUntil[playerNum] = now + (TICRATE * 2);
+    return true;
+}
+
+static void P_GetDisplayPlayerName(int32_t const playerNum, char * const buffer, size_t const bufferSize)
+{
+    if (bufferSize == 0)
+        return;
+
+    buffer[0] = '\0';
+
+    if ((unsigned)playerNum < MAXPLAYERS && g_player[playerNum].user_name[0] != '\0')
+        Bstrncpyz(buffer, g_player[playerNum].user_name, bufferSize);
+    else
+        Bsnprintf(buffer, bufferSize, "Player %d", playerNum + 1);
+}
+
 
 int const icon_to_inv[ICON_MAX] = { GET_FIRSTAID, GET_FIRSTAID, GET_STEROIDS, GET_HOLODUKE,
                                     GET_JETPACK,  GET_HEATS,    GET_SCUBA,    GET_BOOTS,    GET_SHIELD };
@@ -5179,6 +5220,9 @@ void P_AddWeapon(DukePlayer_t *pPlayer, int weaponNum)
     else
         curr_weapon = weaponNum;
 
+    if (!hadWeapon && curr_weapon != pPlayer->curr_weapon && !P_NewWeaponPickupSwitchAllowed(pPlayer))
+        return;
+
     if (RR && weaponNum == HANDBOMB_WEAPON)
         pPlayer->last_weapon = -1;
 
@@ -5605,27 +5649,53 @@ void P_FragPlayer(int playerNum)
         pPlayer->dn_388 = 0;
     }
 
-#ifdef SPLITSCREEN_MOD_HACKS
     if (REALITY && g_fakeMultiMode > 1)
     {
         if ((unsigned)pPlayer->frag_ps >= MAXPLAYERS || g_player[pPlayer->frag_ps].ps == nullptr)
             pPlayer->frag_ps = playerNum;
+
+        char victimName[64], killerName[64];
+        P_GetDisplayPlayerName(playerNum, victimName, sizeof(victimName));
+        P_GetDisplayPlayerName(pPlayer->frag_ps, killerName, sizeof(killerName));
 
         if (pPlayer->frag_ps != playerNum)
         {
             g_player[pPlayer->frag_ps].ps->frag++;
             g_player[pPlayer->frag_ps].frags[playerNum]++;
             g_player[playerNum].frags[playerNum]++;
+
+            Bsprintf(apStrings[QUOTE_RESERVED], "Killed by %s", killerName);
+            P_DoQuote(QUOTE_RESERVED, pPlayer);
+            Bsprintf(apStrings[QUOTE_RESERVED2], "Killed %s", victimName);
+            P_DoQuote(QUOTE_RESERVED2, g_player[pPlayer->frag_ps].ps);
         }
         else
             pPlayer->fraggedself++;
 
+        if (ud.obituaries && pPlayer->frag_ps == playerNum)
+        {
+            if ((unsigned)pPlayer->wackedbyactor < MAXSPRITES && A_CheckEnemyTile(sprite[pPlayer->wackedbyactor].picnum))
+            {
+                if (g_numObituaries > 0)
+                    Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (krand2() % g_numObituaries)], "A monster", victimName);
+                else
+                    Bsprintf(tempbuf, "A monster killed %s", victimName);
+            }
+            else if (actor[pPlayer->i].picnum == NUKEBUTTON)
+                Bsprintf(tempbuf, "^02%s^02 tried to leave", victimName);
+            else if (g_numSelfObituaries > 0)
+                Bsprintf(tempbuf, apStrings[SUICIDEQUOTEINDEX + (krand2() % g_numSelfObituaries)], victimName);
+            else
+                Bsprintf(tempbuf, "%s died", victimName);
+
+            G_AddUserQuote(tempbuf);
+        }
+
+        g_redSplitDeathRespawnClock[playerNum] = (int32_t)totalclock + TICRATE * 2;
         pPlayer->frag_ps = playerNum;
-        P_ResetPlayer(playerNum);
         pus = NUMPAGES;
         return;
     }
-#endif
 
     if ((REALITY || pSprite->pal != 1) && (pSprite->cstat & 32768) == 0)
         pSprite->cstat = 0;
@@ -5634,6 +5704,10 @@ void P_FragPlayer(int playerNum)
     {
         if (g_fakeMultiMode > 1 && ((unsigned)pPlayer->frag_ps >= MAXPLAYERS || g_player[pPlayer->frag_ps].ps == nullptr))
             pPlayer->frag_ps = playerNum;
+
+        char victimName[64], killerName[64];
+        P_GetDisplayPlayerName(playerNum, victimName, sizeof(victimName));
+        P_GetDisplayPlayerName(pPlayer->frag_ps, killerName, sizeof(killerName));
 
         if (pPlayer->frag_ps != playerNum)
         {
@@ -5648,19 +5722,19 @@ void P_FragPlayer(int playerNum)
 
             if (playerNum == screenpeek)
             {
-                Bsprintf(apStrings[QUOTE_RESERVED], "Killed by %s", &g_player[pPlayer->frag_ps].user_name[0]);
+                Bsprintf(apStrings[QUOTE_RESERVED], "Killed by %s", killerName);
                 P_DoQuote(QUOTE_RESERVED, pPlayer);
             }
             else
             {
-                Bsprintf(apStrings[QUOTE_RESERVED2], "Killed %s", &g_player[playerNum].user_name[0]);
+                Bsprintf(apStrings[QUOTE_RESERVED2], "Killed %s", victimName);
                 P_DoQuote(QUOTE_RESERVED2, g_player[pPlayer->frag_ps].ps);
             }
 
             if (ud.obituaries && g_numObituaries > 0)
             {
                 Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (g_globalRandom % g_numObituaries)],
-                         &g_player[pPlayer->frag_ps].user_name[0], &g_player[playerNum].user_name[0]);
+                         killerName, victimName);
                 G_AddUserQuote(tempbuf);
             }
         }
@@ -5673,23 +5747,23 @@ void P_FragPlayer(int playerNum)
                 {
                     if (g_numObituaries > 0)
                         Bsprintf(tempbuf, apStrings[OBITQUOTEINDEX + (krand2() % g_numObituaries)], "A monster",
-                                 &g_player[playerNum].user_name[0]);
+                                 victimName);
                     else
-                        Bsprintf(tempbuf, "A monster killed %s", &g_player[playerNum].user_name[0]);
+                        Bsprintf(tempbuf, "A monster killed %s", victimName);
                 }
                 else if (actor[pPlayer->i].picnum == NUKEBUTTON)
-                    Bsprintf(tempbuf, "^02%s^02 tried to leave", &g_player[playerNum].user_name[0]);
+                    Bsprintf(tempbuf, "^02%s^02 tried to leave", victimName);
                 else if (g_numSelfObituaries > 0)
                 {
                     // random suicide death string
                     Bsprintf(tempbuf, apStrings[SUICIDEQUOTEINDEX + (krand2() % g_numSelfObituaries)],
-                             &g_player[playerNum].user_name[0]);
+                             victimName);
                 }
                 else
-                    Bsprintf(tempbuf, "%s died", &g_player[playerNum].user_name[0]);
+                    Bsprintf(tempbuf, "%s died", victimName);
             }
             else
-                Bsprintf(tempbuf, "^02%s^02 switched to team %d", &g_player[playerNum].user_name[0], pPlayer->team + 1);
+                Bsprintf(tempbuf, "^02%s^02 switched to team %d", victimName, pPlayer->team + 1);
 
             if (ud.obituaries)
                 G_AddUserQuote(tempbuf);
@@ -7467,7 +7541,6 @@ static void P_Dead(int const playerNum, int const sectorLotag, int const floorZ,
     DukePlayer_t *const pPlayer = g_player[playerNum].ps;
     spritetype *const   pSprite = &sprite[pPlayer->i];
 
-#ifdef SPLITSCREEN_MOD_HACKS
     if (REALITY && g_fakeMultiMode > 1)
     {
         if (pPlayer->dead_flag == 0)
@@ -7476,11 +7549,13 @@ static void P_Dead(int const playerNum, int const sectorLotag, int const floorZ,
             return;
         }
 
-        P_ResetPlayer(playerNum);
-        pus = NUMPAGES;
+        if ((int32_t)(g_redSplitDeathRespawnClock[playerNum] - (int32_t)totalclock) <= 0)
+        {
+            P_ResetPlayer(playerNum);
+            pus = NUMPAGES;
+        }
         return;
     }
-#endif
 
     if (ud.recstat == 1 && (!g_netServer && ud.multimode < 2))
         G_CloseDemoWrite();
@@ -9485,8 +9560,8 @@ HORIZONLY:;
         pPlayer->q16horiz -= fix16_from_int(pPlayer->hard_landing<<4);
     }
 
-    const fix16_t horiz_max = REALITY ? F16(228) : F16(HORIZ_MAX);
-    const fix16_t horiz_min = REALITY ? F16(-28) : F16(HORIZ_MIN);
+    const fix16_t horiz_max = REALITY ? F16(REALITY_HORIZ_MAX) : F16(HORIZ_MAX);
+    const fix16_t horiz_min = REALITY ? F16(REALITY_HORIZ_MIN) : F16(HORIZ_MIN);
     pPlayer->q16horiz = fix16_clamp(pPlayer->q16horiz + ((ud.recstat == 2 && g_demo_legacy && !pPlayer->aim_mode) ? 0 : g_player[playerNum].inputBits->q16horz), horiz_min, horiz_max);
 
     if (ud.recstat == 2 && g_demo_legacy) centerHoriz = !pPlayer->aim_mode;

@@ -4491,8 +4491,17 @@ void RT_RotateSpriteText(float x, float y, float sx, float sy, int tilenum, int 
             xo *= 2.f;
     }
     glOrtho(0, xdim, ydim, 0, -1.f, 1.f);
-    float const vx1 = x1 * scl + xo;
-    float const vx2 = x2 * scl + xo;
+    float vx1, vx2;
+    if (g_redSplitQuoteTextDrawing == 2 && g_redSplitHudDrawingView >= 0)
+    {
+        vx1 = (float)g_redSplitHudX1 + x1 * scl;
+        vx2 = (float)g_redSplitHudX1 + x2 * scl;
+    }
+    else
+    {
+        vx1 = x1 * scl + xo;
+        vx2 = x2 * scl + xo;
+    }
     float vy1, vy2;
     if (g_redSplitQuoteTextDrawing && g_redSplitHudDrawingView >= 0)
     {
