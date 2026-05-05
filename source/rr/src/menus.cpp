@@ -69,6 +69,7 @@ enum RednukemUpdateInstallMode_t
 static char g_redUpdateStatus[128] = "";
 static char g_redUpdateLatestVersion[64] = "";
 static char g_redUpdateDownloadUrl[1024] = "";
+static char g_redUpdateInstallLabel[128] = "";
 static HANDLE g_redUpdateCheckThread = nullptr;
 static LONG g_redUpdateCheckResult = 0;
 static int32_t g_redUpdateInstallAvailable = RED_UPDATE_INSTALL_NONE;
@@ -79,6 +80,35 @@ static char g_redUpdateDownloadZipPath[BMAX_PATH] = "";
 static char const *Menu_RednukemDisplayVersion(char const * const version)
 {
     return (version[0] == 'v' || version[0] == 'V') ? version + 1 : version;
+}
+
+static char const *Menu_RednukemInstallUpdateLabel(void)
+{
+    char const * const version = g_redUpdateLatestVersion[0] != '\0' ? Menu_RednukemDisplayVersion(g_redUpdateLatestVersion) : nullptr;
+
+    if (g_redUpdateDownloadThread != nullptr)
+    {
+        if (version != nullptr)
+            Bsnprintf(g_redUpdateInstallLabel, sizeof(g_redUpdateInstallLabel), "Downloading %s...", version);
+        else
+            Bstrncpyz(g_redUpdateInstallLabel, "Downloading...", sizeof(g_redUpdateInstallLabel));
+    }
+    else if (g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_REINSTALL_LATEST)
+    {
+        if (version != nullptr)
+            Bsnprintf(g_redUpdateInstallLabel, sizeof(g_redUpdateInstallLabel), "Reinstall Latest %s", version);
+        else
+            Bstrncpyz(g_redUpdateInstallLabel, "Reinstall Latest", sizeof(g_redUpdateInstallLabel));
+    }
+    else
+    {
+        if (version != nullptr)
+            Bsnprintf(g_redUpdateInstallLabel, sizeof(g_redUpdateInstallLabel), "Install Update %s", version);
+        else
+            Bstrncpyz(g_redUpdateInstallLabel, "Install Update", sizeof(g_redUpdateInstallLabel));
+    }
+
+    return g_redUpdateInstallLabel;
 }
 
 static void Menu_StartRednukemUpdateCheck(void);
@@ -2054,6 +2084,7 @@ static void MenuEntry_HideOnCondition(MenuEntry_t * const entry, const int32_t c
 
 static int32_t M_RunMenu_Menu(Menu_t *cm, MenuMenu_t *menu, MenuEntry_t *currentry, int32_t state, vec2_t origin, bool actually_draw = true);
 static void Menu_EntryFocus(/*MenuEntry_t *entry*/);
+static void Menu_UpdateSavePreviewForCurrentEntry(void);
 
 static MenuEntry_t *Menu_AdjustForCurrentEntryAssignment(MenuMenu_t *menu)
 {
@@ -2620,9 +2651,7 @@ static void Menu_Pre(MenuID_t cm)
     case MENU_GAMESETUP:
 #ifdef _WIN32
         Menu_UpdateRednukemUpdateCheck();
-        ME_GAMESETUP_INSTALLUPDATE.name = g_redUpdateDownloadThread != nullptr
-            ? "Downloading..."
-            : (g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_REINSTALL_LATEST ? "Reinstall Latest" : "Install Update");
+        ME_GAMESETUP_INSTALLUPDATE.name = Menu_RednukemInstallUpdateLabel();
         MenuEntry_HideOnCondition(&ME_GAMESETUP_INSTALLUPDATE, g_redUpdateInstallAvailable == RED_UPDATE_INSTALL_NONE);
         MenuEntry_DisableOnCondition(&ME_GAMESETUP_INSTALLUPDATE, g_redUpdateDownloadThread != nullptr);
 #endif
@@ -3016,7 +3045,7 @@ static void Menu_DrawVerifyPrompt(int32_t x, int32_t y, const char * text, int n
 
 static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
 {
-    int32_t i, j, l = 0;
+    int32_t i, l = 0;
 
     switch (cm)
     {
@@ -3205,15 +3234,10 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
             rotatesprite_fs(origin.x + (82<<16), origin.y + (144<<16), 65536L,1024+512,WINDOWBORDER1,24,0,10);
         }
 
-        j = 0;
-        for (int k = 0; k < g_nummenusaves+1; ++k)
-            if (((MenuString_t*)M_SAVE.entrylist[k]->entry)->editfield)
-                j |= 1;
-
-        if (j)
-            rotatesprite_fs(origin.x + (80<<16), origin.y + (97<<16), 65536L>>1,512,TILE_SAVESHOT,-32,0,4+10+64);
-        else if (0 < M_SAVE.currentEntry && M_SAVE.currentEntry <= (int32_t)g_nummenusaves)
+        if (0 < M_SAVE.currentEntry && M_SAVE.currentEntry <= (int32_t)g_nummenusaves)
         {
+            Menu_UpdateSavePreviewForCurrentEntry();
+
             if (g_menusaves[M_SAVE.currentEntry-1].brief.isValid())
             {
                 rotatesprite_fs(origin.x + (80<<16), origin.y + (97<<16), 65536L>>1,512,TILE_LOADSHOT,-32,0,4+10+64);
@@ -3233,12 +3257,17 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t *entry, const vec2_t origin)
 
                     break;
                 }
+
+                Menu_DrawSaveInfo(origin, savehead.numplayers, savehead.volnum, savehead.levnum, savehead.skill, savehead.boardfn);
             }
         }
         else
-            menutext_centeralign(origin.x + (80<<16), origin.y + (97<<16), "New");
+        {
+            // New Slot previews the game currently being saved. Existing slots preview their own stored shot.
+            rotatesprite_fs(origin.x + (80<<16), origin.y + (97<<16), 65536L>>1,512,TILE_SAVESHOT,-32,0,4+10+64);
+            Menu_DrawSaveInfo(origin, ud.multimode, ud.volume_number, ud.level_number, ud.player_skill, currentboardfilename);
+        }
 
-        Menu_DrawSaveInfo(origin, ud.multimode, ud.volume_number, ud.level_number, ud.player_skill, currentboardfilename);
         break;
     }
 
@@ -5153,6 +5182,8 @@ void RedSplit_AssignInputsForPlayerCount(int32_t playerCount)
 
 static void RedSplit_RebuildConnectChain(int32_t const playerCount)
 {
+    connecthead = 0;
+
     for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
         connectpoint2[playerNum] = -1;
 
@@ -5172,6 +5203,150 @@ static void RedSplit_HidePlayerSprite(int32_t const playerNum)
     sprite[spriteNum].cstat |= 32768;
     sprite[spriteNum].xrepeat = 0;
     sprite[spriteNum].yrepeat = 0;
+}
+
+static int32_t RedSplit_IsReservedPlayerSprite(int32_t const spriteNum, int32_t const ignorePlayer)
+{
+    for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
+    {
+        if (playerNum == ignorePlayer || g_player[playerNum].ps == nullptr)
+            continue;
+
+        if (g_player[playerNum].ps->i == spriteNum || g_player[playerNum].ps->holoduke_on == spriteNum)
+            return 1;
+    }
+
+    return 0;
+}
+
+static int32_t RedSplit_IsReusableJoinPlayerSprite(int32_t const spriteNum, int32_t const playerNum)
+{
+    if ((unsigned)spriteNum >= MAXSPRITES || sprite[spriteNum].statnum == MAXSTATUS || sprite[spriteNum].picnum != APLAYER)
+        return 0;
+
+    if (RedSplit_IsReservedPlayerSprite(spriteNum, playerNum))
+        return 0;
+
+    return sprite[spriteNum].statnum == STAT_PLAYER || sprite[spriteNum].statnum == STAT_MISC;
+}
+
+static int32_t RedSplit_FindReusableJoinPlayerSprite(int32_t const playerNum)
+{
+    for (int32_t pass = 0; pass < 3; ++pass)
+    {
+        for (int32_t spriteNum = 0; spriteNum < MAXSPRITES; ++spriteNum)
+        {
+            if (!RedSplit_IsReusableJoinPlayerSprite(spriteNum, playerNum))
+                continue;
+
+            if (pass == 0 && (sprite[spriteNum].owner != spriteNum || (sprite[spriteNum].cstat & CSTAT_SPRITE_INVISIBLE) == 0))
+                continue;
+            if (pass == 1 && sprite[spriteNum].owner != spriteNum)
+                continue;
+
+            return spriteNum;
+        }
+    }
+
+    return -1;
+}
+
+static int32_t RedSplit_CreateJoinPlayerSprite(void)
+{
+    DukePlayer_t const * const host = g_player[myconnectindex].ps != nullptr ? g_player[myconnectindex].ps : g_player[0].ps;
+    if (host == nullptr)
+        return -1;
+
+    int32_t const hostSprite = host->i;
+    if ((unsigned)hostSprite >= MAXSPRITES)
+        return -1;
+
+    int16_t sectNum = host->cursectnum;
+    if ((unsigned)sectNum >= (unsigned)numsectors)
+        sectNum = sprite[hostSprite].sectnum;
+    if ((unsigned)sectNum >= (unsigned)numsectors)
+        return -1;
+
+    int32_t const spriteNum = A_InsertSprite(sectNum, host->pos.x, host->pos.y, host->pos.z, APLAYER, 0, 0, 0,
+                                             fix16_to_int(host->q16ang), 0, 0, hostSprite, STAT_PLAYER);
+    if ((unsigned)spriteNum >= MAXSPRITES)
+        return -1;
+
+    changespritestat(spriteNum, STAT_PLAYER);
+    return spriteNum;
+}
+
+static int32_t RedSplit_DefaultPlayerColor(int32_t const playerNum)
+{
+    static int32_t const colors[] = { 9, 10, 11, 12 };
+    return colors[clamp<int32_t>(playerNum, 0, (int32_t)ARRAY_SIZE(colors) - 1)];
+}
+
+static void RedSplit_InitJoinedPlayerInGame(int32_t const playerNum)
+{
+    if (playerNum <= 0 || playerNum >= MAXPLAYERS || g_player[0].ps == nullptr || g_player[playerNum].ps == nullptr)
+        return;
+
+    DukePlayer_t const * const host = g_player[0].ps;
+    DukePlayer_t * const       ps   = g_player[playerNum].ps;
+
+    int32_t spriteNum = RedSplit_FindReusableJoinPlayerSprite(playerNum);
+    if ((unsigned)spriteNum >= MAXSPRITES)
+        spriteNum = RedSplit_CreateJoinPlayerSprite();
+    if ((unsigned)spriteNum >= MAXSPRITES)
+        return;
+
+    int32_t playerColor = g_player[playerNum].pcolor;
+    int32_t playerTeam  = g_player[playerNum].pteam;
+    uint8_t aimMode     = ps->aim_mode;
+    uint8_t weaponSwitch = ps->weaponswitch;
+
+    if (playerColor == 0)
+        playerColor = g_player[playerNum].pcolor = RedSplit_DefaultPlayerColor(playerNum);
+    if (playerNum > 0 && playerTeam == 0)
+        playerTeam = g_player[playerNum].pteam = playerNum & 1;
+    if (weaponSwitch == 0)
+        weaponSwitch = host->weaponswitch != 0 ? host->weaponswitch : 3;
+
+    Bmemcpy(ps, host, sizeof(DukePlayer_t));
+
+    ps->i              = spriteNum;
+    ps->frag_ps        = playerNum;
+    ps->gm             = MODE_GAME;
+    ps->palookup       = playerColor;
+    ps->team           = playerTeam;
+    ps->aim_mode       = aimMode;
+    ps->auto_aim       = ud.config.AutoAim;
+    ps->weaponswitch   = weaponSwitch;
+    ps->newowner       = -1;
+    ps->holoduke_on    = -1;
+    ps->on_crane       = -1;
+    ps->dummyplayersprite = -1;
+    ps->wackedbyactor  = -1;
+    ps->somethingonplayer = -1;
+
+    if (g_player[playerNum].user_name[0] == '\0')
+        Bsnprintf(g_player[playerNum].user_name, sizeof(g_player[playerNum].user_name), "PLAYER %d", playerNum + 1);
+
+    spritetype * const pSprite = &sprite[spriteNum];
+    pSprite->picnum = APLAYER;
+    pSprite->yvel   = playerNum;
+    pSprite->owner  = spriteNum;
+    pSprite->pal    = playerColor;
+    if (pSprite->statnum != STAT_PLAYER)
+        changespritestat(spriteNum, STAT_PLAYER);
+
+    P_ResetPlayer(playerNum);
+
+    sprite[ps->i].picnum = APLAYER;
+    sprite[ps->i].yvel   = playerNum;
+    sprite[ps->i].owner  = ps->i;
+    sprite[ps->i].pal    = playerColor;
+    actor[ps->i].owner   = ps->i;
+
+    pub = NUMPAGES;
+    pus = NUMPAGES;
+    G_UpdateScreenArea();
 }
 
 void RedSplit_SetPlayerCount(int32_t const playerCount)
@@ -5203,7 +5378,7 @@ void RedSplit_SetPlayerCount(int32_t const playerCount)
     if (RedSplit_MenuInGame())
     {
         for (int32_t playerNum = oldPlayerCount; playerNum < clampedPlayerCount; ++playerNum)
-            P_ResetPlayer(playerNum);
+            RedSplit_InitJoinedPlayerInGame(playerNum);
 
         for (int32_t playerNum = clampedPlayerCount; playerNum < oldPlayerCount; ++playerNum)
             RedSplit_HidePlayerSprite(playerNum);
@@ -5906,6 +6081,8 @@ static int32_t Menu_EntryRangeDoubleModify(void /*MenuEntry_t *entry, double new
 static uint32_t save_xxh = 0;
 static bool g_saveMenuNeedsRefresh;
 static bool g_saveMenuActivatedDirectly;
+static int32_t g_savePreviewEntry = -2;
+static char g_savePreviewPath[BMAX_PATH];
 
 static MenuString_t *Menu_GetCurrentSaveStringEntry(void)
 {
@@ -5935,17 +6112,40 @@ static void Menu_SelectLastUserSave(void)
     }
 }
 
+static void Menu_UpdateSavePreviewForCurrentEntry(void)
+{
+    if (M_SAVE.currentEntry <= 0 || M_SAVE.currentEntry > (int32_t)g_nummenusaves)
+    {
+        g_savePreviewEntry = M_SAVE.currentEntry;
+        g_savePreviewPath[0] = '\0';
+        return;
+    }
+
+    savebrief_t & sv = g_menusaves[M_SAVE.currentEntry - 1].brief;
+    if (!sv.isValid())
+    {
+        g_savePreviewEntry = M_SAVE.currentEntry;
+        g_savePreviewPath[0] = '\0';
+        return;
+    }
+
+    if (g_savePreviewEntry == M_SAVE.currentEntry && strcmp(g_savePreviewPath, sv.path) == 0)
+        return;
+
+    if (G_LoadSaveHeaderNew(sv.path, &savehead) == 0)
+    {
+        g_savePreviewEntry = M_SAVE.currentEntry;
+        Bstrncpyz(g_savePreviewPath, sv.path, sizeof(g_savePreviewPath));
+    }
+}
+
 static void Menu_RefreshSaveMenuAfterSave(void)
 {
     Menu_SaveReadHeaders();
     Menu_SelectLastUserSave();
-
-    if (0 < M_SAVE.currentEntry && M_SAVE.currentEntry <= (int32_t)g_nummenusaves)
-    {
-        savebrief_t & sv = g_menusaves[M_SAVE.currentEntry - 1].brief;
-        if (sv.isValid())
-            G_LoadSaveHeaderNew(sv.path, &savehead);
-    }
+    g_savePreviewEntry = -2;
+    g_savePreviewPath[0] = '\0';
+    Menu_UpdateSavePreviewForCurrentEntry();
 }
 
 static void Menu_BuildAutoSaveName(char * const name, size_t const nameSize)
@@ -6712,6 +6912,8 @@ static void Menu_AboutToStartDisplaying(Menu_t * m)
             break;
 
         Menu_SaveReadHeaders();
+        g_savePreviewEntry = -2;
+        g_savePreviewPath[0] = '\0';
 
         if (g_lastusersave.isValid())
         {

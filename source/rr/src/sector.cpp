@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define sector_c_
 
 #include "duke3d.h"
+#include "cmdline.h"
 #include "input.h"
 
 // PRIMITIVE
@@ -69,6 +70,8 @@ int A_CallSound(int sectNum, int spriteNum)
     if (SFXsprite >= 0)
     {
         if (spriteNum == -1)
+            spriteNum = SFXsprite;
+        else if (g_fakeMultiMode >= 2 && (unsigned)spriteNum < MAXSPRITES && PN(spriteNum) == APLAYER)
             spriteNum = SFXsprite;
 
         if (T1(SFXsprite) == 0)
@@ -4830,11 +4833,35 @@ static int P_FindWall(DukePlayer_t *pPlayer, int *hitWall)
     return FindDistance2D(hitData.x - pPlayer->pos.x, hitData.y - pPlayer->pos.y);
 }
 
+static int P_HasClearNukeButtonPath(DukePlayer_t const * const pPlayer, int const buttonSprite)
+{
+    if ((unsigned)buttonSprite >= MAXSPRITES)
+        return 0;
+
+    spritetype const &s = sprite[buttonSprite];
+    hitdata_t hitData;
+    vec3_t const target = { s.x, s.y, s.z };
+    vec3_t const path = { target.x - pPlayer->pos.x, target.y - pPlayer->pos.y, target.z - pPlayer->pos.z };
+    int32_t const targetDist = FindDistance3D(path.x, path.y, path.z);
+
+    hitscan((const vec3_t *)pPlayer, pPlayer->cursectnum, path.x, path.y, path.z, &hitData, CLIPMASK1);
+
+    if (hitData.sprite == buttonSprite)
+        return 1;
+
+    int32_t const hitDist = FindDistance3D(hitData.x - pPlayer->pos.x, hitData.y - pPlayer->pos.y, hitData.z - pPlayer->pos.z);
+    if ((hitData.wall >= 0 || hitData.sprite >= 0) && hitDist + 32 < targetDist)
+        return 0;
+
+    return 1;
+}
+
 static int P_FindNearbyNukeButton(DukePlayer_t const * const pPlayer)
 {
     if (!REALITY || pPlayer == nullptr || pPlayer->cursectnum < 0)
         return -1;
 
+    static int const maxNukeButtonUseDist = 492; // 60% shorter than the previous helper range.
     int bestSprite = -1;
     int bestDist = INT32_MAX;
     int const playerAng = fix16_to_int(pPlayer->q16ang);
@@ -4847,7 +4874,7 @@ static int P_FindNearbyNukeButton(DukePlayer_t const * const pPlayer)
             continue;
 
         int const dist = FindDistance2D(s.x - pPlayer->pos.x, s.y - pPlayer->pos.y);
-        if (dist > 2048 || dist >= bestDist)
+        if (dist > maxNukeButtonUseDist || dist >= bestDist)
             continue;
 
         int const angDiff = klabs(G_GetAngleDelta(playerAng, getangle(s.x - pPlayer->pos.x, s.y - pPlayer->pos.y)));
@@ -4855,6 +4882,9 @@ static int P_FindNearbyNukeButton(DukePlayer_t const * const pPlayer)
             continue;
 
         if (!cansee(pPlayer->pos.x, pPlayer->pos.y, pPlayer->pos.z, pPlayer->cursectnum, s.x, s.y, s.z, s.sectnum))
+            continue;
+
+        if (!P_HasClearNukeButtonPath(pPlayer, spriteNum))
             continue;
 
         bestSprite = spriteNum;

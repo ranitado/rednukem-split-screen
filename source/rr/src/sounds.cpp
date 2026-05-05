@@ -794,10 +794,6 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t *pos)
 
     int const splitPlayerManaged = S_IsSplitPlayerManagedSound(sndNum);
 
-    if (g_fakeMultiMode >= 2 && (snd.m & (SF_LOOP|SF_MSFX|SF_TALK)) == 0 && !splitPlayerManaged
-        && S_GetSplitSoundPlayer(spriteNum, pos) != screenpeek)
-        return S_PlaySound(sndNum);
-
     if (S_IsSplitPlayerSprite(spriteNum) && (snd.m & (SF_LOOP|SF_MSFX)) == 0 && !splitPlayerManaged)
         return S_PlaySound(sndNum);
 
