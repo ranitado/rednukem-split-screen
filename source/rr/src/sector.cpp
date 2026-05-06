@@ -3764,7 +3764,7 @@ void P_HandleKeys(int playerNum)
     else
         pPlayer->dn64_374 = min(pPlayer->dn64_374+12, 0);
     pPlayer->interface_toggle_flag = max(pPlayer->interface_toggle_flag-1, 0);
-    if (!(playerBits & ((15u<<SK_WEAPON_BITS)|BIT(SK_STEROIDS)|BIT(SK_NIGHTVISION)|BIT(SK_MEDKIT)|BIT(SK_QUICK_KICK)| \
+    if (!(playerBits & ((15u<<SK_WEAPON_BITS)|BIT(SK_STEROIDS)|BIT(SK_NIGHTVISION)|BIT(SK_MEDKIT)| \
                    BIT(SK_HOLSTER)|BIT(SK_INV_LEFT)|BIT(SK_PAUSE)|BIT(SK_HOLODUKE)|BIT(SK_JETPACK)|BIT(SK_INV_RIGHT)| \
                    BIT(SK_TURNAROUND)|BIT(SK_INVENTORY)|BIT(SK_ESCAPE))))
     {
@@ -3894,8 +3894,10 @@ CHECKINV1:
             }
         }
 
+        int const weaponSelectDuringKick = pPlayer->quick_kick > 0 || pPlayer->last_quick_kick > 0 || pPlayer->curr_weapon == KNEE_WEAPON;
+
         if (pPlayer->last_pissed_time <= (GAMETICSPERSEC * 218) &&
-            pPlayer->kickback_pic == 0 && pPlayer->quick_kick == 0 && sprite[pPlayer->i].xrepeat > 32 && pPlayer->access_incs == 0 &&
+            (pPlayer->kickback_pic == 0 || weaponSelectDuringKick) && sprite[pPlayer->i].xrepeat > 32 && pPlayer->access_incs == 0 &&
             pPlayer->knee_incs == 0)
         {
             int weaponNum = ((playerBits & (15 << SK_WEAPON_BITS)) >> SK_WEAPON_BITS) - 1;
@@ -4178,7 +4180,7 @@ void P_HandleSharedKeys(int playerNum)
             }
     }
 
-    if (!(playerBits & ((15u<<SK_WEAPON_BITS)|BIT(SK_STEROIDS)|BIT(SK_NIGHTVISION)|BIT(SK_MEDKIT)|BIT(SK_QUICK_KICK)| \
+    if (!(playerBits & ((15u<<SK_WEAPON_BITS)|BIT(SK_STEROIDS)|BIT(SK_NIGHTVISION)|BIT(SK_MEDKIT)| \
                    BIT(SK_HOLSTER)|BIT(SK_INV_LEFT)|BIT(SK_PAUSE)|BIT(SK_HOLODUKE)|BIT(SK_JETPACK)|BIT(SK_INV_RIGHT)| \
                    BIT(SK_TURNAROUND)|BIT(SK_OPEN)|BIT(SK_INVENTORY)|BIT(SK_ESCAPE))))
         pPlayer->interface_toggle_flag = 0;
@@ -4335,7 +4337,7 @@ CHECKINV1:
         }
 
         if (pPlayer->last_pissed_time <= (GAMETICSPERSEC * 218) && pPlayer->show_empty_weapon == 0 &&
-            pPlayer->kickback_pic == 0 && pPlayer->quick_kick == 0 && sprite[pPlayer->i].xrepeat > (RR ? 8 :32) && pPlayer->access_incs == 0 &&
+            pPlayer->kickback_pic == 0 && sprite[pPlayer->i].xrepeat > (RR ? 8 :32) && pPlayer->access_incs == 0 &&
             pPlayer->knee_incs == 0)
         {
             if(  (pPlayer->weapon_pos == 0 || (pPlayer->holster_weapon && pPlayer->weapon_pos == WEAPON_POS_LOWER ) ))

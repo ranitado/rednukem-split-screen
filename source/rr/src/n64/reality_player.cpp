@@ -224,10 +224,11 @@ static int RT_P_DisplayKnuckles(int knuckleShade)
         return 0;
 
     int const knuckleY   = (klabs(pPlayer->look_ang) / 9) - (pPlayer->hard_landing << 3);
+    int const knuckleOffsetY = RT_RedSplitQuarterWeaponTweaksActive() ? 20 : 0;
     int const knucklePal = RT_P_GetHudPal(pPlayer);
 
     RT_DrawTileScaled(160 + (fix16_to_int(g_player[screenpeek].inputBits->q16avel) >> 5) - (pPlayer->look_ang >> 1),
-                     knuckleY + 180 - (fix16_to_int(pPlayer->q16horiz - pPlayer->q16horizoff) >> 4),
+                     knuckleY + 180 + knuckleOffsetY - (fix16_to_int(pPlayer->q16horiz - pPlayer->q16horizoff) >> 4),
                      CRACKKNUCKLES + knuckleFrames[pPlayer->knuckle_incs >> 1], knuckleShade, 4 + DRAWEAP_CENTER,
                      knucklePal);
 
@@ -426,13 +427,14 @@ void RT_P_DisplayWeapon(void)
     if (quickKickFrame != 14 && ud.drawweapon == 1)
     {
         int const kickOffsetX = (RT_RedSplitTwoPlayerWeaponTweaksActive() && currentWeapon != KNEE_WEAPON) ? g_redSplitWeaponKickArmedOffsetX : 0;
+        int const kickOffsetY = RT_RedSplitQuarterWeaponTweaksActive() ? 15 : 0;
         guniqhudid = 100;
 
         if (quickKickFrame < 5 || quickKickFrame > 9)
-            RT_DrawTileScaled(kickWeaponX + 35 + kickOffsetX - (pPlayer->look_ang >> 1), kickWeaponY + 321 - kickWeaponYOffset, KNEE, weaponShade,
+            RT_DrawTileScaled(kickWeaponX + 35 + kickOffsetX - (pPlayer->look_ang >> 1), kickWeaponY + 321 + kickOffsetY - kickWeaponYOffset, KNEE, weaponShade,
                                 weaponBits | 4 | DRAWEAP_CENTER, weaponPal);
         else
-            RT_DrawTileScaled(kickWeaponX + 115 - 16 + kickOffsetX - (pPlayer->look_ang >> 1), kickWeaponY + 285 - kickWeaponYOffset, KNEE + 1,
+            RT_DrawTileScaled(kickWeaponX + 115 - 16 + kickOffsetX - (pPlayer->look_ang >> 1), kickWeaponY + 285 + kickOffsetY - kickWeaponYOffset, KNEE + 1,
                                 weaponShade, weaponBits | 4 | DRAWEAP_CENTER, weaponPal);
         guniqhudid = 0;
     }
@@ -480,12 +482,13 @@ void RT_P_DisplayWeapon(void)
         case KNEE_WEAPON__STATIC:
         {
             int const kickOffsetX = RT_RedSplitTwoPlayerWeaponTweaksActive() ? g_redSplitWeaponKickUnarmedOffsetX : 0;
+            int const kickOffsetY = RT_RedSplitQuarterWeaponTweaksActive() ? 15 : 0;
             guniqhudid = currentWeapon;
             if (*weaponFrame < 5 || *weaponFrame > 9)
-                RT_DrawTileScaled(weaponX + 260 + kickOffsetX - halfLookAng, weaponY + 321 - weaponYOffset, KNEE,
+                RT_DrawTileScaled(weaponX + 260 + kickOffsetX - halfLookAng, weaponY + 321 + kickOffsetY - weaponYOffset, KNEE,
                                     weaponShade, weaponBits, weaponPal);
             else
-                RT_DrawTileScaled(weaponX + 200 + kickOffsetX - halfLookAng, weaponY + 285 - weaponYOffset, KNEE + 1,
+                RT_DrawTileScaled(weaponX + 200 + kickOffsetX - halfLookAng, weaponY + 285 + kickOffsetY - weaponYOffset, KNEE + 1,
                                     weaponShade, weaponBits, weaponPal);
             guniqhudid = 0;
             break;
