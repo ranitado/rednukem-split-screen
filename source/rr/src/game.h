@@ -93,6 +93,8 @@ extern int32_t g_redSplitWeaponQuarterLeftOffsetX;
 extern int32_t g_redSplitWeaponQuarterRightOffsetX;
 extern int32_t g_redSplitWeaponQuarterOffsetY;
 extern int32_t g_redSplitWeaponQuarterScalePercent;
+extern int32_t g_redSplitWeaponPerWeaponQuarterOffsetX[MAX_WEAPONS];
+extern int32_t g_redSplitWeaponPerWeaponQuarterOffsetY[MAX_WEAPONS];
 extern int32_t g_redSplitWeaponPerWeaponOffsetX[MAX_WEAPONS];
 extern int32_t g_redSplitWeaponPerWeaponOffsetY[MAX_WEAPONS];
 extern int32_t g_redSplitWeaponFlashWideOffsetX;

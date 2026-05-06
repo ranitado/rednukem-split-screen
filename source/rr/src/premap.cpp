@@ -823,6 +823,8 @@ void P_ResetPlayer(int playerNum)
     tmpvect.z += PHEIGHT;
 
     P_RandomSpawnPoint(playerNum);
+    if (g_fakeMultiMode)
+        tmpvect = pPlayer->pos;
 
     pPlayer->opos          = pPlayer->pos;
     pPlayer->bobpos        = *(vec2_t *)&pPlayer->pos;

@@ -171,6 +171,16 @@ static inline int RT_RedSplitWeaponTweaksActive(void)
     return g_fakeMultiMode > 1 && g_redSplitHudDrawingView >= 0;
 }
 
+static inline int RT_RedSplitQuarterWeaponTweaksActive(void)
+{
+    return RT_RedSplitWeaponTweaksActive() && (g_fakeMultiMode >= 4 || (g_fakeMultiMode == 3 && g_redSplitHudDrawingView > 0));
+}
+
+static inline int RT_RedSplitWideWeaponTweaksActive(void)
+{
+    return RT_RedSplitWeaponTweaksActive() && !RT_RedSplitQuarterWeaponTweaksActive();
+}
+
 static inline int RT_RedSplitTwoPlayerWeaponTweaksActive(void)
 {
     return RT_RedSplitWeaponTweaksActive() && g_fakeMultiMode == 2;
@@ -391,7 +401,7 @@ void RT_P_DisplayWeapon(void)
     kickWeaponY       = weaponY;
     kickWeaponYOffset = weaponYOffset;
 
-    if (RT_RedSplitWeaponTweaksActive() && (unsigned)currentWeapon < MAX_WEAPONS)
+    if (RT_RedSplitWideWeaponTweaksActive() && (unsigned)currentWeapon < MAX_WEAPONS)
     {
         weaponX += g_redSplitWeaponPerWeaponOffsetX[currentWeapon];
         weaponY += g_redSplitWeaponPerWeaponOffsetY[currentWeapon];
@@ -483,7 +493,7 @@ void RT_P_DisplayWeapon(void)
 
             if ((*weaponFrame) > 6)
                 weaponY += ((*weaponFrame) << 3);
-            int const tripTweaks = RT_RedSplitWeaponTweaksActive();
+            int const tripTweaks = RT_RedSplitWideWeaponTweaksActive();
             int const tripLeftOffsetX = tripTweaks ? g_redSplitWeaponTripLeftOffsetX : 0;
             int const tripLeftOffsetY = tripTweaks ? g_redSplitWeaponTripLeftOffsetY : 0;
             int const tripRightOffsetX = tripTweaks ? g_redSplitWeaponTripRightOffsetX : 0;
@@ -524,7 +534,7 @@ void RT_P_DisplayWeapon(void)
 
             int const rpgGroupX = weaponX + 249;
             int const rpgGroupY = (weaponY << 1) + 189 - weaponYOffset;
-            int const missileTweaks = RT_RedSplitWeaponTweaksActive();
+            int const missileTweaks = RT_RedSplitWideWeaponTweaksActive();
             int const missileRightOffsetX = missileTweaks ? g_redSplitWeaponMissileRightOffsetX : 0;
             int const missileRightOffsetY = missileTweaks ? g_redSplitWeaponMissileRightOffsetY : 0;
             int const missileRocketOffsetX = missileTweaks ? g_redSplitWeaponMissileRocketOffsetX : 0;
@@ -564,7 +574,7 @@ void RT_P_DisplayWeapon(void)
         case SHOTGUN_WEAPON__STATIC:
         case MOTORCYCLE_WEAPON__STATIC:
             weaponX -= 8;
-            if (RT_RedSplitWeaponTweaksActive() && currentWeapon == SHOTGUN_WEAPON)
+            if (RT_RedSplitWideWeaponTweaksActive() && currentWeapon == SHOTGUN_WEAPON)
                 weaponYOffset += 15;
 
             if (*weaponFrame > 3 && *weaponFrame < 8)
@@ -825,7 +835,7 @@ void RT_P_DisplayWeapon(void)
             }
             int const alienGroupX = weaponX + 206 - halfLookAng;
             int const alienGroupY = weaponY + 227 - weaponYOffset;
-            int const alienGlowTweaks = RT_RedSplitWeaponTweaksActive();
+            int const alienGlowTweaks = RT_RedSplitWideWeaponTweaksActive();
             int const alienGlowOffsetX = (alienGlowTweaks && (unsigned)currentWeapon < MAX_WEAPONS) ? g_redSplitWeaponAlienGlowOffsetX[currentWeapon] : 0;
             int const alienGlowOffsetY = alienGlowTweaks ? g_redSplitWeaponAlienGlowOffsetY : 0;
             int const alienGlowSmall1OffsetX = alienGlowTweaks ? g_redSplitWeaponAlienGlowSmall1OffsetX : 0;

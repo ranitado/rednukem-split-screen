@@ -4850,7 +4850,7 @@ static int P_HasClearNukeButtonPath(DukePlayer_t const * const pPlayer, int cons
         return 1;
 
     int32_t const hitDist = FindDistance3D(hitData.x - pPlayer->pos.x, hitData.y - pPlayer->pos.y, hitData.z - pPlayer->pos.z);
-    if ((hitData.wall >= 0 || hitData.sprite >= 0) && hitDist + 32 < targetDist)
+    if ((hitData.wall >= 0 || hitData.sprite >= 0) && hitDist < targetDist)
         return 0;
 
     return 1;
@@ -5273,6 +5273,9 @@ void P_CheckSectors(int playerNum)
                 int wallNum;
 
                 P_FindWall(pPlayer, &wallNum);
+
+                if (REALITY && !P_HasClearNukeButtonPath(pPlayer, nearSprite))
+                    return;
 
                 if ((wallNum >= 0 && wall[wallNum].overpicnum == 0) ||
                     (REALITY && cansee(pPlayer->pos.x, pPlayer->pos.y, pPlayer->pos.z, pPlayer->cursectnum,

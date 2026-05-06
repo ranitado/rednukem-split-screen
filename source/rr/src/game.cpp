@@ -1718,10 +1718,12 @@ int32_t g_redSplitWeaponPerWeaponWideOffsetX[MAX_WEAPONS] = { -39, -39, -39, -39
 int32_t g_redSplitWeaponWideTopOffsetY = 15;
 int32_t g_redSplitWeaponWideScalePercent = 70;
 int32_t g_redSplitWeaponPerWeaponWideScalePercent[MAX_WEAPONS] = { 70, 70, 70, 70, 70, 70, 70, 70, 97, 70, 70, 70, 70, 70, 70, 70, 70 };
-int32_t g_redSplitWeaponQuarterLeftOffsetX = 14;
-int32_t g_redSplitWeaponQuarterRightOffsetX = -10;
-int32_t g_redSplitWeaponQuarterOffsetY = 0;
-int32_t g_redSplitWeaponQuarterScalePercent = 55;
+int32_t g_redSplitWeaponQuarterLeftOffsetX = 12;
+int32_t g_redSplitWeaponQuarterRightOffsetX = 12;
+int32_t g_redSplitWeaponQuarterOffsetY = 10;
+int32_t g_redSplitWeaponQuarterScalePercent = 50;
+int32_t g_redSplitWeaponPerWeaponQuarterOffsetX[MAX_WEAPONS] = { 0 };
+int32_t g_redSplitWeaponPerWeaponQuarterOffsetY[MAX_WEAPONS] = { 0 };
 int32_t g_redSplitWeaponPerWeaponOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, -62, -2, 40, 36, 13 };
 int32_t g_redSplitWeaponPerWeaponOffsetY[MAX_WEAPONS] = { 0, 0, -2, -4, -10, -8, -28, -28, 14, -32, -14 };
 int32_t g_redSplitWeaponFlashWideOffsetX = 15;
@@ -1732,8 +1734,8 @@ int32_t g_redSplitWeaponFlashWideTopOffsetX = 0;
 int32_t g_redSplitWeaponFlashWideTopOffsetY = 0;
 int32_t g_redSplitWeaponFlashWideBottomOffsetX = 0;
 int32_t g_redSplitWeaponFlashWideBottomOffsetY = 0;
-int32_t g_redSplitWeaponFlashQuarterLeftOffsetX = 16;
-int32_t g_redSplitWeaponFlashQuarterRightOffsetX = 0;
+int32_t g_redSplitWeaponFlashQuarterLeftOffsetX = 12;
+int32_t g_redSplitWeaponFlashQuarterRightOffsetX = 12;
 int32_t g_redSplitWeaponFlashDualLeftOffsetX = 34;
 int32_t g_redSplitWeaponFlashDualRightOffsetX = 3;
 int32_t g_redSplitWeaponFlashPistolOffsetX = 0;
@@ -1929,6 +1931,7 @@ static int32_t g_redSplitHudTuningOpen = 0;
 static int32_t g_redSplitHudTuningSelection = 0;
 static int32_t g_redSplitWeaponTuningOpen = 0;
 static int32_t g_redSplitWeaponTuningSelection = 0;
+static int32_t g_redSplitDebugScreenType = 0;
 static int32_t g_redSplitWeaponDebugWeapon = PISTOL_WEAPON;
 static int32_t *g_redSplitWeaponDebugOffsetX = &g_redSplitWeaponPerWeaponOffsetX[PISTOL_WEAPON];
 static int32_t *g_redSplitWeaponDebugOffsetY = &g_redSplitWeaponPerWeaponOffsetY[PISTOL_WEAPON];
@@ -1968,7 +1971,63 @@ static int32_t g_redSplitHudAmmoTextScale = 66;
 static int32_t g_redSplitHudAccessIconX = 347;
 static int32_t g_redSplitHudAccessIconY = 71;
 static int32_t g_redSplitHudAccessIconScale = 45;
-static int32_t g_redSplitExtraMenuBgOpacity = 80;
+static int32_t g_redSplitExtraMenuBgOpacity = 75;
+static int32_t g_redSplitHudGlobalX = 0;
+static int32_t g_redSplitHudGlobalY = 0;
+static int32_t g_redSplitHudGlobalScale = 100;
+static int32_t g_redSplitHudTextSpacing = 0;
+
+static int32_t g_redSplitHudQuarterHealthIconX = 11;
+static int32_t g_redSplitHudQuarterHealthIconY = 88;
+static int32_t g_redSplitHudQuarterHealthIconScale = 91;
+static int32_t g_redSplitHudQuarterHealthTextX = 34;
+static int32_t g_redSplitHudQuarterHealthTextY = 90;
+static int32_t g_redSplitHudQuarterHealthTextScale = 90;
+static int32_t g_redSplitHudQuarterArmorIconX = 78;
+static int32_t g_redSplitHudQuarterArmorIconY = 87;
+static int32_t g_redSplitHudQuarterArmorIconScale = 73;
+static int32_t g_redSplitHudQuarterArmorTextX = 101;
+static int32_t g_redSplitHudQuarterArmorTextY = 90;
+static int32_t g_redSplitHudQuarterArmorTextScale = 90;
+static int32_t g_redSplitHudQuarterAmmoIconX = 246;
+static int32_t g_redSplitHudQuarterAmmoIconY = 87;
+static int32_t g_redSplitHudQuarterAmmoIconScale = 36;
+static int32_t g_redSplitHudQuarterAmmoTextX = 306;
+static int32_t g_redSplitHudQuarterAmmoTextY = 88;
+static int32_t g_redSplitHudQuarterAmmoTextScale = 90;
+static int32_t g_redSplitHudQuarterAccessIconX = 283;
+static int32_t g_redSplitHudQuarterAccessIconY = 76;
+static int32_t g_redSplitHudQuarterAccessIconScale = 57;
+static int32_t g_redSplitHudQuarterGlobalX = 0;
+static int32_t g_redSplitHudQuarterGlobalY = 2;
+static int32_t g_redSplitHudQuarterGlobalScale = 100;
+static int32_t g_redSplitHudQuarterTextSpacing = 5;
+
+static int32_t *g_redSplitHudDebugHealthIconX = &g_redSplitHudHealthIconX;
+static int32_t *g_redSplitHudDebugHealthIconY = &g_redSplitHudHealthIconY;
+static int32_t *g_redSplitHudDebugHealthIconScale = &g_redSplitHudHealthIconScale;
+static int32_t *g_redSplitHudDebugHealthTextX = &g_redSplitHudHealthTextX;
+static int32_t *g_redSplitHudDebugHealthTextY = &g_redSplitHudHealthTextY;
+static int32_t *g_redSplitHudDebugHealthTextScale = &g_redSplitHudHealthTextScale;
+static int32_t *g_redSplitHudDebugArmorIconX = &g_redSplitHudArmorIconX;
+static int32_t *g_redSplitHudDebugArmorIconY = &g_redSplitHudArmorIconY;
+static int32_t *g_redSplitHudDebugArmorIconScale = &g_redSplitHudArmorIconScale;
+static int32_t *g_redSplitHudDebugArmorTextX = &g_redSplitHudArmorTextX;
+static int32_t *g_redSplitHudDebugArmorTextY = &g_redSplitHudArmorTextY;
+static int32_t *g_redSplitHudDebugArmorTextScale = &g_redSplitHudArmorTextScale;
+static int32_t *g_redSplitHudDebugAmmoIconX = &g_redSplitHudAmmoIconX;
+static int32_t *g_redSplitHudDebugAmmoIconY = &g_redSplitHudAmmoIconY;
+static int32_t *g_redSplitHudDebugAmmoIconScale = &g_redSplitHudAmmoIconScale;
+static int32_t *g_redSplitHudDebugAmmoTextX = &g_redSplitHudAmmoTextX;
+static int32_t *g_redSplitHudDebugAmmoTextY = &g_redSplitHudAmmoTextY;
+static int32_t *g_redSplitHudDebugAmmoTextScale = &g_redSplitHudAmmoTextScale;
+static int32_t *g_redSplitHudDebugAccessIconX = &g_redSplitHudAccessIconX;
+static int32_t *g_redSplitHudDebugAccessIconY = &g_redSplitHudAccessIconY;
+static int32_t *g_redSplitHudDebugAccessIconScale = &g_redSplitHudAccessIconScale;
+static int32_t *g_redSplitHudDebugGlobalX = &g_redSplitHudGlobalX;
+static int32_t *g_redSplitHudDebugGlobalY = &g_redSplitHudGlobalY;
+static int32_t *g_redSplitHudDebugGlobalScale = &g_redSplitHudGlobalScale;
+static int32_t *g_redSplitHudDebugTextSpacing = &g_redSplitHudTextSpacing;
 
 static int32_t const g_redSplitHudHealthIconTiles[] = { FIRSTAID, FIRSTAID_ICON, SIXPAK, COLA, ATOMICHEALTH };
 
@@ -1981,32 +2040,38 @@ struct RedSplitHudTuningParam_t
 };
 
 static RedSplitHudTuningParam_t g_redSplitHudTuningParams[] = {
+    { "Screen 0=1/2 1=1/4", &g_redSplitDebugScreenType, 0, 1 },
     { "Health icon tile", &g_redSplitHudHealthIconTile, 0, (int32_t)ARRAY_SIZE(g_redSplitHudHealthIconTiles) - 1 },
-    { "Health icon X", &g_redSplitHudHealthIconX, -220, 560 },
-    { "Health icon Y", &g_redSplitHudHealthIconY, -40, 140 },
-    { "Health icon scale", &g_redSplitHudHealthIconScale, 1, 140 },
-    { "Health text X", &g_redSplitHudHealthTextX, -220, 560 },
-    { "Health text Y", &g_redSplitHudHealthTextY, -40, 140 },
-    { "Health text scale", &g_redSplitHudHealthTextScale, 1, 140 },
-    { "Armor icon X", &g_redSplitHudArmorIconX, -220, 560 },
-    { "Armor icon Y", &g_redSplitHudArmorIconY, -40, 140 },
-    { "Armor icon scale", &g_redSplitHudArmorIconScale, 1, 140 },
-    { "Armor text X", &g_redSplitHudArmorTextX, -220, 560 },
-    { "Armor text Y", &g_redSplitHudArmorTextY, -40, 140 },
-    { "Armor text scale", &g_redSplitHudArmorTextScale, 1, 140 },
-    { "Ammo icon X", &g_redSplitHudAmmoIconX, -220, 560 },
-    { "Ammo icon Y", &g_redSplitHudAmmoIconY, -40, 140 },
-    { "Ammo icon scale", &g_redSplitHudAmmoIconScale, 1, 140 },
-    { "Ammo text X", &g_redSplitHudAmmoTextX, -220, 560 },
-    { "Ammo text Y", &g_redSplitHudAmmoTextY, -40, 140 },
-    { "Ammo text scale", &g_redSplitHudAmmoTextScale, 1, 140 },
-    { "Access icon X", &g_redSplitHudAccessIconX, -220, 560 },
-    { "Access icon Y", &g_redSplitHudAccessIconY, -40, 140 },
-    { "Access icon scale", &g_redSplitHudAccessIconScale, 1, 140 },
+    { "Health icon X", g_redSplitHudDebugHealthIconX, -220, 560 },
+    { "Health icon Y", g_redSplitHudDebugHealthIconY, -40, 140 },
+    { "Health icon scale", g_redSplitHudDebugHealthIconScale, 1, 180 },
+    { "Health text X", g_redSplitHudDebugHealthTextX, -220, 560 },
+    { "Health text Y", g_redSplitHudDebugHealthTextY, -40, 140 },
+    { "Health text scale", g_redSplitHudDebugHealthTextScale, 1, 180 },
+    { "Armor icon X", g_redSplitHudDebugArmorIconX, -220, 560 },
+    { "Armor icon Y", g_redSplitHudDebugArmorIconY, -40, 140 },
+    { "Armor icon scale", g_redSplitHudDebugArmorIconScale, 1, 180 },
+    { "Armor text X", g_redSplitHudDebugArmorTextX, -220, 560 },
+    { "Armor text Y", g_redSplitHudDebugArmorTextY, -40, 140 },
+    { "Armor text scale", g_redSplitHudDebugArmorTextScale, 1, 180 },
+    { "Ammo icon X", g_redSplitHudDebugAmmoIconX, -220, 560 },
+    { "Ammo icon Y", g_redSplitHudDebugAmmoIconY, -40, 140 },
+    { "Ammo icon scale", g_redSplitHudDebugAmmoIconScale, 1, 180 },
+    { "Ammo text X", g_redSplitHudDebugAmmoTextX, -220, 560 },
+    { "Ammo text Y", g_redSplitHudDebugAmmoTextY, -40, 140 },
+    { "Ammo text scale", g_redSplitHudDebugAmmoTextScale, 1, 180 },
+    { "Access icon X", g_redSplitHudDebugAccessIconX, -220, 560 },
+    { "Access icon Y", g_redSplitHudDebugAccessIconY, -40, 140 },
+    { "Access icon scale", g_redSplitHudDebugAccessIconScale, 1, 180 },
+    { "HUD all X", g_redSplitHudDebugGlobalX, -220, 220 },
+    { "HUD all Y", g_redSplitHudDebugGlobalY, -120, 120 },
+    { "HUD all scale", g_redSplitHudDebugGlobalScale, 50, 200 },
+    { "HUD text spacing", g_redSplitHudDebugTextSpacing, -8, 20 },
     { "Extra bg opacity", &g_redSplitExtraMenuBgOpacity, 0, 100 },
 };
 
 static RedSplitHudTuningParam_t g_redSplitWeaponTuningParams[] = {
+    { "Screen 0=1/2 1=1/4", &g_redSplitDebugScreenType, 0, 1 },
     { "Weapon", &g_redSplitWeaponDebugWeapon, 0, MAX_WEAPONS - 1 },
     { "Weapon X", g_redSplitWeaponDebugOffsetX, -220, 220 },
     { "Weapon Y", g_redSplitWeaponDebugOffsetY, -160, 180 },
@@ -2060,6 +2125,7 @@ void RedSplit_OpenExtraMenu(int32_t const playerNum)
     g_redSplitExtraMenuPlayer = playerNum;
     g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_MAIN;
     g_redSplitExtraMenuSelection = 0;
+    S_MenuSound();
 }
 
 void RedSplit_CloseExtraMenu(void)
@@ -2246,6 +2312,11 @@ static int32_t RedSplit_ViewHeight(RedSplitViewport_t const &view)
     return view.y2 - view.y1 + 1;
 }
 
+static int32_t RedSplit_IsQuarterViewport(RedSplitViewport_t const &view)
+{
+    return RedSplit_ViewWidth(view) < scale(xdim, 75, 100) && RedSplit_ViewHeight(view) < scale(ydim, 75, 100);
+}
+
 static int32_t RedSplit_ToVirtualX(int32_t const absoluteX)
 {
     return scale(absoluteX, 320, xdim);
@@ -2271,6 +2342,16 @@ static int32_t RedSplit_ViewScalePercent(RedSplitViewport_t const &view, int32_t
     int32_t const widthPercent  = scale(RedSplit_ViewWidth(view), 100, xdim);
     int32_t const heightPercent = scale(RedSplit_ViewHeight(view), 200, ydim);
     return scale(basePercent, min(widthPercent, heightPercent), 100);
+}
+
+static int32_t RedSplit_HudRotateFlags(RedSplitViewport_t const &view)
+{
+    return 2 | 8 | 16 | ROTATESPRITE_FULL16 | (RedSplit_IsQuarterViewport(view) ? RS_STRETCH : 0);
+}
+
+static int32_t RedSplit_HudTextRotateFlags(void)
+{
+    return 2 | 8 | 16 | ROTATESPRITE_FULL16;
 }
 
 static bool RedSplit_DrawScreenBlackRectangle(int32_t const left, int32_t const top, int32_t const right, int32_t const bottom)
@@ -2393,19 +2474,102 @@ static void RedSplit_DrawExtraMenuText(RedSplitViewport_t const &view, int32_t c
     int32_t const zoom = scale(MF_Redfont.zoom, scalePercent, 100);
 
     G_ScreenText(MF_Redfont.tilenum, RedSplit_ViewXFrom320(view, 160) << 16, RedSplit_ViewYFrom100(view, y) << 16, zoom, 0, 0, text, shade, pal,
-        2 | 8 | 16 | ROTATESPRITE_FULL16, 0, scale(MF_Redfont.emptychar.x, scalePercent, 100), scale(MF_Redfont.emptychar.y, scalePercent, 100),
+        RedSplit_HudRotateFlags(view), 0, scale(MF_Redfont.emptychar.x, scalePercent, 100), scale(MF_Redfont.emptychar.y, scalePercent, 100),
         scale(MF_Redfont.between.x, scalePercent, 100), scale(MF_Redfont.between.y, scalePercent, 100),
         MF_Redfont.textflags | TEXT_XCENTER | TEXT_LITERALESCAPE | TEXT_RRMENUTEXTHACK,
           view.x1, view.y1, view.x2, view.y2);
 }
 
+static int32_t RedSplit_HudTextTile(char ch)
+{
+    if (ch >= 'a' && ch <= 'z')
+        ch = ch - 'a' + 'A';
+
+    if (ch >= '0' && ch <= '9')
+        return MF_Redfont.tilenum - 10 + (ch - '0');
+    if (ch >= 'A' && ch <= 'Z')
+        return MF_Redfont.tilenum + (ch - 'A');
+
+    switch (ch)
+    {
+    case '-':
+        return MF_Redfont.tilenum - 11;
+    case '%':
+        return MF_Redfont.tilenum + 69;
+    default:
+        return -1;
+    }
+}
+
+static int32_t RedSplit_HudTextGlyphAdvance(char ch, int32_t const zoom)
+{
+    int32_t const tile = RedSplit_HudTextTile(ch);
+
+    if (tile < 0 || (unsigned)tile >= MAXTILES || tilesiz[tile].x <= 0)
+        return mulscale16(5, zoom);
+
+    return max<int32_t>(1, mulscale16(tilesiz[tile].x + 1, zoom));
+}
+
+static int32_t RedSplit_HudTextWidth(char const * const text, int32_t const zoom, int32_t const charSpacing)
+{
+    int32_t width = 0;
+
+    for (char const *ch = text; ch != nullptr && *ch != '\0'; ++ch)
+    {
+        width += RedSplit_HudTextGlyphAdvance(*ch, zoom);
+        if (*(ch + 1) != '\0')
+            width += charSpacing;
+    }
+
+    return width;
+}
+
+static void RedSplit_DrawMinimalHudTextSprites(RedSplitViewport_t const &view, int32_t x, int32_t const y, char const * const text,
+                                               int32_t const flags, int32_t const baseScalePercent)
+{
+    if (text == nullptr)
+        return;
+
+    int32_t const scalePercent = RedSplit_ViewScalePercent(view, baseScalePercent);
+    int32_t const zoom = scale(65536, scalePercent, 100);
+    int32_t const charSpacing = RedSplit_IsQuarterViewport(view) ? g_redSplitHudQuarterTextSpacing : g_redSplitHudTextSpacing;
+
+    if (flags & TEXT_XRIGHT)
+        x -= RedSplit_HudTextWidth(text, zoom, charSpacing);
+    else if (flags & TEXT_XCENTER)
+        x -= RedSplit_HudTextWidth(text, zoom, charSpacing) / 2;
+
+    for (char const *ch = text; *ch != '\0'; ++ch)
+    {
+        int32_t const tile = RedSplit_HudTextTile(*ch);
+
+        if (tile >= 0 && (unsigned)tile < MAXTILES && tilesiz[tile].x > 0 && tilesiz[tile].y > 0)
+        {
+            rotatesprite_(RedSplit_ViewXFrom320(view, x) << 16, RedSplit_ViewYFrom100(view, y) << 16,
+                zoom, 0, tile, 0, MF_Redfont.pal_deselected, RedSplit_HudRotateFlags(view),
+                0, 0, view.x1, view.y1, view.x2, view.y2);
+        }
+
+        x += RedSplit_HudTextGlyphAdvance(*ch, zoom);
+        if (*(ch + 1) != '\0')
+            x += charSpacing;
+    }
+}
+
 static void RedSplit_DrawMinimalHudText(RedSplitViewport_t const &view, int32_t const x, int32_t const y, char const * const text, int32_t const flags = 0, int32_t const baseScalePercent = 66)
 {
+    if (RedSplit_IsQuarterViewport(view))
+    {
+        RedSplit_DrawMinimalHudTextSprites(view, x, y, text, flags, baseScalePercent);
+        return;
+    }
+
     int32_t const scalePercent = RedSplit_ViewScalePercent(view, baseScalePercent);
     int32_t const zoom = scale(MF_Redfont.zoom, scalePercent, 100);
 
     G_ScreenText(MF_Redfont.tilenum, RedSplit_ViewXFrom320(view, x) << 16, RedSplit_ViewYFrom100(view, y) << 16, zoom, 0, 0, text, 0, MF_Redfont.pal_deselected,
-        2 | 8 | 16 | ROTATESPRITE_FULL16, 0,
+        RedSplit_HudTextRotateFlags(), 0,
         scale(MF_Redfont.emptychar.x, scalePercent, 100), scale(MF_Redfont.emptychar.y, scalePercent, 100),
         scale(MF_Redfont.between.x, scalePercent, 100), scale(MF_Redfont.between.y, scalePercent, 100),
         MF_Redfont.textflags | TEXT_LITERALESCAPE | TEXT_RRMENUTEXTHACK | flags,
@@ -2419,15 +2583,111 @@ static void RedSplit_DrawMinimalHudTile(RedSplitViewport_t const &view, int32_t 
 
     rotatesprite_(RedSplit_ViewXFrom320(view, x) << 16, RedSplit_ViewYFrom100(view, y) << 16,
         scale(65536, RedSplit_ViewScalePercent(view, scalePercent), 100), 0, tile, 0, pal,
-        2 | 8 | 16 | ROTATESPRITE_FULL16, 0, 0, view.x1, view.y1, view.x2, view.y2);
+        RedSplit_HudRotateFlags(view), 0, 0, view.x1, view.y1, view.x2, view.y2);
 }
 
-static int32_t RedSplit_HudAmmoIconScaleForWeapon(int32_t const weaponNum)
+struct RedSplitMinimalHudLayout_t
+{
+    int32_t healthIconX, healthIconY, healthIconScale;
+    int32_t healthTextX, healthTextY, healthTextScale;
+    int32_t armorIconX, armorIconY, armorIconScale;
+    int32_t armorTextX, armorTextY, armorTextScale;
+    int32_t ammoIconX, ammoIconY, ammoIconScale;
+    int32_t ammoTextX, ammoTextY, ammoTextScale;
+    int32_t accessIconX, accessIconY, accessIconScale;
+    int32_t inventoryIconX, inventoryIconY, inventoryIconScale;
+    int32_t inventoryTextX, inventoryTextY, inventoryTextScale;
+    int32_t inventoryStateX, inventoryStateY, inventoryStateScale;
+};
+
+static void RedSplit_ApplyMinimalHudGlobal(int32_t &x, int32_t &y, int32_t &scalePercent, int32_t const globalX, int32_t const globalY, int32_t const globalScale)
+{
+    x = 160 + ::scale(x - 160, globalScale, 100) + globalX;
+    y = 100 + ::scale(y - 100, globalScale, 100) + globalY;
+    scalePercent = ::scale(scalePercent, globalScale, 100);
+}
+
+static RedSplitMinimalHudLayout_t RedSplit_MinimalHudLayout(RedSplitViewport_t const &view)
+{
+    int32_t globalX = g_redSplitHudGlobalX;
+    int32_t globalY = g_redSplitHudGlobalY;
+    int32_t globalScale = g_redSplitHudGlobalScale;
+    RedSplitMinimalHudLayout_t layout = {
+        g_redSplitHudHealthIconX, g_redSplitHudHealthIconY, g_redSplitHudHealthIconScale,
+        g_redSplitHudHealthTextX, g_redSplitHudHealthTextY, g_redSplitHudHealthTextScale,
+        g_redSplitHudArmorIconX, g_redSplitHudArmorIconY, g_redSplitHudArmorIconScale,
+        g_redSplitHudArmorTextX, g_redSplitHudArmorTextY, g_redSplitHudArmorTextScale,
+        g_redSplitHudAmmoIconX, g_redSplitHudAmmoIconY, g_redSplitHudAmmoIconScale,
+        g_redSplitHudAmmoTextX, g_redSplitHudAmmoTextY, g_redSplitHudAmmoTextScale,
+        g_redSplitHudAccessIconX, g_redSplitHudAccessIconY, g_redSplitHudAccessIconScale,
+        284, 72, 34,
+        324, 73, 50,
+        324, 62, 42,
+    };
+
+    if (RedSplit_IsQuarterViewport(view))
+    {
+        globalX = g_redSplitHudQuarterGlobalX;
+        globalY = g_redSplitHudQuarterGlobalY;
+        globalScale = g_redSplitHudQuarterGlobalScale;
+
+        layout.healthIconX = g_redSplitHudQuarterHealthIconX;
+        layout.healthIconY = g_redSplitHudQuarterHealthIconY;
+        layout.healthIconScale = g_redSplitHudQuarterHealthIconScale;
+        layout.healthTextX = g_redSplitHudQuarterHealthTextX;
+        layout.healthTextY = g_redSplitHudQuarterHealthTextY;
+        layout.healthTextScale = g_redSplitHudQuarterHealthTextScale;
+
+        layout.armorIconX = g_redSplitHudQuarterArmorIconX;
+        layout.armorIconY = g_redSplitHudQuarterArmorIconY;
+        layout.armorIconScale = g_redSplitHudQuarterArmorIconScale;
+        layout.armorTextX = g_redSplitHudQuarterArmorTextX;
+        layout.armorTextY = g_redSplitHudQuarterArmorTextY;
+        layout.armorTextScale = g_redSplitHudQuarterArmorTextScale;
+
+        layout.ammoIconX = g_redSplitHudQuarterAmmoIconX;
+        layout.ammoIconY = g_redSplitHudQuarterAmmoIconY;
+        layout.ammoIconScale = g_redSplitHudQuarterAmmoIconScale;
+        layout.ammoTextX = g_redSplitHudQuarterAmmoTextX;
+        layout.ammoTextY = g_redSplitHudQuarterAmmoTextY;
+        layout.ammoTextScale = g_redSplitHudQuarterAmmoTextScale;
+
+        layout.accessIconX = g_redSplitHudQuarterAccessIconX;
+        layout.accessIconY = g_redSplitHudQuarterAccessIconY;
+        layout.accessIconScale = g_redSplitHudQuarterAccessIconScale;
+
+        layout.inventoryIconX = 208;
+        layout.inventoryIconY = 67;
+        layout.inventoryIconScale = 30;
+        layout.inventoryTextX = 236;
+        layout.inventoryTextY = 72;
+        layout.inventoryTextScale = 42;
+        layout.inventoryStateX = 236;
+        layout.inventoryStateY = 62;
+        layout.inventoryStateScale = 36;
+    }
+
+    globalScale = clamp<int32_t>(globalScale, 50, 200);
+    RedSplit_ApplyMinimalHudGlobal(layout.healthIconX, layout.healthIconY, layout.healthIconScale, globalX, globalY, globalScale);
+    RedSplit_ApplyMinimalHudGlobal(layout.healthTextX, layout.healthTextY, layout.healthTextScale, globalX, globalY, globalScale);
+    RedSplit_ApplyMinimalHudGlobal(layout.armorIconX, layout.armorIconY, layout.armorIconScale, globalX, globalY, globalScale);
+    RedSplit_ApplyMinimalHudGlobal(layout.armorTextX, layout.armorTextY, layout.armorTextScale, globalX, globalY, globalScale);
+    RedSplit_ApplyMinimalHudGlobal(layout.ammoIconX, layout.ammoIconY, layout.ammoIconScale, globalX, globalY, globalScale);
+    RedSplit_ApplyMinimalHudGlobal(layout.ammoTextX, layout.ammoTextY, layout.ammoTextScale, globalX, globalY, globalScale);
+    RedSplit_ApplyMinimalHudGlobal(layout.accessIconX, layout.accessIconY, layout.accessIconScale, globalX, globalY, globalScale);
+    RedSplit_ApplyMinimalHudGlobal(layout.inventoryIconX, layout.inventoryIconY, layout.inventoryIconScale, globalX, globalY, globalScale);
+    RedSplit_ApplyMinimalHudGlobal(layout.inventoryTextX, layout.inventoryTextY, layout.inventoryTextScale, globalX, globalY, globalScale);
+    RedSplit_ApplyMinimalHudGlobal(layout.inventoryStateX, layout.inventoryStateY, layout.inventoryStateScale, globalX, globalY, globalScale);
+
+    return layout;
+}
+
+static int32_t RedSplit_HudAmmoIconScaleForWeapon(int32_t const weaponNum, int32_t const baseScale)
 {
     if (weaponNum == PISTOL_WEAPON)
-        return g_redSplitHudAmmoIconScale;
+        return baseScale;
 
-    return scale(g_redSplitHudAmmoIconScale, 160, 100);
+    return scale(baseScale, 160, 100);
 }
 
 static int32_t RedSplit_HudAmmoIconForWeapon(int32_t const weaponNum)
@@ -2481,11 +2741,26 @@ static int32_t RedSplit_HudAccessPal(int32_t const accessBit)
     return accessBit == 1 ? 0 : accessBit == 2 ? 21 : 23;
 }
 
-static void RedSplit_DrawMinimalHudAccessCards(DukePlayer_t const * const p, RedSplitViewport_t const &view)
+static int32_t RedSplit_HudAccessOffsetX(int32_t const accessBit)
+{
+    if (!REALITY)
+        return 0;
+
+    // Duke 64 uses separate card tiles; their art is not centered the same way.
+    return accessBit == 1 ? -5 : 0;
+}
+
+static int32_t RedSplit_HudAccessOffsetY(int32_t const accessBit)
+{
+    if (!REALITY)
+        return -2;
+
+    return accessBit == 4 ? -5 : -2;
+}
+
+static void RedSplit_DrawMinimalHudAccessCards(DukePlayer_t const * const p, RedSplitViewport_t const &view, RedSplitMinimalHudLayout_t const &layout)
 {
     static int32_t const cardBits[] = { 1, 2, 4 };
-    static int32_t const cardOffsetX[] = { 0, 0, 0 };
-    static int32_t const cardOffsetY[] = { -2, -2, -2 };
 
     int32_t const accessBits = RedSplit_HudAccessBits(p);
 
@@ -2495,9 +2770,83 @@ static void RedSplit_DrawMinimalHudAccessCards(DukePlayer_t const * const p, Red
         if ((accessBits & accessBit) == 0)
             continue;
 
-        RedSplit_DrawMinimalHudTile(view, g_redSplitHudAccessIconX + cardOffsetX[i], g_redSplitHudAccessIconY + cardOffsetY[i],
-                                    RedSplit_HudAccessTile(accessBit), g_redSplitHudAccessIconScale, RedSplit_HudAccessPal(accessBit));
+        RedSplit_DrawMinimalHudTile(view, layout.accessIconX + RedSplit_HudAccessOffsetX(accessBit),
+                                    layout.accessIconY + RedSplit_HudAccessOffsetY(accessBit),
+                                    RedSplit_HudAccessTile(accessBit), layout.accessIconScale, RedSplit_HudAccessPal(accessBit));
     }
+}
+
+struct RedSplitHudInventory_t
+{
+    int32_t tile;
+    int32_t amount;
+    char const *state;
+};
+
+static RedSplitHudInventory_t RedSplit_HudInventory(DukePlayer_t const * const p)
+{
+    RedSplitHudInventory_t inv = { 0, 0, nullptr };
+
+    if (p == nullptr)
+        return inv;
+
+    switch (p->inven_icon)
+    {
+        case ICON_FIRSTAID:
+            inv.tile = FIRSTAID;
+            inv.amount = p->inv_amount[GET_FIRSTAID];
+            break;
+        case ICON_STEROIDS:
+            inv.tile = STEROIDS;
+            inv.amount = (p->inv_amount[GET_STEROIDS] + 3) / 4;
+            inv.state = inv.amount < 100 ? "ON" : "OFF";
+            break;
+        case ICON_HOLODUKE:
+            inv.tile = HOLODUKE;
+            inv.amount = (p->inv_amount[GET_HOLODUKE] + 15) / 24;
+            inv.state = p->holoduke_on > 0 ? "ON" : "OFF";
+            break;
+        case ICON_JETPACK:
+            inv.tile = JETPACK;
+            inv.amount = (p->inv_amount[GET_JETPACK] + 15) / 16;
+            inv.state = p->jetpack_on != 0 ? "ON" : "OFF";
+            break;
+        case ICON_HEATS:
+            inv.tile = HEATSENSOR;
+            inv.amount = p->inv_amount[GET_HEATS] / 12;
+            inv.state = p->heat_on != 0 ? "ON" : "OFF";
+            break;
+        case ICON_SCUBA:
+            inv.tile = AIRTANK;
+            inv.amount = (p->inv_amount[GET_SCUBA] + 63) / 64;
+            inv.state = "AUTO";
+            break;
+        case ICON_BOOTS:
+            inv.tile = BOOTS;
+            inv.amount = p->inv_amount[GET_BOOTS] / 2;
+            inv.state = "AUTO";
+            break;
+        default:
+            break;
+    }
+
+    return inv;
+}
+
+static void RedSplit_DrawMinimalHudInventory(DukePlayer_t const * const p, RedSplitViewport_t const &view, RedSplitMinimalHudLayout_t const &layout)
+{
+    RedSplitHudInventory_t const inv = RedSplit_HudInventory(p);
+
+    if (inv.tile <= 0 || inv.amount <= 0)
+        return;
+
+    char value[16];
+    RedSplit_DrawMinimalHudTile(view, layout.inventoryIconX, layout.inventoryIconY, inv.tile, layout.inventoryIconScale);
+    Bsprintf(value, "%d%%", inv.amount);
+    RedSplit_DrawMinimalHudText(view, layout.inventoryTextX, layout.inventoryTextY, value, TEXT_XRIGHT, layout.inventoryTextScale);
+
+    if (inv.state != nullptr)
+        RedSplit_DrawMinimalHudText(view, layout.inventoryStateX, layout.inventoryStateY, inv.state, TEXT_XRIGHT, layout.inventoryStateScale);
 }
 
 static void RedSplit_DrawMinimalHudForPlayer(int32_t const playerNum, RedSplitViewport_t const &view)
@@ -2518,24 +2867,27 @@ static void RedSplit_DrawMinimalHudForPlayer(int32_t const playerNum, RedSplitVi
 
     int32_t const hasAmmoHud = weaponNum != KNEE_WEAPON && weaponNum >= 0 && weaponNum < MAX_WEAPONS;
     int32_t const ammo = hasAmmoHud ? p->ammo_amount[weaponNum] : 0;
+    RedSplitMinimalHudLayout_t const layout = RedSplit_MinimalHudLayout(view);
     char value[16];
 
-    RedSplit_DrawMinimalHudTile(view, g_redSplitHudHealthIconX, g_redSplitHudHealthIconY, RedSplit_HudHealthIconTile(), g_redSplitHudHealthIconScale);
-    RedSplit_DrawMinimalHudTile(view, g_redSplitHudArmorIconX, g_redSplitHudArmorIconY, SHIELD, g_redSplitHudArmorIconScale);
+    RedSplit_DrawMinimalHudTile(view, layout.healthIconX, layout.healthIconY, RedSplit_HudHealthIconTile(), layout.healthIconScale);
+    RedSplit_DrawMinimalHudTile(view, layout.armorIconX, layout.armorIconY, SHIELD, layout.armorIconScale);
     if (hasAmmoHud)
-        RedSplit_DrawMinimalHudTile(view, g_redSplitHudAmmoIconX, g_redSplitHudAmmoIconY, RedSplit_HudAmmoIconForWeapon(weaponNum), RedSplit_HudAmmoIconScaleForWeapon(weaponNum));
-    RedSplit_DrawMinimalHudAccessCards(p, view);
+        RedSplit_DrawMinimalHudTile(view, layout.ammoIconX, layout.ammoIconY, RedSplit_HudAmmoIconForWeapon(weaponNum),
+                                    RedSplit_HudAmmoIconScaleForWeapon(weaponNum, layout.ammoIconScale));
+    RedSplit_DrawMinimalHudAccessCards(p, view, layout);
+    RedSplit_DrawMinimalHudInventory(p, view, layout);
 
     Bsprintf(value, "%d", p->last_extra);
-    RedSplit_DrawMinimalHudText(view, g_redSplitHudHealthTextX, g_redSplitHudHealthTextY, value, 0, g_redSplitHudHealthTextScale);
+    RedSplit_DrawMinimalHudText(view, layout.healthTextX, layout.healthTextY, value, 0, layout.healthTextScale);
 
     Bsprintf(value, "%d", p->inv_amount[GET_SHIELD]);
-    RedSplit_DrawMinimalHudText(view, g_redSplitHudArmorTextX, g_redSplitHudArmorTextY, value, 0, g_redSplitHudArmorTextScale);
+    RedSplit_DrawMinimalHudText(view, layout.armorTextX, layout.armorTextY, value, 0, layout.armorTextScale);
 
     if (hasAmmoHud)
     {
         Bsprintf(value, "%d", ammo);
-        RedSplit_DrawMinimalHudText(view, g_redSplitHudAmmoTextX, g_redSplitHudAmmoTextY, value, TEXT_XRIGHT, g_redSplitHudAmmoTextScale);
+        RedSplit_DrawMinimalHudText(view, layout.ammoTextX, layout.ammoTextY, value, TEXT_XRIGHT, layout.ammoTextScale);
     }
 }
 
@@ -2553,6 +2905,90 @@ static void RedSplit_HandleHudTuningInput(void)
 
     if (!g_redSplitHudTuningOpen)
         return;
+
+    g_redSplitDebugScreenType = clamp<int32_t>(g_redSplitDebugScreenType, 0, 1);
+    if (g_redSplitDebugScreenType == 0)
+    {
+        g_redSplitHudDebugHealthIconX = &g_redSplitHudHealthIconX;
+        g_redSplitHudDebugHealthIconY = &g_redSplitHudHealthIconY;
+        g_redSplitHudDebugHealthIconScale = &g_redSplitHudHealthIconScale;
+        g_redSplitHudDebugHealthTextX = &g_redSplitHudHealthTextX;
+        g_redSplitHudDebugHealthTextY = &g_redSplitHudHealthTextY;
+        g_redSplitHudDebugHealthTextScale = &g_redSplitHudHealthTextScale;
+        g_redSplitHudDebugArmorIconX = &g_redSplitHudArmorIconX;
+        g_redSplitHudDebugArmorIconY = &g_redSplitHudArmorIconY;
+        g_redSplitHudDebugArmorIconScale = &g_redSplitHudArmorIconScale;
+        g_redSplitHudDebugArmorTextX = &g_redSplitHudArmorTextX;
+        g_redSplitHudDebugArmorTextY = &g_redSplitHudArmorTextY;
+        g_redSplitHudDebugArmorTextScale = &g_redSplitHudArmorTextScale;
+        g_redSplitHudDebugAmmoIconX = &g_redSplitHudAmmoIconX;
+        g_redSplitHudDebugAmmoIconY = &g_redSplitHudAmmoIconY;
+        g_redSplitHudDebugAmmoIconScale = &g_redSplitHudAmmoIconScale;
+        g_redSplitHudDebugAmmoTextX = &g_redSplitHudAmmoTextX;
+        g_redSplitHudDebugAmmoTextY = &g_redSplitHudAmmoTextY;
+        g_redSplitHudDebugAmmoTextScale = &g_redSplitHudAmmoTextScale;
+        g_redSplitHudDebugAccessIconX = &g_redSplitHudAccessIconX;
+        g_redSplitHudDebugAccessIconY = &g_redSplitHudAccessIconY;
+        g_redSplitHudDebugAccessIconScale = &g_redSplitHudAccessIconScale;
+        g_redSplitHudDebugGlobalX = &g_redSplitHudGlobalX;
+        g_redSplitHudDebugGlobalY = &g_redSplitHudGlobalY;
+        g_redSplitHudDebugGlobalScale = &g_redSplitHudGlobalScale;
+        g_redSplitHudDebugTextSpacing = &g_redSplitHudTextSpacing;
+    }
+    else
+    {
+        g_redSplitHudDebugHealthIconX = &g_redSplitHudQuarterHealthIconX;
+        g_redSplitHudDebugHealthIconY = &g_redSplitHudQuarterHealthIconY;
+        g_redSplitHudDebugHealthIconScale = &g_redSplitHudQuarterHealthIconScale;
+        g_redSplitHudDebugHealthTextX = &g_redSplitHudQuarterHealthTextX;
+        g_redSplitHudDebugHealthTextY = &g_redSplitHudQuarterHealthTextY;
+        g_redSplitHudDebugHealthTextScale = &g_redSplitHudQuarterHealthTextScale;
+        g_redSplitHudDebugArmorIconX = &g_redSplitHudQuarterArmorIconX;
+        g_redSplitHudDebugArmorIconY = &g_redSplitHudQuarterArmorIconY;
+        g_redSplitHudDebugArmorIconScale = &g_redSplitHudQuarterArmorIconScale;
+        g_redSplitHudDebugArmorTextX = &g_redSplitHudQuarterArmorTextX;
+        g_redSplitHudDebugArmorTextY = &g_redSplitHudQuarterArmorTextY;
+        g_redSplitHudDebugArmorTextScale = &g_redSplitHudQuarterArmorTextScale;
+        g_redSplitHudDebugAmmoIconX = &g_redSplitHudQuarterAmmoIconX;
+        g_redSplitHudDebugAmmoIconY = &g_redSplitHudQuarterAmmoIconY;
+        g_redSplitHudDebugAmmoIconScale = &g_redSplitHudQuarterAmmoIconScale;
+        g_redSplitHudDebugAmmoTextX = &g_redSplitHudQuarterAmmoTextX;
+        g_redSplitHudDebugAmmoTextY = &g_redSplitHudQuarterAmmoTextY;
+        g_redSplitHudDebugAmmoTextScale = &g_redSplitHudQuarterAmmoTextScale;
+        g_redSplitHudDebugAccessIconX = &g_redSplitHudQuarterAccessIconX;
+        g_redSplitHudDebugAccessIconY = &g_redSplitHudQuarterAccessIconY;
+        g_redSplitHudDebugAccessIconScale = &g_redSplitHudQuarterAccessIconScale;
+        g_redSplitHudDebugGlobalX = &g_redSplitHudQuarterGlobalX;
+        g_redSplitHudDebugGlobalY = &g_redSplitHudQuarterGlobalY;
+        g_redSplitHudDebugGlobalScale = &g_redSplitHudQuarterGlobalScale;
+        g_redSplitHudDebugTextSpacing = &g_redSplitHudQuarterTextSpacing;
+    }
+
+    g_redSplitHudTuningParams[2].value = g_redSplitHudDebugHealthIconX;
+    g_redSplitHudTuningParams[3].value = g_redSplitHudDebugHealthIconY;
+    g_redSplitHudTuningParams[4].value = g_redSplitHudDebugHealthIconScale;
+    g_redSplitHudTuningParams[5].value = g_redSplitHudDebugHealthTextX;
+    g_redSplitHudTuningParams[6].value = g_redSplitHudDebugHealthTextY;
+    g_redSplitHudTuningParams[7].value = g_redSplitHudDebugHealthTextScale;
+    g_redSplitHudTuningParams[8].value = g_redSplitHudDebugArmorIconX;
+    g_redSplitHudTuningParams[9].value = g_redSplitHudDebugArmorIconY;
+    g_redSplitHudTuningParams[10].value = g_redSplitHudDebugArmorIconScale;
+    g_redSplitHudTuningParams[11].value = g_redSplitHudDebugArmorTextX;
+    g_redSplitHudTuningParams[12].value = g_redSplitHudDebugArmorTextY;
+    g_redSplitHudTuningParams[13].value = g_redSplitHudDebugArmorTextScale;
+    g_redSplitHudTuningParams[14].value = g_redSplitHudDebugAmmoIconX;
+    g_redSplitHudTuningParams[15].value = g_redSplitHudDebugAmmoIconY;
+    g_redSplitHudTuningParams[16].value = g_redSplitHudDebugAmmoIconScale;
+    g_redSplitHudTuningParams[17].value = g_redSplitHudDebugAmmoTextX;
+    g_redSplitHudTuningParams[18].value = g_redSplitHudDebugAmmoTextY;
+    g_redSplitHudTuningParams[19].value = g_redSplitHudDebugAmmoTextScale;
+    g_redSplitHudTuningParams[20].value = g_redSplitHudDebugAccessIconX;
+    g_redSplitHudTuningParams[21].value = g_redSplitHudDebugAccessIconY;
+    g_redSplitHudTuningParams[22].value = g_redSplitHudDebugAccessIconScale;
+    g_redSplitHudTuningParams[23].value = g_redSplitHudDebugGlobalX;
+    g_redSplitHudTuningParams[24].value = g_redSplitHudDebugGlobalY;
+    g_redSplitHudTuningParams[25].value = g_redSplitHudDebugGlobalScale;
+    g_redSplitHudTuningParams[26].value = g_redSplitHudDebugTextSpacing;
 
     int32_t const paramCount = ARRAY_SIZE(g_redSplitHudTuningParams);
 
@@ -2598,9 +3034,6 @@ static void RedSplit_DrawHudTuningPanel(void)
     if (!g_redSplitHudTuningOpen)
         return;
 
-    rotatesprite_(4 << 16, 4 << 16, divscale16(150 << 16, tilesiz[0].x << 16), 0, 0, 95, ud.shadow_pal, 2 | 8 | 16 | 32,
-                  0, 0, 0, 0, xdim - 1, ydim - 1);
-
     char line[96];
     minitext(8, 8, "HUD TUNE  . closes  arrows adjust  shift=5", 0, 2 | 8 | 16);
 
@@ -2615,25 +3048,26 @@ static void RedSplit_DrawHudTuningPanel(void)
 static void RedSplit_UpdateWeaponTuningPointers(void)
 {
     int32_t const maxWeapon = RedSplit_VisibleWeaponDebugMax();
-    g_redSplitWeaponTuningParams[0].maxValue = maxWeapon;
+    g_redSplitDebugScreenType = clamp<int32_t>(g_redSplitDebugScreenType, 0, 1);
+    g_redSplitWeaponTuningParams[1].maxValue = maxWeapon;
     g_redSplitWeaponDebugWeapon = clamp<int32_t>(g_redSplitWeaponDebugWeapon, 0, maxWeapon);
 
     int32_t const weaponNum = g_redSplitWeaponDebugWeapon;
 
-    g_redSplitWeaponDebugOffsetX = &g_redSplitWeaponPerWeaponOffsetX[weaponNum];
-    g_redSplitWeaponDebugOffsetY = &g_redSplitWeaponPerWeaponOffsetY[weaponNum];
+    g_redSplitWeaponDebugOffsetX = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponPerWeaponOffsetX[weaponNum] : &g_redSplitWeaponPerWeaponQuarterOffsetX[weaponNum];
+    g_redSplitWeaponDebugOffsetY = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponPerWeaponOffsetY[weaponNum] : &g_redSplitWeaponPerWeaponQuarterOffsetY[weaponNum];
     g_redSplitWeaponDebugWideOffsetX = &g_redSplitWeaponPerWeaponWideOffsetX[weaponNum];
     g_redSplitWeaponDebugWideScalePercent = &g_redSplitWeaponPerWeaponWideScalePercent[weaponNum];
     g_redSplitWeaponDebugFlashWideOffsetX = &g_redSplitWeaponPerWeaponFlashWideOffsetX[weaponNum];
     g_redSplitWeaponDebugFlashWideOffsetY = &g_redSplitWeaponPerWeaponFlashWideOffsetY[weaponNum];
     g_redSplitWeaponDebugAlienGlowOffsetX = &g_redSplitWeaponAlienGlowOffsetX[weaponNum];
-    g_redSplitWeaponTuningParams[1].value = g_redSplitWeaponDebugOffsetX;
-    g_redSplitWeaponTuningParams[2].value = g_redSplitWeaponDebugOffsetY;
-    g_redSplitWeaponTuningParams[3].value = g_redSplitWeaponDebugWideOffsetX;
-    g_redSplitWeaponTuningParams[5].value = g_redSplitWeaponDebugWideScalePercent;
-    g_redSplitWeaponTuningParams[10].value = g_redSplitWeaponDebugFlashWideOffsetX;
-    g_redSplitWeaponTuningParams[11].value = g_redSplitWeaponDebugFlashWideOffsetY;
-    g_redSplitWeaponTuningParams[22].value = g_redSplitWeaponDebugAlienGlowOffsetX;
+    g_redSplitWeaponTuningParams[2].value = g_redSplitWeaponDebugOffsetX;
+    g_redSplitWeaponTuningParams[3].value = g_redSplitWeaponDebugOffsetY;
+    g_redSplitWeaponTuningParams[4].value = g_redSplitWeaponDebugWideOffsetX;
+    g_redSplitWeaponTuningParams[6].value = g_redSplitWeaponDebugWideScalePercent;
+    g_redSplitWeaponTuningParams[11].value = g_redSplitWeaponDebugFlashWideOffsetX;
+    g_redSplitWeaponTuningParams[12].value = g_redSplitWeaponDebugFlashWideOffsetY;
+    g_redSplitWeaponTuningParams[23].value = g_redSplitWeaponDebugAlienGlowOffsetX;
 }
 
 static void RedSplit_ApplyDebugWeaponToPlayers(void)
@@ -2727,7 +3161,7 @@ static void RedSplit_HandleWeaponTuningInput(void)
             delta *= 5;
 
         RedSplitHudTuningParam_t &param = g_redSplitWeaponTuningParams[g_redSplitWeaponTuningSelection];
-        if (g_fakeMultiMode > 1 || param.value == &g_redSplitWeaponDebugWeapon)
+        if (g_fakeMultiMode > 1 || param.value == &g_redSplitWeaponDebugWeapon || param.value == &g_redSplitDebugScreenType)
         {
             *param.value = clamp(*param.value + delta, param.minValue, param.maxValue);
         }
@@ -2818,11 +3252,11 @@ static void RedSplit_DrawExtraMenuForPlayer(int32_t const playerNum, RedSplitVie
         break;
     }
 
-    RedSplit_DrawExtraMenuText(view, 11, title, 1, 95);
+    RedSplit_DrawExtraMenuText(view, 13, title, 1, 91);
 
     for (int32_t i = 0; i < optionCount; ++i)
     {
-        RedSplit_DrawExtraMenuText(view, 33 + (i * 15) - min<int32_t>(i, 2), options[i], i == g_redSplitExtraMenuSelection, 82);
+        RedSplit_DrawExtraMenuText(view, 35 + (i * 15) - min<int32_t>(i, 2), options[i], i == g_redSplitExtraMenuSelection, 78);
     }
 }
 

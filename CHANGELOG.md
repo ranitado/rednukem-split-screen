@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.6
+
+* Improves 3 and 4 player split-screen presentation, especially quarter-screen HUD alignment, text spacing, weapon placement, flashes, and top notifications.
+* Adds separate HUD and weapon debug presets for wide 1/2 and small 1/4 viewports, while keeping debug panels disabled in Release builds.
+* Improves player input setup for players 3 and 4 and adds clearer disconnect handling for multiple joined players.
+* Fixes and tunes Duke Nukem 64 HUD details including inventory item display, access cards, simplified pause menu styling, and debug overlay readability.
+* Fixes additional local co-op gameplay issues around final exit button activation, access card transfer on disconnect/rejoin, respawn safety, look limits, and sleep/pause sound buildup.
+* Note: 3 and 4 player split-screen modes are still experimental and need more optimization; that work is planned for upcoming versions.
+
 ## v0.5
 
 * Adds the in-game Levels menu with level thumbnails, per-save progress, best times, and secret tracking.

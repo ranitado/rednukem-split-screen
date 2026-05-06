@@ -45,7 +45,7 @@ droidinput_t droidinput;
 #define MENU_MARGIN_CENTER  160
 #define MENU_HEIGHT_CENTER  100
 
-#define REDNUKEM_SPLITSCREEN_VERSION "v0.5"
+#define REDNUKEM_SPLITSCREEN_VERSION "v0.6"
 
 int32_t g_skillSoundVoice = -1;
 
@@ -1160,16 +1160,30 @@ static int32_t MEOSV_PLAYERINPUT_SOURCE[] = { RN_SPLIT_INPUT_NONE, RN_SPLIT_INPU
 static MenuOptionSet_t MEOS_PLAYERINPUT_SOURCE = MAKE_MENUOPTIONSET(MEOSN_PLAYERINPUT_SOURCE, MEOSV_PLAYERINPUT_SOURCE, 0x2);
 static MenuOption_t MEO_PLAYERINPUT_P1 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitPlayerInput[0]);
 static MenuOption_t MEO_PLAYERINPUT_P2 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitPlayerInput[1]);
+static MenuOption_t MEO_PLAYERINPUT_P3 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitPlayerInput[2]);
+static MenuOption_t MEO_PLAYERINPUT_P4 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitPlayerInput[3]);
 static MenuEntry_t ME_PLAYERINPUT_P1 = MAKE_MENUENTRY("Player 1:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_PLAYERINPUT_P1, Option);
 static MenuEntry_t ME_PLAYERINPUT_P2 = MAKE_MENUENTRY("Player 2:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_PLAYERINPUT_P2, Option);
+static MenuEntry_t ME_PLAYERINPUT_P3 = MAKE_MENUENTRY("Player 3:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_PLAYERINPUT_P3, Option);
+static MenuEntry_t ME_PLAYERINPUT_P4 = MAKE_MENUENTRY("Player 4:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_PLAYERINPUT_P4, Option);
 static MenuEntry_t ME_PLAYERINPUT_JOIN2 = MAKE_MENUENTRY("Join Player 2", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
+static MenuEntry_t ME_PLAYERINPUT_JOIN3 = MAKE_MENUENTRY("Join Player 3", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
+static MenuEntry_t ME_PLAYERINPUT_JOIN4 = MAKE_MENUENTRY("Join Player 4", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
 static MenuEntry_t ME_PLAYERINPUT_DISCONNECT2 = MAKE_MENUENTRY("Disconnect Player 2", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
+static MenuEntry_t ME_PLAYERINPUT_DISCONNECT3 = MAKE_MENUENTRY("Disconnect Player 3", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
+static MenuEntry_t ME_PLAYERINPUT_DISCONNECT4 = MAKE_MENUENTRY("Disconnect Player 4", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
 static MenuEntry_t *MEL_PLAYERINPUT[] = {
     &ME_PLAYERINPUT_P1,
     &ME_PLAYERINPUT_P2,
+    &ME_PLAYERINPUT_P3,
+    &ME_PLAYERINPUT_P4,
     &ME_Space6_Redfont,
     &ME_PLAYERINPUT_JOIN2,
+    &ME_PLAYERINPUT_JOIN3,
+    &ME_PLAYERINPUT_JOIN4,
     &ME_PLAYERINPUT_DISCONNECT2,
+    &ME_PLAYERINPUT_DISCONNECT3,
+    &ME_PLAYERINPUT_DISCONNECT4,
 };
 
 static MenuEntry_t *MEL_CHEATS[ARRAY_SIZE(ME_CheatCodes)+1] = {
@@ -2988,9 +3002,16 @@ static void Menu_Pre(MenuID_t cm)
     case MENU_PLAYERINPUT:
     {
         int32_t const inGame = g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME);
-        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_JOIN2, g_fakeMultiMode > 1);
+        int32_t const playerCount = g_fakeMultiMode > 1 ? clamp<int32_t>(g_fakeMultiMode, 2, 4) : 1;
+        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_JOIN2, playerCount != 1);
         MenuEntry_DisableOnCondition(&ME_PLAYERINPUT_JOIN2, !inGame);
-        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_DISCONNECT2, g_fakeMultiMode <= 1);
+        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_JOIN3, playerCount != 2);
+        MenuEntry_DisableOnCondition(&ME_PLAYERINPUT_JOIN3, !inGame);
+        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_JOIN4, playerCount != 3);
+        MenuEntry_DisableOnCondition(&ME_PLAYERINPUT_JOIN4, !inGame);
+        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_DISCONNECT2, playerCount < 2);
+        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_DISCONNECT3, playerCount < 3);
+        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_DISCONNECT4, playerCount < 4);
         break;
     }
 
@@ -5463,6 +5484,20 @@ static int32_t RedSplit_DefaultPlayerColor(int32_t const playerNum)
     return colors[clamp<int32_t>(playerNum, 0, (int32_t)ARRAY_SIZE(colors) - 1)];
 }
 
+static void RedSplit_ClearPlayerAccessState(DukePlayer_t * const ps)
+{
+    if (ps == nullptr)
+        return;
+
+    ps->got_access = 0;
+    for (int32_t keyNum = 1; keyNum <= 3; ++keyNum)
+        ps->keys[keyNum] = 0;
+
+    ps->access_incs = 0;
+    ps->access_spritenum = -1;
+    ps->access_wallnum = -1;
+}
+
 static void RedSplit_InitJoinedPlayerInGame(int32_t const playerNum)
 {
     if (playerNum <= 0 || playerNum >= MAXPLAYERS || g_player[0].ps == nullptr || g_player[playerNum].ps == nullptr)
@@ -5518,6 +5553,7 @@ static void RedSplit_InitJoinedPlayerInGame(int32_t const playerNum)
         changespritestat(spriteNum, STAT_PLAYER);
 
     P_ResetPlayer(playerNum);
+    RedSplit_ClearPlayerAccessState(ps);
 
     sprite[ps->i].picnum = APLAYER;
     sprite[ps->i].yvel   = playerNum;
@@ -5593,13 +5629,7 @@ static void RedSplit_TransferDisconnectedPlayerAccess(int32_t const playerNum)
     for (int32_t keyNum = 1; keyNum <= 3; ++keyNum)
         target->keys[keyNum] |= source->keys[keyNum];
 
-    source->got_access = 0;
-    for (int32_t keyNum = 1; keyNum <= 3; ++keyNum)
-        source->keys[keyNum] = 0;
-
-    source->access_incs = 0;
-    source->access_spritenum = -1;
-    source->access_wallnum = -1;
+    RedSplit_ClearPlayerAccessState(source);
 }
 
 void RedSplit_DisconnectPlayer(int32_t const playerNum)
@@ -5761,8 +5791,16 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
     case MENU_PLAYERINPUT:
         if (entry == &ME_PLAYERINPUT_JOIN2 && g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME))
             RedSplit_SetPlayerCount(2);
+        else if (entry == &ME_PLAYERINPUT_JOIN3 && g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME))
+            RedSplit_SetPlayerCount(3);
+        else if (entry == &ME_PLAYERINPUT_JOIN4 && g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME))
+            RedSplit_SetPlayerCount(4);
         else if (entry == &ME_PLAYERINPUT_DISCONNECT2)
             RedSplit_DisconnectPlayer(1);
+        else if (entry == &ME_PLAYERINPUT_DISCONNECT3)
+            RedSplit_DisconnectPlayer(2);
+        else if (entry == &ME_PLAYERINPUT_DISCONNECT4)
+            RedSplit_DisconnectPlayer(3);
         break;
 
     case MENU_EPISODE:
