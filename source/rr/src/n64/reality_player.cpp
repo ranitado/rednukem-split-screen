@@ -9,6 +9,8 @@
 
 //////////////////// HUD WEAPON / MISC. DISPLAY CODE ////////////////////
 
+static constexpr int REDSPLIT_HUDID_FIST_BUTTON = 202;
+
 int RT_P_GetHudPal(const DukePlayer_t *p)
 {
     if (p->cursectnum >= 0)
@@ -65,8 +67,11 @@ static int RT_P_DisplayFist(int const fistShade)
         wx[(g_snum==0)] = (wx[0]+wx[1])/2+1;
 #endif
 
+    int const savedUniqueHudId = guniqhudid;
+    guniqhudid = REDSPLIT_HUDID_FIST_BUTTON;
     RT_RotateSprite(-fistInc + 222 + (fix16_to_int(g_player[screenpeek].inputBits->q16avel) >> 3), fistY + fistYOffset,
                  (fistZoom*100)/65536, (fistZoom*100)/65536, FIST, 0);
+    guniqhudid = savedUniqueHudId;
 
     return 1;
 }
@@ -643,6 +648,10 @@ void RT_P_DisplayWeapon(void)
 
         case CHAINGUN_WEAPON__STATIC:
         {
+            int const sharedWeaponOffsetX = RT_RedSplitWideWeaponTweaksActive() ? g_redSplitWeaponPerWeaponOffsetX[currentWeapon] : 0;
+            int const leftWeaponOffsetX = RT_RedSplitWideWeaponTweaksActive() ? g_redSplitWeaponDualLeftWeaponOffsetX : 0;
+            weaponX -= sharedWeaponOffsetX;
+
             int oWeaponY = weaponYOffset;
             if (*weaponFrame > 0 && (RT_FakeKRand() & 255) < 127)
             {
@@ -650,13 +659,13 @@ void RT_P_DisplayWeapon(void)
 
                 if (doAnim)
                     weaponX += (RT_FakeKRand()&3);
-                
+
                 float siz = ((RT_FakeKRand() & 255) * (1.f/256.f) + 0.7);
 
-                RT_DrawTileFlash(weaponX + 215 - halfLookAng, weaponY + 205 - weaponYOffset, 0xf4f, siz, siz, 0, 12, currentWeapon);
+                RT_DrawTileFlash(weaponX + sharedWeaponOffsetX + 215 - halfLookAng, weaponY + 205 - weaponYOffset, 0xf4f, siz, siz, 0, 12, currentWeapon);
             }
 
-            RT_DrawWeaponTileWithID(currentWeapon, weaponX + 235 - (pPlayer->look_ang >> 1), weaponY + 265 - weaponYOffset,
+            RT_DrawWeaponTileWithID(currentWeapon, weaponX + sharedWeaponOffsetX + 235 - (pPlayer->look_ang >> 1), weaponY + 265 - weaponYOffset,
                                     CHAINGUN, weaponShade, weaponBits, weaponPal);
 
             weaponYOffset = oWeaponY;
@@ -667,12 +676,12 @@ void RT_P_DisplayWeapon(void)
 
                 if (doAnim)
                     weaponX -= (RT_FakeKRand()&3);
-                
+
                 float siz = ((RT_FakeKRand() & 255) * (1.f/256.f) + 0.7);
 
-                RT_DrawTileFlash(-weaponX + 105 - halfLookAng, weaponY + 205 - weaponYOffset, 0xf4f, siz, siz, 4, 12, currentWeapon);
+                RT_DrawTileFlash(-weaponX + sharedWeaponOffsetX + leftWeaponOffsetX + 105 - halfLookAng, weaponY + 205 - weaponYOffset, 0xf4f, siz, siz, 4, 12, currentWeapon);
             }
-            RT_DrawWeaponTileWithID(currentWeapon<<1, -weaponX + 85 - (pPlayer->look_ang >> 1), weaponY + 265 - weaponYOffset,
+            RT_DrawWeaponTileWithID(currentWeapon<<1, -weaponX + sharedWeaponOffsetX + leftWeaponOffsetX + 85 - (pPlayer->look_ang >> 1), weaponY + 265 - weaponYOffset,
                                     CHAINGUN, weaponShade, weaponBits|4, weaponPal);
             break;
         }

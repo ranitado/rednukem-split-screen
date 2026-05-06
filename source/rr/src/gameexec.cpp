@@ -1357,7 +1357,9 @@ static int32_t VM_ResetPlayer(int const playerNum, int32_t vmFlags)
     //AddLog("resetplayer");
     if (!g_netServer && ud.multimode < 2)
     {
-        if (g_quickload && g_quickload->isValid() && ud.recstat != 2)
+        if (REALITY)
+            g_player[playerNum].ps->gm = MODE_RESTART;
+        else if (g_quickload && g_quickload->isValid() && ud.recstat != 2)
         {
             Menu_Open(playerNum);
             KB_ClearKeyDown(sc_Space);

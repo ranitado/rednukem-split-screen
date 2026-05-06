@@ -87,6 +87,7 @@ static bool  rt_redSplitWeaponGroupActive;
 static float rt_redSplitWeaponGroupX;
 static float rt_redSplitWeaponGroupY;
 static int   rt_redSplitWeaponGroupID = -1;
+static constexpr int REDSPLIT_HUDID_FIST_BUTTON = 202;
 
 void RT_RedSplitWeaponGroupBegin(float const x, float const y, int const weaponID)
 {
@@ -1062,7 +1063,10 @@ void RT_DisplayTileWorld(float x, float y, float sx, float sy, int16_t picnum, i
             ? g_redSplitWeaponPerWeaponWideScalePercent[scaleWeaponID]
             : g_redSplitWeaponWideScalePercent;
         int const wideOffsetX = ((unsigned)scaleWeaponID < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponWideOffsetX[scaleWeaponID] : g_redSplitWeaponWideOffsetX;
-        float const splitScale = (quarterView ? g_redSplitWeaponQuarterScalePercent : wideScalePercent) / 100.f;
+        bool const splitFistButton = scaleWeaponID == REDSPLIT_HUDID_FIST_BUTTON && picnum == FIST;
+        float splitScale = (quarterView ? g_redSplitWeaponQuarterScalePercent : wideScalePercent) / 100.f;
+        if (quarterView && splitFistButton)
+            splitScale = max<float>(splitScale, 0.68f);
         float const halfW = sizx * sclx * splitScale;
         float const halfH = sizy * scly * splitScale;
         float mappedCenterX = RT_RedSplitWeaponAnchorX(splitOriginX + (centerX / (float)xdim) * viewW, splitOriginX, splitOriginX + viewW - 1.f, centerX);
@@ -1132,6 +1136,8 @@ void RT_DisplayTileWorld(float x, float y, float sx, float sy, int16_t picnum, i
             }
             mappedCenterX += quarterWeaponOffsetX * sclx;
             mappedCenterY += quarterWeaponOffsetY * scly;
+            if (splitFistButton)
+                mappedCenterY += 10.f * scly;
         }
 
         if (quarterView && rt_fxtile)
@@ -4338,7 +4344,10 @@ void RT_RotateSprite(float x, float y, float sx, float sy, int tilenum, int orie
             ? g_redSplitWeaponPerWeaponWideScalePercent[scaleWeaponID]
             : g_redSplitWeaponWideScalePercent;
         int const wideOffsetX = ((unsigned)scaleWeaponID < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponWideOffsetX[scaleWeaponID] : g_redSplitWeaponWideOffsetX;
-        float const splitScale = (quarterView ? g_redSplitWeaponQuarterScalePercent : wideScalePercent) / 100.f;
+        bool const splitFistButton = scaleWeaponID == REDSPLIT_HUDID_FIST_BUTTON && otilenum == FIST;
+        float splitScale = (quarterView ? g_redSplitWeaponQuarterScalePercent : wideScalePercent) / 100.f;
+        if (quarterView && splitFistButton)
+            splitScale = max<float>(splitScale, 0.68f);
         float const halfW = sizx * scl * splitScale;
         float const halfH = sizy * scl * splitScale;
         float mappedCenterX = RT_RedSplitWeaponAnchorX(splitOriginX + (centerX / (float)xdim) * viewW, splitOriginX, splitOriginX + viewW - 1.f, centerX);
@@ -4407,6 +4416,8 @@ void RT_RotateSprite(float x, float y, float sx, float sy, int tilenum, int orie
             }
             mappedCenterX += quarterWeaponOffsetX * scl;
             mappedCenterY += quarterWeaponOffsetY * scl;
+            if (splitFistButton)
+                mappedCenterY += 10.f * scl;
         }
 
         if (quarterView && weaponFlash)

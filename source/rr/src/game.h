@@ -110,6 +110,7 @@ extern int32_t g_redSplitWeaponFlashQuarterLeftOffsetX;
 extern int32_t g_redSplitWeaponFlashQuarterRightOffsetX;
 extern int32_t g_redSplitWeaponFlashDualLeftOffsetX;
 extern int32_t g_redSplitWeaponFlashDualRightOffsetX;
+extern int32_t g_redSplitWeaponDualLeftWeaponOffsetX;
 extern int32_t g_redSplitWeaponFlashPistolOffsetX;
 extern int32_t g_redSplitWeaponFlashPistolOffsetY;
 extern int32_t g_redSplitWeaponAlienGlowOffsetX[MAX_WEAPONS];

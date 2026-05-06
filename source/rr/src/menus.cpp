@@ -5367,20 +5367,32 @@ static int32_t RedSplit_MenuInputUsedByEarlierPlayer(int32_t const inputSource, 
     return 0;
 }
 
+static int32_t RedSplit_MenuInputUsedByEarlierPlayerStrict(int32_t const inputSource, int32_t const playerNum)
+{
+    if (inputSource == RN_SPLIT_INPUT_NONE)
+        return 0;
+
+    for (int32_t i = 0; i < playerNum; ++i)
+        if (g_redSplitPlayerInput[i] == inputSource)
+            return 1;
+
+    return 0;
+}
+
 static int32_t RedSplit_MenuFindAvailableInput(int32_t const playerNum)
 {
-    if (playerNum == 0 && !RedSplit_MenuInputUsedByEarlierPlayer(RN_SPLIT_INPUT_KBM, playerNum))
+    if (playerNum == 0 && !RedSplit_MenuInputUsedByEarlierPlayerStrict(RN_SPLIT_INPUT_KBM, playerNum))
         return RN_SPLIT_INPUT_KBM;
 
     int32_t const padCount = min<int32_t>(joyGetConnectedGamepadCount(), RN_SPLIT_INPUT_PAD5 - RN_SPLIT_INPUT_PAD1 + 1);
     for (int32_t padIndex = 0; padIndex < padCount; ++padIndex)
     {
         int32_t const inputSource = RedSplit_MenuPadToInputSource(padIndex);
-        if (!RedSplit_MenuInputUsedByEarlierPlayer(inputSource, playerNum))
+        if (!RedSplit_MenuInputUsedByEarlierPlayerStrict(inputSource, playerNum))
             return inputSource;
     }
 
-    if (!RedSplit_MenuInputUsedByEarlierPlayer(RN_SPLIT_INPUT_KBM, playerNum))
+    if (!RedSplit_MenuInputUsedByEarlierPlayerStrict(RN_SPLIT_INPUT_KBM, playerNum))
         return RN_SPLIT_INPUT_KBM;
 
     return RN_SPLIT_INPUT_NONE;
@@ -5394,7 +5406,7 @@ void RedSplit_AssignInputsForPlayerCount(int32_t playerCount)
     {
         int32_t const inputSource = g_redSplitPlayerInput[playerNum];
 
-        if (RedSplit_MenuInputSourceConnected(inputSource) && !RedSplit_MenuInputUsedByEarlierPlayer(inputSource, playerNum))
+        if (inputSource != RN_SPLIT_INPUT_NONE && !RedSplit_MenuInputUsedByEarlierPlayer(inputSource, playerNum))
             continue;
 
         g_redSplitPlayerInput[playerNum] = RedSplit_MenuFindAvailableInput(playerNum);
@@ -5692,7 +5704,6 @@ void RedSplit_DisconnectPlayer(int32_t const playerNum)
     }
 
     g_player[lastPlayer].playerquitflag = 0;
-    g_redSplitPlayerInput[lastPlayer] = RN_SPLIT_INPUT_NONE;
 
     if ((unsigned)spriteToHide < MAXSPRITES)
     {
@@ -6248,6 +6259,11 @@ static void Menu_EntryOptionDidModify(MenuEntry_t *entry)
 
     if (entry == &ME_PLAYER_SELECTOR)
         RedSplit_SyncPlayerSetupMenuData();
+    else if (entry == &ME_PLAYERINPUT_P1 ||
+             entry == &ME_PLAYERINPUT_P2 ||
+             entry == &ME_PLAYERINPUT_P3 ||
+             entry == &ME_PLAYERINPUT_P4)
+        CONFIG_WriteSetup(0);
     else if (entry == &ME_PLAYER_WEAPSWITCH_PICKUP ||
              entry == &ME_PLAYER_COLOR ||
              entry == &ME_PLAYER_TEAM)

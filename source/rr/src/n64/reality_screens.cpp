@@ -348,8 +348,9 @@ static void RT_DrawSplitBonusTable(float alpha, int32_t enemiesLeft, int32_t bab
         bestSecrets = max<int32_t>(bestSecrets, secrets[playerIndex]);
         bestBabes = max<int32_t>(bestBabes, babes[playerIndex]);
 
+        static int32_t const playerLabelOffsetX[] = { 7, 4, 4, 4 };
         Bsprintf(buf, "P%d", playerIndex + 1);
-        RT_DrawBonusStatsText(alpha, 150.f, 200.f, 255.f, colStart + playerIndex * colStep, rowHeaderY, buf);
+        RT_DrawBonusStatsText(alpha, 150.f, 200.f, 255.f, colStart + playerLabelOffsetX[playerIndex] + playerIndex * colStep, rowHeaderY, buf);
     }
 
     if (visibleStep >= 1)

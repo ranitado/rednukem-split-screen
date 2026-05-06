@@ -1739,6 +1739,7 @@ int32_t g_redSplitWeaponFlashQuarterLeftOffsetX = 12;
 int32_t g_redSplitWeaponFlashQuarterRightOffsetX = 12;
 int32_t g_redSplitWeaponFlashDualLeftOffsetX = 34;
 int32_t g_redSplitWeaponFlashDualRightOffsetX = 3;
+int32_t g_redSplitWeaponDualLeftWeaponOffsetX = 8;
 int32_t g_redSplitWeaponFlashPistolOffsetX = 0;
 int32_t g_redSplitWeaponFlashPistolOffsetY = 0;
 int32_t g_redSplitWeaponAlienGlowOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, 87, 1 };
@@ -1979,10 +1980,10 @@ static int32_t g_redSplitHudHealthIconScale = 58;
 static int32_t g_redSplitHudHealthTextX = -31;
 static int32_t g_redSplitHudHealthTextY = 88;
 static int32_t g_redSplitHudHealthTextScale = 66;
-static int32_t g_redSplitHudArmorIconX = 27;
+static int32_t g_redSplitHudArmorIconX = 20;
 static int32_t g_redSplitHudArmorIconY = 85;
 static int32_t g_redSplitHudArmorIconScale = 45;
-static int32_t g_redSplitHudArmorTextX = 43;
+static int32_t g_redSplitHudArmorTextX = 35;
 static int32_t g_redSplitHudArmorTextY = 88;
 static int32_t g_redSplitHudArmorTextScale = 66;
 static int32_t g_redSplitHudAmmoIconX = 327;
@@ -2031,7 +2032,7 @@ static int32_t g_redSplitHudQuarterAmmoTextScale = 110;
 static int32_t g_redSplitHudQuarterAccessIconX = 332;
 static int32_t g_redSplitHudQuarterAccessIconY = 75;
 static int32_t g_redSplitHudQuarterAccessIconScale = 74;
-static int32_t g_redSplitHudQuarterInventoryIconX = 125;
+static int32_t g_redSplitHudQuarterInventoryIconX = 124;
 static int32_t g_redSplitHudQuarterInventoryIconY = 96;
 static int32_t g_redSplitHudQuarterInventoryIconScale = 72;
 static int32_t g_redSplitHudQuarterInventoryTextX = 158;
@@ -2177,6 +2178,7 @@ static RedSplitHudTuningParam_t g_redSplitWeaponTuningParams[] = {
     { "Trip right X", g_redSplitWeaponDebugTripRightOffsetX, -180, 180 },
     { "Trip right Y", g_redSplitWeaponDebugTripRightOffsetY, -120, 160 },
     { "Trip mine scale", g_redSplitWeaponDebugTripMineScalePercent, 20, 180 },
+    { "Dual left weapon X", &g_redSplitWeaponDualLeftWeaponOffsetX, -180, 180 },
     { "Kick armed X", &g_redSplitWeaponKickArmedOffsetX, -180, 180 },
     { "Kick unarmed X", &g_redSplitWeaponKickUnarmedOffsetX, -180, 180 },
     { "Anchor 0L 1S 2R", &g_redSplitWeaponAnchor, 0, 2 },
@@ -3054,7 +3056,7 @@ static int32_t RedSplit_HudAccessOffsetX(int32_t const accessBit)
         return 0;
 
     // Duke 64 uses separate card tiles; their art is not centered the same way.
-    return accessBit == 1 ? -5 : 0;
+    return 0;
 }
 
 static int32_t RedSplit_HudAccessOffsetY(int32_t const accessBit)

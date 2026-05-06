@@ -324,7 +324,7 @@ void RT_DrawBar(DukePlayer_t *const pPlayer, bool drawhud)
         {
             if (pPlayer->got_access & 1)
             {
-                float x = RT_SBarScale(-0x3d) + borderx2;
+                float x = RT_SBarScale(-0x3a) + borderx2;
                 float y = RT_SBarScale(-0x18) + bordery2;
                 float sc = RT_SBarScale(100.f);
                 RT_RotateSprite(x, y, sc, sc, 0xe25, 512|RTRS_SCALED);
