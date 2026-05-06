@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7
+
+* Improves 4 player quarter-screen HUD consistency, including health, armor, ammo, access cards, inventory item icons, item text, and square-aspect protection.
+* Improves 4 player weapon presentation, including per-weapon quarter-screen offsets, muzzle flashes, tripmine hands, missile launcher parts, and weapon wheel icon scaling/centering.
+* Improves 2 player HUD and weapon tuning for inventory item icons, ammo icons, missile launcher pieces, tripmine placement, and several weapon flashes.
+* Improves player setup and input persistence, including default names `Player 1` through `Player 4` and saved player input assignments.
+* Fixes split-screen quote/obituary placement in quarter viewports and keeps normal top notifications centered where appropriate.
+* Keeps HUD and weapon debug tuning panels disabled in Release builds.
+* Note: 3 and 4 player split-screen modes are still experimental and need more optimization; that work is planned for upcoming versions.
+
 ## v0.6
 
 * Improves 3 and 4 player split-screen presentation, especially quarter-screen HUD alignment, text spacing, weapon placement, flashes, and top notifications.

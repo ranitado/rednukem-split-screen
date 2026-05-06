@@ -1829,6 +1829,8 @@ static uint32_t s_redSplitPrevMenuBits[MAXPLAYERS];
 static uint32_t s_redSplitPrevGameplayBits[MAXPLAYERS];
 static uint32_t s_redSplitPrevJoinPadBits[5];
 static int32_t s_redSplitSuppressEscapeTicks;
+static input_t s_redSplitCachedKbmInput;
+static int32_t s_redSplitCachedKbmInputValid;
 
 static inline int32_t RedSplit_InputSourceToPad(int32_t inputSource)
 {
@@ -2274,6 +2276,12 @@ static void RedSplit_GetInputForPlayer(int32_t playerNum, input_t *out)
 
     if (inputSource == RN_SPLIT_INPUT_KBM)
     {
+        if (s_redSplitCachedKbmInputValid)
+        {
+            *out = s_redSplitCachedKbmInput;
+            return;
+        }
+
         int32_t const previousPrimaryPad = joyGetPrimaryGamepadIndex();
         joySetPrimaryGamepadIndex(-1);
 
@@ -2293,6 +2301,8 @@ static void RedSplit_GetInputForPlayer(int32_t playerNum, input_t *out)
         if (s_redSplitSuppressEscapeTicks > 0)
             out->bits &= ~BIT(SK_ESCAPE);
         joySetPrimaryGamepadIndex(previousPrimaryPad);
+        s_redSplitCachedKbmInput = *out;
+        s_redSplitCachedKbmInputValid = 1;
         return;
     }
 
@@ -2310,6 +2320,7 @@ void Net_GetInput(void)
     if (g_player[myconnectindex].movefifoend - movefifoplc >= 100)
         return;
 
+    s_redSplitCachedKbmInputValid = 0;
     RedSplit_PollUnassignedPadJoins();
 
     RedSplit_GetInputForPlayer(myconnectindex, &playerInput);

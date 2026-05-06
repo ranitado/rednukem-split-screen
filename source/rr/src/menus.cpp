@@ -45,7 +45,7 @@ droidinput_t droidinput;
 #define MENU_MARGIN_CENTER  160
 #define MENU_HEIGHT_CENTER  100
 
-#define REDNUKEM_SPLITSCREEN_VERSION "v0.6"
+#define REDNUKEM_SPLITSCREEN_VERSION "v0.7"
 
 int32_t g_skillSoundVoice = -1;
 
@@ -414,7 +414,8 @@ static void Menu_DrawCursorText(int32_t x, int32_t y, int32_t h, int32_t ydim_up
         return;
     }
 
-    Menu_DrawCursorTextTile(x, y, h, SPINNINGNUKEICON+(((int32_t) totalclock>>3)%frames), siz, ydim_upper, ydim_lower);
+    int32_t const cursorH = REALITY ? min<int32_t>(h, 8<<16) : h;
+    Menu_DrawCursorTextTile(x, y, cursorH, SPINNINGNUKEICON+(((int32_t) totalclock>>3)%frames), siz, ydim_upper, ydim_lower);
 }
 
 int dword_A99A0, dword_A99A4, dword_A99A8, dword_A99AC;
@@ -2738,10 +2739,26 @@ static int32_t RedSplit_PlayerSetupPlayer(void)
     return clamp<int32_t>(g_redSplitPlayerSetupPlayer, 0, MAXPLAYERS - 1);
 }
 
+static void RedSplit_DefaultPlayerName(int32_t const playerNum, char * const buf, size_t const bufSize)
+{
+    Bsnprintf(buf, bufSize, "Player %d", playerNum + 1);
+}
+
 static void RedSplit_SyncPlayerSetupMenuData(void)
 {
     int32_t const playerNum = RedSplit_PlayerSetupPlayer();
     DukePlayer_t * const ps = g_player[playerNum].ps;
+
+    if (g_player[playerNum].user_name[0] == '\0')
+    {
+        if (playerNum == myconnectindex && szPlayerName[0] != '\0')
+            Bstrncpyz(g_player[playerNum].user_name, szPlayerName, sizeof(g_player[playerNum].user_name));
+        else
+            RedSplit_DefaultPlayerName(playerNum, g_player[playerNum].user_name, sizeof(g_player[playerNum].user_name));
+    }
+
+    if (MEO_PLAYER_NAME.editfield == nullptr)
+        Bstrncpyz(szPlayerName, g_player[playerNum].user_name, sizeof(szPlayerName));
 
     ud.color = g_player[playerNum].pcolor;
     ud.team = g_player[playerNum].pteam;
@@ -2754,6 +2771,11 @@ static void RedSplit_ApplyPlayerSetupMenuData(void)
 {
     int32_t const playerNum = RedSplit_PlayerSetupPlayer();
     DukePlayer_t * const ps = g_player[playerNum].ps;
+
+    if (szPlayerName[0] == '\0')
+        RedSplit_DefaultPlayerName(playerNum, szPlayerName, sizeof(szPlayerName));
+
+    Bstrncpyz(g_player[playerNum].user_name, szPlayerName, sizeof(g_player[playerNum].user_name));
 
     g_player[playerNum].pcolor = ud.color;
     g_player[playerNum].pteam = ud.team;
@@ -5335,7 +5357,7 @@ static int32_t RedSplit_MenuInputSourceConnected(int32_t const inputSource)
 
 static int32_t RedSplit_MenuInputUsedByEarlierPlayer(int32_t const inputSource, int32_t const playerNum)
 {
-    if (inputSource == RN_SPLIT_INPUT_NONE)
+    if (inputSource == RN_SPLIT_INPUT_NONE || inputSource == RN_SPLIT_INPUT_KBM)
         return 0;
 
     for (int32_t i = 0; i < playerNum; ++i)
@@ -5542,7 +5564,7 @@ static void RedSplit_InitJoinedPlayerInGame(int32_t const playerNum)
     ps->somethingonplayer = -1;
 
     if (g_player[playerNum].user_name[0] == '\0')
-        Bsnprintf(g_player[playerNum].user_name, sizeof(g_player[playerNum].user_name), "PLAYER %d", playerNum + 1);
+        RedSplit_DefaultPlayerName(playerNum, g_player[playerNum].user_name, sizeof(g_player[playerNum].user_name));
 
     spritetype * const pSprite = &sprite[spriteNum];
     pSprite->picnum = APLAYER;
@@ -10154,6 +10176,9 @@ static void Menu_RunInput_EntryString_Submit(/*MenuEntry_t *entry, */MenuString_
         if (object->variable)
             strncpy(object->variable, object->editfield, object->bufsize);
     }
+
+    if (object == &MEO_PLAYER_NAME)
+        RedSplit_ApplyPlayerSetupMenuData();
 
     object->editfield = NULL;
     Menu_StopTextInput();

@@ -1722,9 +1722,10 @@ int32_t g_redSplitWeaponQuarterLeftOffsetX = 12;
 int32_t g_redSplitWeaponQuarterRightOffsetX = 12;
 int32_t g_redSplitWeaponQuarterOffsetY = 10;
 int32_t g_redSplitWeaponQuarterScalePercent = 50;
-int32_t g_redSplitWeaponPerWeaponQuarterOffsetX[MAX_WEAPONS] = { 0 };
-int32_t g_redSplitWeaponPerWeaponQuarterOffsetY[MAX_WEAPONS] = { 0 };
-int32_t g_redSplitWeaponPerWeaponOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, -62, -2, 40, 36, 13 };
+int32_t g_redSplitWeaponWheelQuarterScalePercent = 75;
+int32_t g_redSplitWeaponPerWeaponQuarterOffsetX[MAX_WEAPONS] = { 0, 0, 1, 0, 0, 22, -8, -8, -6, 3, 7 };
+int32_t g_redSplitWeaponPerWeaponQuarterOffsetY[MAX_WEAPONS] = { 0, -3, -3, -3, -5, 6, -1, -1, 10, -7, -2 };
+int32_t g_redSplitWeaponPerWeaponOffsetX[MAX_WEAPONS] = { 0, 0, 0, 0, 0, 0, -62, -2, 40, 37, 13 };
 int32_t g_redSplitWeaponPerWeaponOffsetY[MAX_WEAPONS] = { 0, 0, -2, -4, -10, -8, -28, -28, 14, -32, -14 };
 int32_t g_redSplitWeaponFlashWideOffsetX = 15;
 int32_t g_redSplitWeaponFlashWideOffsetY = -16;
@@ -1747,17 +1748,28 @@ int32_t g_redSplitWeaponAlienGlowSmall1OffsetX = 0;
 int32_t g_redSplitWeaponAlienGlowSmall1OffsetY = 6;
 int32_t g_redSplitWeaponAlienGlowSmall2OffsetX = -2;
 int32_t g_redSplitWeaponAlienGlowSmall2OffsetY = 16;
-int32_t g_redSplitWeaponMissileRightOffsetX = 0;
+int32_t g_redSplitWeaponMissileRightOffsetX = 1;
 int32_t g_redSplitWeaponMissileRightOffsetY = -62;
-int32_t g_redSplitWeaponMissileRocketOffsetX = 0;
-int32_t g_redSplitWeaponMissileRocketOffsetY = 0;
+int32_t g_redSplitWeaponMissileQuarterRightOffsetX = 73;
+int32_t g_redSplitWeaponMissileQuarterRightOffsetY = -62;
+int32_t g_redSplitWeaponMissileRocketOffsetX = -10;
+int32_t g_redSplitWeaponMissileRocketOffsetY = -34;
+int32_t g_redSplitWeaponMissileQuarterRocketOffsetX = 45;
+int32_t g_redSplitWeaponMissileQuarterRocketOffsetY = -36;
 int32_t g_redSplitWeaponMissileFlashOffsetX = 0;
-int32_t g_redSplitWeaponMissileFlashOffsetY = 0;
+int32_t g_redSplitWeaponMissileFlashOffsetY = -7;
+int32_t g_redSplitWeaponMissileQuarterFlashOffsetX = 33;
+int32_t g_redSplitWeaponMissileQuarterFlashOffsetY = -7;
 int32_t g_redSplitWeaponTripLeftOffsetX = 0;
 int32_t g_redSplitWeaponTripLeftOffsetY = 14;
 int32_t g_redSplitWeaponTripRightOffsetX = 0;
 int32_t g_redSplitWeaponTripRightOffsetY = 14;
 int32_t g_redSplitWeaponTripMineScalePercent = 103;
+int32_t g_redSplitWeaponTripQuarterLeftOffsetX = -97;
+int32_t g_redSplitWeaponTripQuarterLeftOffsetY = 14;
+int32_t g_redSplitWeaponTripQuarterRightOffsetX = 97;
+int32_t g_redSplitWeaponTripQuarterRightOffsetY = 14;
+int32_t g_redSplitWeaponTripQuarterMineScalePercent = 103;
 int32_t g_redSplitWeaponKickArmedOffsetX = 40;
 int32_t g_redSplitWeaponKickUnarmedOffsetX = -10;
 int32_t g_redSplitWeaponAnchor = 1;
@@ -1940,6 +1952,17 @@ static int32_t *g_redSplitWeaponDebugWideScalePercent = &g_redSplitWeaponPerWeap
 static int32_t *g_redSplitWeaponDebugFlashWideOffsetX = &g_redSplitWeaponPerWeaponFlashWideOffsetX[PISTOL_WEAPON];
 static int32_t *g_redSplitWeaponDebugFlashWideOffsetY = &g_redSplitWeaponPerWeaponFlashWideOffsetY[PISTOL_WEAPON];
 static int32_t *g_redSplitWeaponDebugAlienGlowOffsetX = &g_redSplitWeaponAlienGlowOffsetX[PISTOL_WEAPON];
+static int32_t *g_redSplitWeaponDebugMissileRightOffsetX = &g_redSplitWeaponMissileRightOffsetX;
+static int32_t *g_redSplitWeaponDebugMissileRightOffsetY = &g_redSplitWeaponMissileRightOffsetY;
+static int32_t *g_redSplitWeaponDebugMissileRocketOffsetX = &g_redSplitWeaponMissileRocketOffsetX;
+static int32_t *g_redSplitWeaponDebugMissileRocketOffsetY = &g_redSplitWeaponMissileRocketOffsetY;
+static int32_t *g_redSplitWeaponDebugMissileFlashOffsetX = &g_redSplitWeaponMissileFlashOffsetX;
+static int32_t *g_redSplitWeaponDebugMissileFlashOffsetY = &g_redSplitWeaponMissileFlashOffsetY;
+static int32_t *g_redSplitWeaponDebugTripLeftOffsetX = &g_redSplitWeaponTripLeftOffsetX;
+static int32_t *g_redSplitWeaponDebugTripLeftOffsetY = &g_redSplitWeaponTripLeftOffsetY;
+static int32_t *g_redSplitWeaponDebugTripRightOffsetX = &g_redSplitWeaponTripRightOffsetX;
+static int32_t *g_redSplitWeaponDebugTripRightOffsetY = &g_redSplitWeaponTripRightOffsetY;
+static int32_t *g_redSplitWeaponDebugTripMineScalePercent = &g_redSplitWeaponTripMineScalePercent;
 
 static int32_t RedSplit_VisibleWeaponDebugMax(void)
 {
@@ -1962,46 +1985,67 @@ static int32_t g_redSplitHudArmorIconScale = 45;
 static int32_t g_redSplitHudArmorTextX = 43;
 static int32_t g_redSplitHudArmorTextY = 88;
 static int32_t g_redSplitHudArmorTextScale = 66;
-static int32_t g_redSplitHudAmmoIconX = 336;
-static int32_t g_redSplitHudAmmoIconY = 87;
-static int32_t g_redSplitHudAmmoIconScale = 19;
-static int32_t g_redSplitHudAmmoTextX = 369;
+static int32_t g_redSplitHudAmmoIconX = 327;
+static int32_t g_redSplitHudAmmoIconY = 86;
+static int32_t g_redSplitHudAmmoIconScale = 54;
+static int32_t g_redSplitHudAmmoTextX = 367;
 static int32_t g_redSplitHudAmmoTextY = 88;
 static int32_t g_redSplitHudAmmoTextScale = 66;
-static int32_t g_redSplitHudAccessIconX = 347;
-static int32_t g_redSplitHudAccessIconY = 71;
+static int32_t g_redSplitHudAccessIconX = 345;
+static int32_t g_redSplitHudAccessIconY = 68;
 static int32_t g_redSplitHudAccessIconScale = 45;
+static int32_t g_redSplitHudInventoryIconX = 82;
+static int32_t g_redSplitHudInventoryIconY = 98;
+static int32_t g_redSplitHudInventoryIconScale = 36;
+static int32_t g_redSplitHudInventoryTextX = 104;
+static int32_t g_redSplitHudInventoryTextY = 94;
+static int32_t g_redSplitHudInventoryTextScale = 60;
+static int32_t g_redSplitHudInventoryTextSpacing = 3;
+static int32_t g_redSplitHudInventoryStateX = 106;
+static int32_t g_redSplitHudInventoryStateY = 87;
+static int32_t g_redSplitHudInventoryStateScale = 60;
 static int32_t g_redSplitExtraMenuBgOpacity = 75;
 static int32_t g_redSplitHudGlobalX = 0;
 static int32_t g_redSplitHudGlobalY = 0;
 static int32_t g_redSplitHudGlobalScale = 100;
 static int32_t g_redSplitHudTextSpacing = 0;
 
-static int32_t g_redSplitHudQuarterHealthIconX = 11;
+static int32_t g_redSplitHudQuarterHealthIconX = -47;
 static int32_t g_redSplitHudQuarterHealthIconY = 88;
-static int32_t g_redSplitHudQuarterHealthIconScale = 91;
-static int32_t g_redSplitHudQuarterHealthTextX = 34;
-static int32_t g_redSplitHudQuarterHealthTextY = 90;
-static int32_t g_redSplitHudQuarterHealthTextScale = 90;
-static int32_t g_redSplitHudQuarterArmorIconX = 78;
-static int32_t g_redSplitHudQuarterArmorIconY = 87;
-static int32_t g_redSplitHudQuarterArmorIconScale = 73;
-static int32_t g_redSplitHudQuarterArmorTextX = 101;
-static int32_t g_redSplitHudQuarterArmorTextY = 90;
-static int32_t g_redSplitHudQuarterArmorTextScale = 90;
-static int32_t g_redSplitHudQuarterAmmoIconX = 246;
-static int32_t g_redSplitHudQuarterAmmoIconY = 87;
-static int32_t g_redSplitHudQuarterAmmoIconScale = 36;
-static int32_t g_redSplitHudQuarterAmmoTextX = 306;
-static int32_t g_redSplitHudQuarterAmmoTextY = 88;
-static int32_t g_redSplitHudQuarterAmmoTextScale = 90;
-static int32_t g_redSplitHudQuarterAccessIconX = 283;
-static int32_t g_redSplitHudQuarterAccessIconY = 76;
-static int32_t g_redSplitHudQuarterAccessIconScale = 57;
+static int32_t g_redSplitHudQuarterHealthIconScale = 110;
+static int32_t g_redSplitHudQuarterHealthTextX = -19;
+static int32_t g_redSplitHudQuarterHealthTextY = 89;
+static int32_t g_redSplitHudQuarterHealthTextScale = 120;
+static int32_t g_redSplitHudQuarterArmorIconX = 40;
+static int32_t g_redSplitHudQuarterArmorIconY = 86;
+static int32_t g_redSplitHudQuarterArmorIconScale = 91;
+static int32_t g_redSplitHudQuarterArmorTextX = 67;
+static int32_t g_redSplitHudQuarterArmorTextY = 89;
+static int32_t g_redSplitHudQuarterArmorTextScale = 120;
+static int32_t g_redSplitHudQuarterAmmoIconX = 301;
+static int32_t g_redSplitHudQuarterAmmoIconY = 86;
+static int32_t g_redSplitHudQuarterAmmoIconScale = 96;
+static int32_t g_redSplitHudQuarterAmmoTextX = 364;
+static int32_t g_redSplitHudQuarterAmmoTextY = 89;
+static int32_t g_redSplitHudQuarterAmmoTextScale = 110;
+static int32_t g_redSplitHudQuarterAccessIconX = 332;
+static int32_t g_redSplitHudQuarterAccessIconY = 75;
+static int32_t g_redSplitHudQuarterAccessIconScale = 74;
+static int32_t g_redSplitHudQuarterInventoryIconX = 125;
+static int32_t g_redSplitHudQuarterInventoryIconY = 96;
+static int32_t g_redSplitHudQuarterInventoryIconScale = 72;
+static int32_t g_redSplitHudQuarterInventoryTextX = 158;
+static int32_t g_redSplitHudQuarterInventoryTextY = 93;
+static int32_t g_redSplitHudQuarterInventoryTextScale = 120;
+static int32_t g_redSplitHudQuarterInventoryTextSpacing = 4;
+static int32_t g_redSplitHudQuarterInventoryStateX = 158;
+static int32_t g_redSplitHudQuarterInventoryStateY = 87;
+static int32_t g_redSplitHudQuarterInventoryStateScale = 123;
 static int32_t g_redSplitHudQuarterGlobalX = 0;
-static int32_t g_redSplitHudQuarterGlobalY = 2;
+static int32_t g_redSplitHudQuarterGlobalY = 0;
 static int32_t g_redSplitHudQuarterGlobalScale = 100;
-static int32_t g_redSplitHudQuarterTextSpacing = 5;
+static int32_t g_redSplitHudQuarterDrawScale = 180;
+static int32_t g_redSplitHudQuarterTextSpacing = 0;
 
 static int32_t *g_redSplitHudDebugHealthIconX = &g_redSplitHudHealthIconX;
 static int32_t *g_redSplitHudDebugHealthIconY = &g_redSplitHudHealthIconY;
@@ -2024,6 +2068,16 @@ static int32_t *g_redSplitHudDebugAmmoTextScale = &g_redSplitHudAmmoTextScale;
 static int32_t *g_redSplitHudDebugAccessIconX = &g_redSplitHudAccessIconX;
 static int32_t *g_redSplitHudDebugAccessIconY = &g_redSplitHudAccessIconY;
 static int32_t *g_redSplitHudDebugAccessIconScale = &g_redSplitHudAccessIconScale;
+static int32_t *g_redSplitHudDebugInventoryIconX = &g_redSplitHudInventoryIconX;
+static int32_t *g_redSplitHudDebugInventoryIconY = &g_redSplitHudInventoryIconY;
+static int32_t *g_redSplitHudDebugInventoryIconScale = &g_redSplitHudInventoryIconScale;
+static int32_t *g_redSplitHudDebugInventoryTextX = &g_redSplitHudInventoryTextX;
+static int32_t *g_redSplitHudDebugInventoryTextY = &g_redSplitHudInventoryTextY;
+static int32_t *g_redSplitHudDebugInventoryTextScale = &g_redSplitHudInventoryTextScale;
+static int32_t *g_redSplitHudDebugInventoryTextSpacing = &g_redSplitHudInventoryTextSpacing;
+static int32_t *g_redSplitHudDebugInventoryStateX = &g_redSplitHudInventoryStateX;
+static int32_t *g_redSplitHudDebugInventoryStateY = &g_redSplitHudInventoryStateY;
+static int32_t *g_redSplitHudDebugInventoryStateScale = &g_redSplitHudInventoryStateScale;
 static int32_t *g_redSplitHudDebugGlobalX = &g_redSplitHudGlobalX;
 static int32_t *g_redSplitHudDebugGlobalY = &g_redSplitHudGlobalY;
 static int32_t *g_redSplitHudDebugGlobalScale = &g_redSplitHudGlobalScale;
@@ -2044,29 +2098,40 @@ static RedSplitHudTuningParam_t g_redSplitHudTuningParams[] = {
     { "Health icon tile", &g_redSplitHudHealthIconTile, 0, (int32_t)ARRAY_SIZE(g_redSplitHudHealthIconTiles) - 1 },
     { "Health icon X", g_redSplitHudDebugHealthIconX, -220, 560 },
     { "Health icon Y", g_redSplitHudDebugHealthIconY, -40, 140 },
-    { "Health icon scale", g_redSplitHudDebugHealthIconScale, 1, 180 },
+    { "Health icon scale", g_redSplitHudDebugHealthIconScale, 1, 400 },
     { "Health text X", g_redSplitHudDebugHealthTextX, -220, 560 },
     { "Health text Y", g_redSplitHudDebugHealthTextY, -40, 140 },
-    { "Health text scale", g_redSplitHudDebugHealthTextScale, 1, 180 },
+    { "Health text scale", g_redSplitHudDebugHealthTextScale, 1, 400 },
     { "Armor icon X", g_redSplitHudDebugArmorIconX, -220, 560 },
     { "Armor icon Y", g_redSplitHudDebugArmorIconY, -40, 140 },
-    { "Armor icon scale", g_redSplitHudDebugArmorIconScale, 1, 180 },
+    { "Armor icon scale", g_redSplitHudDebugArmorIconScale, 1, 400 },
     { "Armor text X", g_redSplitHudDebugArmorTextX, -220, 560 },
     { "Armor text Y", g_redSplitHudDebugArmorTextY, -40, 140 },
-    { "Armor text scale", g_redSplitHudDebugArmorTextScale, 1, 180 },
+    { "Armor text scale", g_redSplitHudDebugArmorTextScale, 1, 400 },
     { "Ammo icon X", g_redSplitHudDebugAmmoIconX, -220, 560 },
     { "Ammo icon Y", g_redSplitHudDebugAmmoIconY, -40, 140 },
-    { "Ammo icon scale", g_redSplitHudDebugAmmoIconScale, 1, 180 },
+    { "Ammo icon scale", g_redSplitHudDebugAmmoIconScale, 1, 400 },
     { "Ammo text X", g_redSplitHudDebugAmmoTextX, -220, 560 },
     { "Ammo text Y", g_redSplitHudDebugAmmoTextY, -40, 140 },
-    { "Ammo text scale", g_redSplitHudDebugAmmoTextScale, 1, 180 },
+    { "Ammo text scale", g_redSplitHudDebugAmmoTextScale, 1, 400 },
     { "Access icon X", g_redSplitHudDebugAccessIconX, -220, 560 },
     { "Access icon Y", g_redSplitHudDebugAccessIconY, -40, 140 },
-    { "Access icon scale", g_redSplitHudDebugAccessIconScale, 1, 180 },
+    { "Access icon scale", g_redSplitHudDebugAccessIconScale, 1, 400 },
+    { "Item icon X", g_redSplitHudDebugInventoryIconX, -220, 560 },
+    { "Item icon Y", g_redSplitHudDebugInventoryIconY, -40, 140 },
+    { "Item icon scale", g_redSplitHudDebugInventoryIconScale, 1, 400 },
+    { "Item amount X", g_redSplitHudDebugInventoryTextX, -220, 560 },
+    { "Item amount Y", g_redSplitHudDebugInventoryTextY, -40, 140 },
+    { "Item amount scale", g_redSplitHudDebugInventoryTextScale, 1, 400 },
+    { "Item amount spacing", g_redSplitHudDebugInventoryTextSpacing, 1, 16 },
+    { "Item state X", g_redSplitHudDebugInventoryStateX, -220, 560 },
+    { "Item state Y", g_redSplitHudDebugInventoryStateY, -40, 140 },
+    { "Item state scale", g_redSplitHudDebugInventoryStateScale, 1, 400 },
     { "HUD all X", g_redSplitHudDebugGlobalX, -220, 220 },
     { "HUD all Y", g_redSplitHudDebugGlobalY, -120, 120 },
-    { "HUD all scale", g_redSplitHudDebugGlobalScale, 50, 200 },
+    { "HUD all scale", g_redSplitHudDebugGlobalScale, 50, 400 },
     { "HUD text spacing", g_redSplitHudDebugTextSpacing, -8, 20 },
+    { "HUD 1/4 draw scale", &g_redSplitHudQuarterDrawScale, 50, 400 },
     { "Extra bg opacity", &g_redSplitExtraMenuBgOpacity, 0, 100 },
 };
 
@@ -2101,20 +2166,21 @@ static RedSplitHudTuningParam_t g_redSplitWeaponTuningParams[] = {
     { "Alien glow S1 Y", &g_redSplitWeaponAlienGlowSmall1OffsetY, -120, 160 },
     { "Alien glow S2 X", &g_redSplitWeaponAlienGlowSmall2OffsetX, -180, 180 },
     { "Alien glow S2 Y", &g_redSplitWeaponAlienGlowSmall2OffsetY, -120, 160 },
-    { "Missile right X", &g_redSplitWeaponMissileRightOffsetX, -180, 180 },
-    { "Missile right Y", &g_redSplitWeaponMissileRightOffsetY, -120, 160 },
-    { "Missile rocket X", &g_redSplitWeaponMissileRocketOffsetX, -180, 180 },
-    { "Missile rocket Y", &g_redSplitWeaponMissileRocketOffsetY, -120, 160 },
-    { "Missile flash X", &g_redSplitWeaponMissileFlashOffsetX, -180, 180 },
-    { "Missile flash Y", &g_redSplitWeaponMissileFlashOffsetY, -120, 160 },
-    { "Trip left X", &g_redSplitWeaponTripLeftOffsetX, -180, 180 },
-    { "Trip left Y", &g_redSplitWeaponTripLeftOffsetY, -120, 160 },
-    { "Trip right X", &g_redSplitWeaponTripRightOffsetX, -180, 180 },
-    { "Trip right Y", &g_redSplitWeaponTripRightOffsetY, -120, 160 },
-    { "Trip mine scale", &g_redSplitWeaponTripMineScalePercent, 20, 180 },
+    { "Missile right X", g_redSplitWeaponDebugMissileRightOffsetX, -180, 180 },
+    { "Missile right Y", g_redSplitWeaponDebugMissileRightOffsetY, -120, 160 },
+    { "Missile rocket X", g_redSplitWeaponDebugMissileRocketOffsetX, -180, 180 },
+    { "Missile rocket Y", g_redSplitWeaponDebugMissileRocketOffsetY, -120, 160 },
+    { "Missile flash X", g_redSplitWeaponDebugMissileFlashOffsetX, -180, 180 },
+    { "Missile flash Y", g_redSplitWeaponDebugMissileFlashOffsetY, -120, 160 },
+    { "Trip left X", g_redSplitWeaponDebugTripLeftOffsetX, -180, 180 },
+    { "Trip left Y", g_redSplitWeaponDebugTripLeftOffsetY, -120, 160 },
+    { "Trip right X", g_redSplitWeaponDebugTripRightOffsetX, -180, 180 },
+    { "Trip right Y", g_redSplitWeaponDebugTripRightOffsetY, -120, 160 },
+    { "Trip mine scale", g_redSplitWeaponDebugTripMineScalePercent, 20, 180 },
     { "Kick armed X", &g_redSplitWeaponKickArmedOffsetX, -180, 180 },
     { "Kick unarmed X", &g_redSplitWeaponKickUnarmedOffsetX, -180, 180 },
     { "Anchor 0L 1S 2R", &g_redSplitWeaponAnchor, 0, 2 },
+    { "Wheel 1/4 scale", &g_redSplitWeaponWheelQuarterScalePercent, 20, 200 },
 };
 
 void RedSplit_OpenExtraMenu(int32_t const playerNum)
@@ -2337,6 +2403,16 @@ static int32_t RedSplit_ViewYFrom100(RedSplitViewport_t const &view, int32_t con
     return RedSplit_ToVirtualY(view.y1 + scale(y, RedSplit_ViewHeight(view), 100));
 }
 
+static int32_t RedSplit_HudDrawXFrom320(RedSplitViewport_t const &view, int32_t const x)
+{
+    return RedSplit_IsQuarterViewport(view) ? x : RedSplit_ViewXFrom320(view, x);
+}
+
+static int32_t RedSplit_HudDrawYFrom100(RedSplitViewport_t const &view, int32_t const y)
+{
+    return RedSplit_IsQuarterViewport(view) ? scale(y, 200, 100) : RedSplit_ViewYFrom100(view, y);
+}
+
 static int32_t RedSplit_ViewScalePercent(RedSplitViewport_t const &view, int32_t const basePercent)
 {
     int32_t const widthPercent  = scale(RedSplit_ViewWidth(view), 100, xdim);
@@ -2344,9 +2420,24 @@ static int32_t RedSplit_ViewScalePercent(RedSplitViewport_t const &view, int32_t
     return scale(basePercent, min(widthPercent, heightPercent), 100);
 }
 
+static int32_t RedSplit_HudDrawScalePercent(RedSplitViewport_t const &view, int32_t const basePercent)
+{
+    int32_t scalePercent = RedSplit_ViewScalePercent(view, basePercent);
+
+    if (RedSplit_IsQuarterViewport(view))
+        scalePercent = scale(scalePercent, clamp<int32_t>(g_redSplitHudQuarterDrawScale, 50, 400), 100);
+
+    return scalePercent;
+}
+
 static int32_t RedSplit_HudRotateFlags(RedSplitViewport_t const &view)
 {
     return 2 | 8 | 16 | ROTATESPRITE_FULL16 | (RedSplit_IsQuarterViewport(view) ? RS_STRETCH : 0);
+}
+
+static int32_t RedSplit_HudIconRotateFlags(RedSplitViewport_t const &view)
+{
+    return RedSplit_IsQuarterViewport(view) ? (2 | 16 | ROTATESPRITE_FULL16) : (2 | 8 | 16 | ROTATESPRITE_FULL16);
 }
 
 static int32_t RedSplit_HudTextRotateFlags(void)
@@ -2531,7 +2622,7 @@ static void RedSplit_DrawMinimalHudTextSprites(RedSplitViewport_t const &view, i
     if (text == nullptr)
         return;
 
-    int32_t const scalePercent = RedSplit_ViewScalePercent(view, baseScalePercent);
+    int32_t const scalePercent = RedSplit_HudDrawScalePercent(view, baseScalePercent);
     int32_t const zoom = scale(65536, scalePercent, 100);
     int32_t const charSpacing = RedSplit_IsQuarterViewport(view) ? g_redSplitHudQuarterTextSpacing : g_redSplitHudTextSpacing;
 
@@ -2546,8 +2637,8 @@ static void RedSplit_DrawMinimalHudTextSprites(RedSplitViewport_t const &view, i
 
         if (tile >= 0 && (unsigned)tile < MAXTILES && tilesiz[tile].x > 0 && tilesiz[tile].y > 0)
         {
-            rotatesprite_(RedSplit_ViewXFrom320(view, x) << 16, RedSplit_ViewYFrom100(view, y) << 16,
-                zoom, 0, tile, 0, MF_Redfont.pal_deselected, RedSplit_HudRotateFlags(view),
+            rotatesprite_(RedSplit_HudDrawXFrom320(view, x) << 16, RedSplit_HudDrawYFrom100(view, y) << 16,
+                zoom, 0, tile, 0, MF_Redfont.pal_deselected, RedSplit_HudIconRotateFlags(view),
                 0, 0, view.x1, view.y1, view.x2, view.y2);
         }
 
@@ -2565,7 +2656,7 @@ static void RedSplit_DrawMinimalHudText(RedSplitViewport_t const &view, int32_t 
         return;
     }
 
-    int32_t const scalePercent = RedSplit_ViewScalePercent(view, baseScalePercent);
+    int32_t const scalePercent = RedSplit_HudDrawScalePercent(view, baseScalePercent);
     int32_t const zoom = scale(MF_Redfont.zoom, scalePercent, 100);
 
     G_ScreenText(MF_Redfont.tilenum, RedSplit_ViewXFrom320(view, x) << 16, RedSplit_ViewYFrom100(view, y) << 16, zoom, 0, 0, text, 0, MF_Redfont.pal_deselected,
@@ -2576,14 +2667,167 @@ static void RedSplit_DrawMinimalHudText(RedSplitViewport_t const &view, int32_t 
         view.x1, view.y1, view.x2, view.y2);
 }
 
-static void RedSplit_DrawMinimalHudTile(RedSplitViewport_t const &view, int32_t const x, int32_t const y, int32_t const tile, int32_t const scalePercent, int32_t const pal = 0)
+static void RedSplit_DrawMinimalHudTile(RedSplitViewport_t const &view, int32_t const x, int32_t const y, int32_t const tile, int32_t const scalePercent, int32_t const pal = 0);
+static int32_t RedSplit_HudTileVisualWidth(int32_t const tile);
+static int32_t RedSplit_HudTileVisualHeight(int32_t const tile);
+
+static int32_t RedSplit_HudRealityInventoryTile(char const ch)
+{
+    if (ch >= '0' && ch <= '9')
+        return 3689 + ch;
+
+    return ch == '%' ? 3736 : -1;
+}
+
+static int32_t RedSplit_HudRealityInventoryStateTile(char const * const text)
+{
+    if (text == nullptr)
+        return -1;
+
+    if (!Bstrcmp(text, "ON"))
+        return 3749;
+    if (!Bstrcmp(text, "OFF"))
+        return 3748;
+    if (!Bstrcmp(text, "AUTO"))
+        return 3747;
+
+    return -1;
+}
+
+static int32_t RedSplit_HudRealityInventoryTextSpacing(RedSplitViewport_t const &view)
+{
+    return max<int32_t>(RedSplit_IsQuarterViewport(view) ? g_redSplitHudQuarterInventoryTextSpacing : g_redSplitHudInventoryTextSpacing, 1);
+}
+
+static int32_t RedSplit_HudRealityInventoryTextWidth(RedSplitViewport_t const &view, char const * const text)
+{
+    if (text == nullptr || text[0] == '\0')
+        return 0;
+
+    int32_t const len = Bstrlen(text);
+    int32_t const spacing = RedSplit_HudRealityInventoryTextSpacing(view);
+
+    return (len - 1) * spacing;
+}
+
+static void RedSplit_DrawMinimalHudRealityInventoryText(RedSplitViewport_t const &view, int32_t x, int32_t const y, char const * const text,
+                                                        int32_t const flags, int32_t const baseScalePercent)
+{
+    if (text == nullptr || text[0] == '\0')
+        return;
+
+    int32_t const stateTile = RedSplit_HudRealityInventoryStateTile(text);
+    if (stateTile >= 0)
+    {
+        int32_t drawX = x;
+        if (flags & TEXT_XRIGHT)
+        {
+            if ((unsigned)stateTile < MAXTILES && tilesiz[stateTile].x > 0)
+                drawX -= tilesiz[stateTile].x / 2;
+        }
+        else if (flags & TEXT_XCENTER)
+        {
+            if ((unsigned)stateTile < MAXTILES && tilesiz[stateTile].x > 0)
+                drawX -= tilesiz[stateTile].x / 4;
+        }
+
+        RedSplit_DrawMinimalHudTile(view, drawX, y, stateTile, baseScalePercent);
+        return;
+    }
+
+    if (flags & TEXT_XRIGHT)
+        x -= RedSplit_HudRealityInventoryTextWidth(view, text);
+    else if (flags & TEXT_XCENTER)
+        x -= RedSplit_HudRealityInventoryTextWidth(view, text) / 2;
+
+    int32_t const spacing = RedSplit_HudRealityInventoryTextSpacing(view);
+    for (char const *ch = text; *ch != '\0'; ++ch)
+    {
+        int32_t const tile = RedSplit_HudRealityInventoryTile(*ch);
+
+        if (tile >= 0)
+            RedSplit_DrawMinimalHudTile(view, x, y, tile, baseScalePercent);
+
+        x += spacing;
+    }
+}
+
+static void RedSplit_DrawMinimalHudMiniText(RedSplitViewport_t const &view, int32_t const x, int32_t const y, char const * const text,
+                                            int32_t const flags = 0, int32_t const baseScalePercent = 100)
+{
+    if (text == nullptr || text[0] == '\0')
+        return;
+
+    RedSplit_DrawMinimalHudRealityInventoryText(view, x, y, text, flags, baseScalePercent);
+}
+
+static void RedSplit_DrawMinimalHudTile(RedSplitViewport_t const &view, int32_t const x, int32_t const y, int32_t const tile, int32_t const scalePercent, int32_t const pal)
 {
     if (tile < 0 || tilesiz[tile].x == 0 || tilesiz[tile].y == 0)
         return;
 
-    rotatesprite_(RedSplit_ViewXFrom320(view, x) << 16, RedSplit_ViewYFrom100(view, y) << 16,
-        scale(65536, RedSplit_ViewScalePercent(view, scalePercent), 100), 0, tile, 0, pal,
-        RedSplit_HudRotateFlags(view), 0, 0, view.x1, view.y1, view.x2, view.y2);
+    rotatesprite_(RedSplit_HudDrawXFrom320(view, x) << 16, RedSplit_HudDrawYFrom100(view, y) << 16,
+        scale(65536, RedSplit_HudDrawScalePercent(view, scalePercent), 100), 0, tile, 0, pal,
+        RedSplit_HudIconRotateFlags(view), 0, 0, view.x1, view.y1, view.x2, view.y2);
+}
+
+static int32_t RedSplit_HudTileVisualWidth(int32_t const tile)
+{
+    if ((unsigned)tile < MAXTILES)
+    {
+        int32_t const rtTile = rt_tilemap[tile];
+        if ((unsigned)rtTile < RT_TILENUM && rt_tileinfo[rtTile].dimx > 0)
+            return rt_tileinfo[rtTile].dimx;
+
+        if (tilesiz[tile].x > 0)
+            return tilesiz[tile].x;
+    }
+
+    return 0;
+}
+
+static int32_t RedSplit_HudTileVisualHeight(int32_t const tile)
+{
+    if ((unsigned)tile < MAXTILES)
+    {
+        int32_t const rtTile = rt_tilemap[tile];
+        if ((unsigned)rtTile < RT_TILENUM && rt_tileinfo[rtTile].dimy > 0)
+            return rt_tileinfo[rtTile].dimy;
+
+        if (tilesiz[tile].y > 0)
+            return tilesiz[tile].y;
+    }
+
+    return 0;
+}
+
+static void RedSplit_DrawMinimalHudTileBottomRight(RedSplitViewport_t const &view, int32_t const rightX, int32_t const bottomY,
+                                                   int32_t const tile, int32_t const scalePercent, int32_t const pal = 0)
+{
+    if (tile < 0 || tilesiz[tile].x == 0 || tilesiz[tile].y == 0)
+        return;
+
+    int32_t const drawScale = RedSplit_HudDrawScalePercent(view, scalePercent);
+    int32_t const drawW = scale(RedSplit_HudTileVisualWidth(tile), drawScale, 100);
+    int32_t const drawH = scale(RedSplit_HudTileVisualHeight(tile), drawScale, 100);
+    int32_t const centerX = rightX - drawW / 2;
+    int32_t const centerY = bottomY - drawH / 2;
+
+    RedSplit_DrawMinimalHudTile(view, centerX, centerY, tile, scalePercent, pal);
+}
+
+static void RedSplit_DrawMinimalHudTileBottomCenter(RedSplitViewport_t const &view, int32_t const centerX, int32_t const bottomY,
+                                                    int32_t const tile, int32_t const scalePercent, int32_t const pal = 0)
+{
+    if (tile < 0 || tilesiz[tile].x == 0 || tilesiz[tile].y == 0)
+        return;
+
+    int32_t const drawScale = RedSplit_HudDrawScalePercent(view, scalePercent);
+    int32_t const tileH = RedSplit_IsQuarterViewport(view) ? RedSplit_HudTileVisualHeight(tile) : tilesiz[tile].y;
+    int32_t const drawH = scale(tileH, drawScale, 100);
+    int32_t const centerY = bottomY - (RedSplit_IsQuarterViewport(view) ? drawH / 2 : drawH);
+
+    RedSplit_DrawMinimalHudTile(view, centerX, centerY, tile, scalePercent, pal);
 }
 
 struct RedSplitMinimalHudLayout_t
@@ -2607,6 +2851,21 @@ static void RedSplit_ApplyMinimalHudGlobal(int32_t &x, int32_t &y, int32_t &scal
     scalePercent = ::scale(scalePercent, globalScale, 100);
 }
 
+static int32_t RedSplit_HudAspectAutoFitScale(RedSplitViewport_t const &view)
+{
+    if (RedSplit_ViewHeight(view) <= 0)
+        return 100;
+
+    int32_t const logicalWidth = RedSplit_IsQuarterViewport(view)
+        ? scale(RedSplit_ViewWidth(view), 200, RedSplit_ViewHeight(view)) - 24
+        : scale(RedSplit_ViewWidth(view), 100, RedSplit_ViewHeight(view)) - 24;
+
+    if (logicalWidth >= 320)
+        return 100;
+
+    return clamp<int32_t>(scale(logicalWidth, 100, 320), 60, 100);
+}
+
 static RedSplitMinimalHudLayout_t RedSplit_MinimalHudLayout(RedSplitViewport_t const &view)
 {
     int32_t globalX = g_redSplitHudGlobalX;
@@ -2620,9 +2879,9 @@ static RedSplitMinimalHudLayout_t RedSplit_MinimalHudLayout(RedSplitViewport_t c
         g_redSplitHudAmmoIconX, g_redSplitHudAmmoIconY, g_redSplitHudAmmoIconScale,
         g_redSplitHudAmmoTextX, g_redSplitHudAmmoTextY, g_redSplitHudAmmoTextScale,
         g_redSplitHudAccessIconX, g_redSplitHudAccessIconY, g_redSplitHudAccessIconScale,
-        284, 72, 34,
-        324, 73, 50,
-        324, 62, 42,
+        g_redSplitHudInventoryIconX, g_redSplitHudInventoryIconY, g_redSplitHudInventoryIconScale,
+        g_redSplitHudInventoryTextX, g_redSplitHudInventoryTextY, g_redSplitHudInventoryTextScale,
+        g_redSplitHudInventoryStateX, g_redSplitHudInventoryStateY, g_redSplitHudInventoryStateScale,
     };
 
     if (RedSplit_IsQuarterViewport(view))
@@ -2656,18 +2915,19 @@ static RedSplitMinimalHudLayout_t RedSplit_MinimalHudLayout(RedSplitViewport_t c
         layout.accessIconY = g_redSplitHudQuarterAccessIconY;
         layout.accessIconScale = g_redSplitHudQuarterAccessIconScale;
 
-        layout.inventoryIconX = 208;
-        layout.inventoryIconY = 67;
-        layout.inventoryIconScale = 30;
-        layout.inventoryTextX = 236;
-        layout.inventoryTextY = 72;
-        layout.inventoryTextScale = 42;
-        layout.inventoryStateX = 236;
-        layout.inventoryStateY = 62;
-        layout.inventoryStateScale = 36;
+        layout.inventoryIconX = g_redSplitHudQuarterInventoryIconX;
+        layout.inventoryIconY = g_redSplitHudQuarterInventoryIconY;
+        layout.inventoryIconScale = g_redSplitHudQuarterInventoryIconScale;
+        layout.inventoryTextX = g_redSplitHudQuarterInventoryTextX;
+        layout.inventoryTextY = g_redSplitHudQuarterInventoryTextY;
+        layout.inventoryTextScale = g_redSplitHudQuarterInventoryTextScale;
+        layout.inventoryStateX = g_redSplitHudQuarterInventoryStateX;
+        layout.inventoryStateY = g_redSplitHudQuarterInventoryStateY;
+        layout.inventoryStateScale = g_redSplitHudQuarterInventoryStateScale;
     }
 
     globalScale = clamp<int32_t>(globalScale, 50, 200);
+    globalScale = scale(globalScale, RedSplit_HudAspectAutoFitScale(view), 100);
     RedSplit_ApplyMinimalHudGlobal(layout.healthIconX, layout.healthIconY, layout.healthIconScale, globalX, globalY, globalScale);
     RedSplit_ApplyMinimalHudGlobal(layout.healthTextX, layout.healthTextY, layout.healthTextScale, globalX, globalY, globalScale);
     RedSplit_ApplyMinimalHudGlobal(layout.armorIconX, layout.armorIconY, layout.armorIconScale, globalX, globalY, globalScale);
@@ -2682,14 +2942,6 @@ static RedSplitMinimalHudLayout_t RedSplit_MinimalHudLayout(RedSplitViewport_t c
     return layout;
 }
 
-static int32_t RedSplit_HudAmmoIconScaleForWeapon(int32_t const weaponNum, int32_t const baseScale)
-{
-    if (weaponNum == PISTOL_WEAPON)
-        return baseScale;
-
-    return scale(baseScale, 160, 100);
-}
-
 static int32_t RedSplit_HudAmmoIconForWeapon(int32_t const weaponNum)
 {
     static int32_t const ammoIcon[MAX_WEAPONS] = {
@@ -2701,6 +2953,61 @@ static int32_t RedSplit_HudAmmoIconForWeapon(int32_t const weaponNum)
         return AMMO;
 
     return ammoIcon[weaponNum];
+}
+
+static int32_t RedSplit_HudAmmoIconScaleForTile(int32_t const tile, int32_t const baseScale)
+{
+    int32_t const tileW = RedSplit_HudTileVisualWidth(tile);
+    int32_t const tileH = RedSplit_HudTileVisualHeight(tile);
+    if (tileW <= 0 || tileH <= 0)
+        return baseScale;
+
+    int32_t const targetH = 20;
+    int32_t const targetW = 36;
+    int32_t normalizedScale = min(scale(baseScale, targetH, tileH), scale(baseScale, targetW, tileW));
+    int32_t minScale = scale(baseScale, 70, 100);
+
+    if (tile == AMMO)
+    {
+        normalizedScale = scale(normalizedScale, 62, 100);
+        minScale = scale(baseScale, 40, 100);
+    }
+    else if (tile == TRIPBOMBSPRITE)
+        normalizedScale = scale(normalizedScale, 150, 100);
+    else if (tile == RPGAMMO)
+        normalizedScale = scale(normalizedScale, 112, 100);
+
+    return clamp<int32_t>(normalizedScale, minScale, scale(baseScale, 320, 100));
+}
+
+static int32_t RedSplit_HudAmmoIconScaleForView(RedSplitViewport_t const &view, int32_t const tile, int32_t const baseScale)
+{
+    int32_t iconScale = RedSplit_HudAmmoIconScaleForTile(tile, baseScale);
+
+    if (!RedSplit_IsQuarterViewport(view) && tile == DEVISTATORAMMO)
+        iconScale = scale(iconScale, 95, 100);
+
+    return iconScale;
+}
+
+static int32_t RedSplit_HudAmmoIconBottomOffset(RedSplitViewport_t const &view, int32_t const tile)
+{
+    if (!RedSplit_IsQuarterViewport(view) && tile == DEVISTATORAMMO)
+        return -4;
+
+    return 0;
+}
+
+static void RedSplit_DrawMinimalHudAmmoIcon(RedSplitViewport_t const &view, RedSplitMinimalHudLayout_t const &layout, int32_t const tile)
+{
+    int32_t const referenceScale = RedSplit_HudAmmoIconScaleForTile(AMMO, layout.ammoIconScale);
+    int32_t const referenceDrawScale = RedSplit_HudDrawScalePercent(view, referenceScale);
+    int32_t const referenceW = scale(RedSplit_HudTileVisualWidth(AMMO), referenceDrawScale, 100);
+    int32_t const referenceH = scale(RedSplit_HudTileVisualHeight(AMMO), referenceDrawScale, 100);
+    int32_t const rightX = layout.ammoIconX + referenceW / 2;
+    int32_t const bottomY = layout.ammoIconY + referenceH / 2 + RedSplit_HudAmmoIconBottomOffset(view, tile);
+
+    RedSplit_DrawMinimalHudTileBottomRight(view, rightX, bottomY, tile, RedSplit_HudAmmoIconScaleForView(view, tile, layout.ammoIconScale));
 }
 
 static int32_t RedSplit_HudHealthIconTile(void)
@@ -2799,7 +3106,6 @@ static RedSplitHudInventory_t RedSplit_HudInventory(DukePlayer_t const * const p
         case ICON_STEROIDS:
             inv.tile = STEROIDS;
             inv.amount = (p->inv_amount[GET_STEROIDS] + 3) / 4;
-            inv.state = inv.amount < 100 ? "ON" : "OFF";
             break;
         case ICON_HOLODUKE:
             inv.tile = HOLODUKE;
@@ -2841,12 +3147,12 @@ static void RedSplit_DrawMinimalHudInventory(DukePlayer_t const * const p, RedSp
         return;
 
     char value[16];
-    RedSplit_DrawMinimalHudTile(view, layout.inventoryIconX, layout.inventoryIconY, inv.tile, layout.inventoryIconScale);
+    RedSplit_DrawMinimalHudTileBottomCenter(view, layout.inventoryIconX, layout.inventoryIconY, inv.tile, layout.inventoryIconScale);
     Bsprintf(value, "%d%%", inv.amount);
-    RedSplit_DrawMinimalHudText(view, layout.inventoryTextX, layout.inventoryTextY, value, TEXT_XRIGHT, layout.inventoryTextScale);
+    RedSplit_DrawMinimalHudMiniText(view, layout.inventoryTextX, layout.inventoryTextY, value, TEXT_XRIGHT, layout.inventoryTextScale);
 
     if (inv.state != nullptr)
-        RedSplit_DrawMinimalHudText(view, layout.inventoryStateX, layout.inventoryStateY, inv.state, TEXT_XRIGHT, layout.inventoryStateScale);
+        RedSplit_DrawMinimalHudMiniText(view, layout.inventoryStateX, layout.inventoryStateY, inv.state, TEXT_XRIGHT, layout.inventoryStateScale);
 }
 
 static void RedSplit_DrawMinimalHudForPlayer(int32_t const playerNum, RedSplitViewport_t const &view)
@@ -2873,8 +3179,10 @@ static void RedSplit_DrawMinimalHudForPlayer(int32_t const playerNum, RedSplitVi
     RedSplit_DrawMinimalHudTile(view, layout.healthIconX, layout.healthIconY, RedSplit_HudHealthIconTile(), layout.healthIconScale);
     RedSplit_DrawMinimalHudTile(view, layout.armorIconX, layout.armorIconY, SHIELD, layout.armorIconScale);
     if (hasAmmoHud)
-        RedSplit_DrawMinimalHudTile(view, layout.ammoIconX, layout.ammoIconY, RedSplit_HudAmmoIconForWeapon(weaponNum),
-                                    RedSplit_HudAmmoIconScaleForWeapon(weaponNum, layout.ammoIconScale));
+    {
+        int32_t const ammoIcon = RedSplit_HudAmmoIconForWeapon(weaponNum);
+        RedSplit_DrawMinimalHudAmmoIcon(view, layout, ammoIcon);
+    }
     RedSplit_DrawMinimalHudAccessCards(p, view, layout);
     RedSplit_DrawMinimalHudInventory(p, view, layout);
 
@@ -2930,6 +3238,16 @@ static void RedSplit_HandleHudTuningInput(void)
         g_redSplitHudDebugAccessIconX = &g_redSplitHudAccessIconX;
         g_redSplitHudDebugAccessIconY = &g_redSplitHudAccessIconY;
         g_redSplitHudDebugAccessIconScale = &g_redSplitHudAccessIconScale;
+        g_redSplitHudDebugInventoryIconX = &g_redSplitHudInventoryIconX;
+        g_redSplitHudDebugInventoryIconY = &g_redSplitHudInventoryIconY;
+        g_redSplitHudDebugInventoryIconScale = &g_redSplitHudInventoryIconScale;
+        g_redSplitHudDebugInventoryTextX = &g_redSplitHudInventoryTextX;
+        g_redSplitHudDebugInventoryTextY = &g_redSplitHudInventoryTextY;
+        g_redSplitHudDebugInventoryTextScale = &g_redSplitHudInventoryTextScale;
+        g_redSplitHudDebugInventoryTextSpacing = &g_redSplitHudInventoryTextSpacing;
+        g_redSplitHudDebugInventoryStateX = &g_redSplitHudInventoryStateX;
+        g_redSplitHudDebugInventoryStateY = &g_redSplitHudInventoryStateY;
+        g_redSplitHudDebugInventoryStateScale = &g_redSplitHudInventoryStateScale;
         g_redSplitHudDebugGlobalX = &g_redSplitHudGlobalX;
         g_redSplitHudDebugGlobalY = &g_redSplitHudGlobalY;
         g_redSplitHudDebugGlobalScale = &g_redSplitHudGlobalScale;
@@ -2958,6 +3276,16 @@ static void RedSplit_HandleHudTuningInput(void)
         g_redSplitHudDebugAccessIconX = &g_redSplitHudQuarterAccessIconX;
         g_redSplitHudDebugAccessIconY = &g_redSplitHudQuarterAccessIconY;
         g_redSplitHudDebugAccessIconScale = &g_redSplitHudQuarterAccessIconScale;
+        g_redSplitHudDebugInventoryIconX = &g_redSplitHudQuarterInventoryIconX;
+        g_redSplitHudDebugInventoryIconY = &g_redSplitHudQuarterInventoryIconY;
+        g_redSplitHudDebugInventoryIconScale = &g_redSplitHudQuarterInventoryIconScale;
+        g_redSplitHudDebugInventoryTextX = &g_redSplitHudQuarterInventoryTextX;
+        g_redSplitHudDebugInventoryTextY = &g_redSplitHudQuarterInventoryTextY;
+        g_redSplitHudDebugInventoryTextScale = &g_redSplitHudQuarterInventoryTextScale;
+        g_redSplitHudDebugInventoryTextSpacing = &g_redSplitHudQuarterInventoryTextSpacing;
+        g_redSplitHudDebugInventoryStateX = &g_redSplitHudQuarterInventoryStateX;
+        g_redSplitHudDebugInventoryStateY = &g_redSplitHudQuarterInventoryStateY;
+        g_redSplitHudDebugInventoryStateScale = &g_redSplitHudQuarterInventoryStateScale;
         g_redSplitHudDebugGlobalX = &g_redSplitHudQuarterGlobalX;
         g_redSplitHudDebugGlobalY = &g_redSplitHudQuarterGlobalY;
         g_redSplitHudDebugGlobalScale = &g_redSplitHudQuarterGlobalScale;
@@ -2985,10 +3313,20 @@ static void RedSplit_HandleHudTuningInput(void)
     g_redSplitHudTuningParams[20].value = g_redSplitHudDebugAccessIconX;
     g_redSplitHudTuningParams[21].value = g_redSplitHudDebugAccessIconY;
     g_redSplitHudTuningParams[22].value = g_redSplitHudDebugAccessIconScale;
-    g_redSplitHudTuningParams[23].value = g_redSplitHudDebugGlobalX;
-    g_redSplitHudTuningParams[24].value = g_redSplitHudDebugGlobalY;
-    g_redSplitHudTuningParams[25].value = g_redSplitHudDebugGlobalScale;
-    g_redSplitHudTuningParams[26].value = g_redSplitHudDebugTextSpacing;
+    g_redSplitHudTuningParams[23].value = g_redSplitHudDebugInventoryIconX;
+    g_redSplitHudTuningParams[24].value = g_redSplitHudDebugInventoryIconY;
+    g_redSplitHudTuningParams[25].value = g_redSplitHudDebugInventoryIconScale;
+    g_redSplitHudTuningParams[26].value = g_redSplitHudDebugInventoryTextX;
+    g_redSplitHudTuningParams[27].value = g_redSplitHudDebugInventoryTextY;
+    g_redSplitHudTuningParams[28].value = g_redSplitHudDebugInventoryTextScale;
+    g_redSplitHudTuningParams[29].value = g_redSplitHudDebugInventoryTextSpacing;
+    g_redSplitHudTuningParams[30].value = g_redSplitHudDebugInventoryStateX;
+    g_redSplitHudTuningParams[31].value = g_redSplitHudDebugInventoryStateY;
+    g_redSplitHudTuningParams[32].value = g_redSplitHudDebugInventoryStateScale;
+    g_redSplitHudTuningParams[33].value = g_redSplitHudDebugGlobalX;
+    g_redSplitHudTuningParams[34].value = g_redSplitHudDebugGlobalY;
+    g_redSplitHudTuningParams[35].value = g_redSplitHudDebugGlobalScale;
+    g_redSplitHudTuningParams[36].value = g_redSplitHudDebugTextSpacing;
 
     int32_t const paramCount = ARRAY_SIZE(g_redSplitHudTuningParams);
 
@@ -3037,11 +3375,17 @@ static void RedSplit_DrawHudTuningPanel(void)
     char line[96];
     minitext(8, 8, "HUD TUNE  . closes  arrows adjust  shift=5", 0, 2 | 8 | 16);
 
-    for (int32_t i = 0; i < (int32_t)ARRAY_SIZE(g_redSplitHudTuningParams); ++i)
+    int32_t const paramCount = ARRAY_SIZE(g_redSplitHudTuningParams);
+    int32_t const maxVisibleRows = 28;
+    int32_t firstParam = g_redSplitHudTuningSelection - maxVisibleRows + 1;
+    firstParam = clamp(firstParam, 0, max<int32_t>(paramCount - maxVisibleRows, 0));
+    int32_t const lastParam = min<int32_t>(firstParam + maxVisibleRows, paramCount);
+
+    for (int32_t i = firstParam; i < lastParam; ++i)
     {
         RedSplitHudTuningParam_t const &param = g_redSplitHudTuningParams[i];
         Bsprintf(line, "%c %s: %d", i == g_redSplitHudTuningSelection ? '>' : ' ', param.name, *param.value);
-        minitext(8, 18 + (i * 6), line, i == g_redSplitHudTuningSelection ? 10 : 0, 2 | 8 | 16);
+        minitext(8, 18 + ((i - firstParam) * 6), line, i == g_redSplitHudTuningSelection ? 10 : 0, 2 | 8 | 16);
     }
 }
 
@@ -3061,6 +3405,17 @@ static void RedSplit_UpdateWeaponTuningPointers(void)
     g_redSplitWeaponDebugFlashWideOffsetX = &g_redSplitWeaponPerWeaponFlashWideOffsetX[weaponNum];
     g_redSplitWeaponDebugFlashWideOffsetY = &g_redSplitWeaponPerWeaponFlashWideOffsetY[weaponNum];
     g_redSplitWeaponDebugAlienGlowOffsetX = &g_redSplitWeaponAlienGlowOffsetX[weaponNum];
+    g_redSplitWeaponDebugMissileRightOffsetX = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponMissileRightOffsetX : &g_redSplitWeaponMissileQuarterRightOffsetX;
+    g_redSplitWeaponDebugMissileRightOffsetY = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponMissileRightOffsetY : &g_redSplitWeaponMissileQuarterRightOffsetY;
+    g_redSplitWeaponDebugMissileRocketOffsetX = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponMissileRocketOffsetX : &g_redSplitWeaponMissileQuarterRocketOffsetX;
+    g_redSplitWeaponDebugMissileRocketOffsetY = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponMissileRocketOffsetY : &g_redSplitWeaponMissileQuarterRocketOffsetY;
+    g_redSplitWeaponDebugMissileFlashOffsetX = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponMissileFlashOffsetX : &g_redSplitWeaponMissileQuarterFlashOffsetX;
+    g_redSplitWeaponDebugMissileFlashOffsetY = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponMissileFlashOffsetY : &g_redSplitWeaponMissileQuarterFlashOffsetY;
+    g_redSplitWeaponDebugTripLeftOffsetX = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponTripLeftOffsetX : &g_redSplitWeaponTripQuarterLeftOffsetX;
+    g_redSplitWeaponDebugTripLeftOffsetY = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponTripLeftOffsetY : &g_redSplitWeaponTripQuarterLeftOffsetY;
+    g_redSplitWeaponDebugTripRightOffsetX = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponTripRightOffsetX : &g_redSplitWeaponTripQuarterRightOffsetX;
+    g_redSplitWeaponDebugTripRightOffsetY = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponTripRightOffsetY : &g_redSplitWeaponTripQuarterRightOffsetY;
+    g_redSplitWeaponDebugTripMineScalePercent = g_redSplitDebugScreenType == 0 ? &g_redSplitWeaponTripMineScalePercent : &g_redSplitWeaponTripQuarterMineScalePercent;
     g_redSplitWeaponTuningParams[2].value = g_redSplitWeaponDebugOffsetX;
     g_redSplitWeaponTuningParams[3].value = g_redSplitWeaponDebugOffsetY;
     g_redSplitWeaponTuningParams[4].value = g_redSplitWeaponDebugWideOffsetX;
@@ -3068,6 +3423,17 @@ static void RedSplit_UpdateWeaponTuningPointers(void)
     g_redSplitWeaponTuningParams[11].value = g_redSplitWeaponDebugFlashWideOffsetX;
     g_redSplitWeaponTuningParams[12].value = g_redSplitWeaponDebugFlashWideOffsetY;
     g_redSplitWeaponTuningParams[23].value = g_redSplitWeaponDebugAlienGlowOffsetX;
+    g_redSplitWeaponTuningParams[30].value = g_redSplitWeaponDebugMissileRightOffsetX;
+    g_redSplitWeaponTuningParams[31].value = g_redSplitWeaponDebugMissileRightOffsetY;
+    g_redSplitWeaponTuningParams[32].value = g_redSplitWeaponDebugMissileRocketOffsetX;
+    g_redSplitWeaponTuningParams[33].value = g_redSplitWeaponDebugMissileRocketOffsetY;
+    g_redSplitWeaponTuningParams[34].value = g_redSplitWeaponDebugMissileFlashOffsetX;
+    g_redSplitWeaponTuningParams[35].value = g_redSplitWeaponDebugMissileFlashOffsetY;
+    g_redSplitWeaponTuningParams[36].value = g_redSplitWeaponDebugTripLeftOffsetX;
+    g_redSplitWeaponTuningParams[37].value = g_redSplitWeaponDebugTripLeftOffsetY;
+    g_redSplitWeaponTuningParams[38].value = g_redSplitWeaponDebugTripRightOffsetX;
+    g_redSplitWeaponTuningParams[39].value = g_redSplitWeaponDebugTripRightOffsetY;
+    g_redSplitWeaponTuningParams[40].value = g_redSplitWeaponDebugTripMineScalePercent;
 }
 
 static void RedSplit_ApplyDebugWeaponToPlayers(void)
@@ -10290,7 +10656,7 @@ int app_main(int argc, char const * const * argv)
 
     for (int i=1, j=numplayers; j<ud.multimode; j++)
     {
-        Bsprintf(g_player[j].user_name,"PLAYER %d",j+1);
+        Bsprintf(g_player[j].user_name,"Player %d",j+1);
         g_player[j].ps->team = g_player[j].pteam = i;
         g_player[j].ps->weaponswitch = 3;
         g_player[j].ps->auto_aim = g_fakeMultiMode > 1 ? ud.config.AutoAim : 0;

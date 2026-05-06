@@ -370,15 +370,15 @@ void RT_DisplayWeaponIcon(float x, float y, int offset, int tile)
         if (!waloff[tile])
             tileLoad(tile);
 
+        bool const quarterView = viewW < ((float)xdim * 0.75f) && viewH < ((float)ydim * 0.75f);
         int32_t const screenX = g_redSplitHudX1 + Blrintf((drawX / 320.f) * viewW);
         int32_t const screenY = g_redSplitHudY1 + Blrintf((drawY / 240.f) * viewH);
-        bool const quarterView = viewW < ((float)xdim * 0.75f) && viewH < ((float)ydim * 0.75f);
-        int32_t const splitScale = quarterView ? g_redSplitWeaponQuarterScalePercent : g_redSplitWeaponWideScalePercent;
+        int32_t const splitScale = quarterView ? g_redSplitWeaponWheelQuarterScalePercent : g_redSplitWeaponWideScalePercent;
         int32_t const zoom = scale(65536, scale(iconScale, splitScale, 100), 100);
-        int32_t const virtualX = scale(screenX, 320, xdim) << 16;
-        int32_t const virtualY = scale(screenY, 200, ydim) << 16;
+        int32_t const virtualX = (quarterView ? Blrintf(drawX) : scale(screenX, 320, xdim)) << 16;
+        int32_t const virtualY = (quarterView ? Blrintf(drawY * (200.f / 240.f)) : scale(screenY, 200, ydim)) << 16;
         int32_t const buildShade = clamp(32 - (shade >> 3), -32, 32);
-        int32_t orientation = 2 | 8 | 16 | 32;
+        int32_t orientation = quarterView ? (2 | 16 | 32 | ROTATESPRITE_FULL16) : (2 | 8 | 16 | 32);
 
         if (alpha < 220)
             orientation |= 1;

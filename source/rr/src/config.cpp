@@ -350,7 +350,7 @@ void CONFIG_SetDefaults(void)
 
     Bstrcpy(ud.rtsname, G_DefaultRtsFile());
 
-    Bstrcpy(szPlayerName, "Player");
+    Bstrcpy(szPlayerName, "Player 1");
 
     //if (RR)
     //{
@@ -851,6 +851,18 @@ int32_t CONFIG_ReadSetup(void)
 
     SCRIPT_GetNumber(ud.config.scripthandle, "Misc", "Executions",&ud.executions);
 
+#ifndef EDUKE32_TOUCH_DEVICES
+    for (dummy = 0; dummy < MAXPLAYERS; ++dummy)
+    {
+        int32_t inputSource;
+        char splitInputKey[32];
+
+        Bsprintf(splitInputKey, "PlayerInput%d", dummy + 1);
+        if (!SCRIPT_GetNumber(ud.config.scripthandle, "Split Screen", splitInputKey, &inputSource))
+            g_redSplitPlayerInput[dummy] = clamp<int32_t>(inputSource, RN_SPLIT_INPUT_NONE, RN_SPLIT_INPUT_PAD5);
+    }
+#endif
+
 #ifdef _WIN32
     SCRIPT_GetNumber(ud.config.scripthandle, "Updates", "CheckForUpdates", &ud.config.CheckForUpdates);
     SCRIPT_GetNumber(ud.config.scripthandle, "Updates", "LastUpdateCheck", &ud.config.LastUpdateCheck);
@@ -966,6 +978,15 @@ void CONFIG_WriteSetup(uint32_t flags)
 
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "Out",ud.lockout,FALSE,FALSE);
     SCRIPT_PutString(ud.config.scripthandle, "Screen Setup", "Password",ud.pwlockout);
+
+#ifndef EDUKE32_TOUCH_DEVICES
+    for (dummy = 0; dummy < MAXPLAYERS; ++dummy)
+    {
+        Bsprintf(buf, "PlayerInput%d", dummy + 1);
+        SCRIPT_PutNumber(ud.config.scripthandle, "Split Screen", buf,
+                         clamp<int32_t>(g_redSplitPlayerInput[dummy], RN_SPLIT_INPUT_NONE, RN_SPLIT_INPUT_PAD5), FALSE, FALSE);
+    }
+#endif
 
 #ifdef _WIN32
     SCRIPT_PutNumber(ud.config.scripthandle, "Updates", "CheckForUpdates", ud.config.CheckForUpdates, FALSE, FALSE);

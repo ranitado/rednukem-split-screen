@@ -75,6 +75,10 @@ static inline int RT_RedSplitQuarterWeaponOffsetID(int weaponID)
 {
     if (weaponID == CHAINGUN_WEAPON || weaponID == (CHAINGUN_WEAPON << 1))
         return CHAINGUN_WEAPON;
+    if (weaponID == RPG_WEAPON || weaponID == (RPG_WEAPON << 1) || weaponID == (RPG_WEAPON << 2) || weaponID == (RPG_WEAPON << 3))
+        return RPG_WEAPON;
+    if (weaponID == BOAT_WEAPON || weaponID == (BOAT_WEAPON << 1) || weaponID == (BOAT_WEAPON << 2) || weaponID == (BOAT_WEAPON << 3))
+        return BOAT_WEAPON;
 
     return weaponID;
 }
@@ -1116,17 +1120,29 @@ void RT_DisplayTileWorld(float x, float y, float sx, float sy, int16_t picnum, i
 
         if (quarterView && guniqhudid != 0)
         {
-            int const quarterWeaponID = RT_RedSplitQuarterWeaponOffsetID(scaleWeaponID);
+            bool const pipebombTile = guniqhudid == HANDBOMB_WEAPON ||
+                (picnum >= HANDTHROW && picnum <= HANDTHROW + 2);
+            int const quarterWeaponID = rt_redSplitWeaponGroupActive ? scaleWeaponID : RT_RedSplitQuarterWeaponOffsetID(scaleWeaponID);
             int const quarterWeaponOffsetX = ((unsigned)quarterWeaponID < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponQuarterOffsetX[quarterWeaponID] : 0;
             int const quarterWeaponOffsetY = ((unsigned)quarterWeaponID < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponQuarterOffsetY[quarterWeaponID] : 0;
-            mappedCenterX += ((viewX1 < (float)xdim * 0.25f ? g_redSplitWeaponQuarterLeftOffsetX : g_redSplitWeaponQuarterRightOffsetX) + quarterWeaponOffsetX) * sclx;
-            mappedCenterY += (g_redSplitWeaponQuarterOffsetY + quarterWeaponOffsetY) * scly;
+            if (!pipebombTile)
+            {
+                mappedCenterX += (viewX1 < (float)xdim * 0.25f ? g_redSplitWeaponQuarterLeftOffsetX : g_redSplitWeaponQuarterRightOffsetX) * sclx;
+                mappedCenterY += g_redSplitWeaponQuarterOffsetY * scly;
+            }
+            mappedCenterX += quarterWeaponOffsetX * sclx;
+            mappedCenterY += quarterWeaponOffsetY * scly;
         }
 
         if (quarterView && rt_fxtile)
         {
+            int const quarterFlashWeaponID = RT_RedSplitQuarterWeaponOffsetID(rt_flashweaponid);
+            int const quarterFlashWeaponOffsetX = ((unsigned)quarterFlashWeaponID < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponQuarterOffsetX[quarterFlashWeaponID] : 0;
+            int const quarterFlashWeaponOffsetY = ((unsigned)quarterFlashWeaponID < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponQuarterOffsetY[quarterFlashWeaponID] : 0;
             mappedCenterX += (viewX1 < (float)xdim * 0.25f ? g_redSplitWeaponFlashQuarterLeftOffsetX : g_redSplitWeaponFlashQuarterRightOffsetX) * sclx;
             mappedCenterY += g_redSplitWeaponQuarterOffsetY * scly;
+            mappedCenterX += quarterFlashWeaponOffsetX * sclx;
+            mappedCenterY += quarterFlashWeaponOffsetY * scly;
         }
 
         vx1 = mappedCenterX - halfW;
@@ -4379,19 +4395,29 @@ void RT_RotateSprite(float x, float y, float sx, float sy, int tilenum, int orie
             mappedCenterY += flashWideOffsetY * scl;
         }
 
-        if (quarterView && weaponTile && !pipebombTile)
+        if (quarterView && weaponTile)
         {
-            int const quarterWeaponID = RT_RedSplitQuarterWeaponOffsetID(scaleWeaponID);
+            int const quarterWeaponID = rt_redSplitWeaponGroupActive ? scaleWeaponID : RT_RedSplitQuarterWeaponOffsetID(scaleWeaponID);
             int const quarterWeaponOffsetX = ((unsigned)quarterWeaponID < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponQuarterOffsetX[quarterWeaponID] : 0;
             int const quarterWeaponOffsetY = ((unsigned)quarterWeaponID < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponQuarterOffsetY[quarterWeaponID] : 0;
-            mappedCenterX += ((viewX1 < (float)xdim * 0.25f ? g_redSplitWeaponQuarterLeftOffsetX : g_redSplitWeaponQuarterRightOffsetX) + quarterWeaponOffsetX) * scl;
-            mappedCenterY += (g_redSplitWeaponQuarterOffsetY + quarterWeaponOffsetY) * scl;
+            if (!pipebombTile)
+            {
+                mappedCenterX += (viewX1 < (float)xdim * 0.25f ? g_redSplitWeaponQuarterLeftOffsetX : g_redSplitWeaponQuarterRightOffsetX) * scl;
+                mappedCenterY += g_redSplitWeaponQuarterOffsetY * scl;
+            }
+            mappedCenterX += quarterWeaponOffsetX * scl;
+            mappedCenterY += quarterWeaponOffsetY * scl;
         }
 
         if (quarterView && weaponFlash)
         {
+            int const quarterFlashWeaponID = RT_RedSplitQuarterWeaponOffsetID(rt_flashweaponid);
+            int const quarterFlashWeaponOffsetX = ((unsigned)quarterFlashWeaponID < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponQuarterOffsetX[quarterFlashWeaponID] : 0;
+            int const quarterFlashWeaponOffsetY = ((unsigned)quarterFlashWeaponID < MAX_WEAPONS) ? g_redSplitWeaponPerWeaponQuarterOffsetY[quarterFlashWeaponID] : 0;
             mappedCenterX += (viewX1 < (float)xdim * 0.25f ? g_redSplitWeaponFlashQuarterLeftOffsetX : g_redSplitWeaponFlashQuarterRightOffsetX) * scl;
             mappedCenterY += g_redSplitWeaponQuarterOffsetY * scl;
+            mappedCenterX += quarterFlashWeaponOffsetX * scl;
+            mappedCenterY += quarterFlashWeaponOffsetY * scl;
             if (rt_flashweaponid == PISTOL_WEAPON || rt_flashweaponid == BOWLINGBALL_WEAPON)
             {
                 mappedCenterX += g_redSplitWeaponFlashPistolOffsetX * scl;
@@ -4526,6 +4552,12 @@ void RT_RotateSpriteText(float x, float y, float sx, float sy, int tilenum, int 
         vx1 = x1 * textScaleX;
         vx2 = x2 * textScaleX;
     }
+    else if (g_redSplitQuoteTextDrawing == 5 && g_redSplitHudDrawingView >= 0)
+    {
+        float const quoteScale = scl * 0.70f;
+        vx1 = (float)g_redSplitHudX1 + x1 * quoteScale;
+        vx2 = (float)g_redSplitHudX1 + x2 * quoteScale;
+    }
     else if (g_redSplitQuoteTextDrawing == 3 && g_redSplitHudDrawingView >= 0)
     {
         float const quoteScale = scl * 0.70f;
@@ -4549,6 +4581,12 @@ void RT_RotateSpriteText(float x, float y, float sx, float sy, int tilenum, int 
         float const textScaleY = (float)ydim / 200.f;
         vy1 = y1 * textScaleY;
         vy2 = y2 * textScaleY;
+    }
+    else if (g_redSplitQuoteTextDrawing == 5 && g_redSplitHudDrawingView >= 0)
+    {
+        float const quoteScale = scl * 0.70f;
+        vy1 = (float)g_redSplitHudY1 + y1 * quoteScale;
+        vy2 = (float)g_redSplitHudY1 + y2 * quoteScale;
     }
     else if (g_redSplitQuoteTextDrawing == 3 && g_redSplitHudDrawingView >= 0)
     {

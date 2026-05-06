@@ -493,12 +493,13 @@ void RT_P_DisplayWeapon(void)
 
             if ((*weaponFrame) > 6)
                 weaponY += ((*weaponFrame) << 3);
-            int const tripTweaks = RT_RedSplitWideWeaponTweaksActive();
-            int const tripLeftOffsetX = tripTweaks ? g_redSplitWeaponTripLeftOffsetX : 0;
-            int const tripLeftOffsetY = tripTweaks ? g_redSplitWeaponTripLeftOffsetY : 0;
-            int const tripRightOffsetX = tripTweaks ? g_redSplitWeaponTripRightOffsetX : 0;
-            int const tripRightOffsetY = tripTweaks ? g_redSplitWeaponTripRightOffsetY : 0;
-            int const tripMineScalePercent = tripTweaks ? clamp<int32_t>(g_redSplitWeaponTripMineScalePercent, 20, 180) : 100;
+            int const tripTweaks = RT_RedSplitWeaponTweaksActive();
+            int const tripQuarterTweaks = RT_RedSplitQuarterWeaponTweaksActive();
+            int const tripLeftOffsetX = tripTweaks ? (tripQuarterTweaks ? g_redSplitWeaponTripQuarterLeftOffsetX : g_redSplitWeaponTripLeftOffsetX) : 0;
+            int const tripLeftOffsetY = tripTweaks ? (tripQuarterTweaks ? g_redSplitWeaponTripQuarterLeftOffsetY : g_redSplitWeaponTripLeftOffsetY) : 0;
+            int const tripRightOffsetX = tripTweaks ? (tripQuarterTweaks ? g_redSplitWeaponTripQuarterRightOffsetX : g_redSplitWeaponTripRightOffsetX) : 0;
+            int const tripRightOffsetY = tripTweaks ? (tripQuarterTweaks ? g_redSplitWeaponTripQuarterRightOffsetY : g_redSplitWeaponTripRightOffsetY) : 0;
+            int const tripMineScalePercent = tripTweaks ? clamp<int32_t>(tripQuarterTweaks ? g_redSplitWeaponTripQuarterMineScalePercent : g_redSplitWeaponTripMineScalePercent, 20, 180) : 100;
             int const tripMineScale = scale(65536, tripMineScalePercent, 100);
             int const tripGroupX = weaponX + 142 - halfLookAng;
             int const tripGroupY = weaponY + 249 - weaponYOffset;
@@ -534,13 +535,13 @@ void RT_P_DisplayWeapon(void)
 
             int const rpgGroupX = weaponX + 249;
             int const rpgGroupY = (weaponY << 1) + 189 - weaponYOffset;
-            int const missileTweaks = RT_RedSplitWideWeaponTweaksActive();
-            int const missileRightOffsetX = missileTweaks ? g_redSplitWeaponMissileRightOffsetX : 0;
-            int const missileRightOffsetY = missileTweaks ? g_redSplitWeaponMissileRightOffsetY : 0;
-            int const missileRocketOffsetX = missileTweaks ? g_redSplitWeaponMissileRocketOffsetX : 0;
-            int const missileRocketOffsetY = missileTweaks ? g_redSplitWeaponMissileRocketOffsetY : 0;
-            int const missileFlashOffsetX = missileTweaks ? g_redSplitWeaponMissileFlashOffsetX : 0;
-            int const missileFlashOffsetY = missileTweaks ? g_redSplitWeaponMissileFlashOffsetY : 0;
+            int const missileTweaks = RT_RedSplitWeaponTweaksActive();
+            int const missileRightOffsetX = missileTweaks ? (RT_RedSplitQuarterWeaponTweaksActive() ? g_redSplitWeaponMissileQuarterRightOffsetX : g_redSplitWeaponMissileRightOffsetX) : 0;
+            int const missileRightOffsetY = missileTweaks ? (RT_RedSplitQuarterWeaponTweaksActive() ? g_redSplitWeaponMissileQuarterRightOffsetY : g_redSplitWeaponMissileRightOffsetY) : 0;
+            int const missileRocketOffsetX = missileTweaks ? (RT_RedSplitQuarterWeaponTweaksActive() ? g_redSplitWeaponMissileQuarterRocketOffsetX : g_redSplitWeaponMissileRocketOffsetX) : 0;
+            int const missileRocketOffsetY = missileTweaks ? (RT_RedSplitQuarterWeaponTweaksActive() ? g_redSplitWeaponMissileQuarterRocketOffsetY : g_redSplitWeaponMissileRocketOffsetY) : 0;
+            int const missileFlashOffsetX = missileTweaks ? (RT_RedSplitQuarterWeaponTweaksActive() ? g_redSplitWeaponMissileQuarterFlashOffsetX : g_redSplitWeaponMissileFlashOffsetX) : 0;
+            int const missileFlashOffsetY = missileTweaks ? (RT_RedSplitQuarterWeaponTweaksActive() ? g_redSplitWeaponMissileQuarterFlashOffsetY : g_redSplitWeaponMissileFlashOffsetY) : 0;
 
             RT_DrawWeaponTileWithIDGrouped(currentWeapon << 2, weaponX + 249 + missileRightOffsetX,
                                            (weaponY << 1) + 190 + missileRightOffsetY - weaponYOffset, RPGGUN+1, weaponShade,
