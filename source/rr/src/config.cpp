@@ -196,12 +196,33 @@ void CONFIG_SetDefaultKeys(const char (*keyptr)[MAXGAMEFUNCLEN], bool lazy/*=fal
     }
 }
 
+void CONFIG_SetDefaultMouse(void)
+{
+    memset(ud.config.MouseFunctions, -1, sizeof(ud.config.MouseFunctions));
+
+    CONTROL_MouseSensitivity = DEFAULTMOUSESENSITIVITY;
+    CONTROL_MouseAxesSensitivity[0] = DEFAULTMOUSESENSITIVITY;
+    CONTROL_MouseAxesSensitivity[1] = DEFAULTMOUSESENSITIVITY;
+
+    for (int i = 0; i < MAXMOUSEBUTTONS; ++i)
+    {
+        CONTROL_FreeMouseBind(i);
+
+        ud.config.MouseFunctions[i][0] = CONFIG_FunctionNameToNum(mousedefaults[i]);
+        CONTROL_MapButton(ud.config.MouseFunctions[i][0], i, 0, controldevice_mouse);
+
+        if (i >= 4)
+            continue;
+
+        ud.config.MouseFunctions[i][1] = CONFIG_FunctionNameToNum(mouseclickeddefaults[i]);
+        CONTROL_MapButton(ud.config.MouseFunctions[i][1], i, 1, controldevice_mouse);
+    }
+}
+
 
 void CONFIG_SetDefaults(void)
 {
     // JBF 20031211
-    int32_t i;
-
     ud.config.scripthandle = -1;
 #ifdef __ANDROID__
     droidinput.forward_sens = 5.f;
@@ -406,24 +427,16 @@ void CONFIG_SetDefaults(void)
     }
 
     CONFIG_SetDefaultKeys(keydefaults);
-
-    memset(ud.config.MouseFunctions, -1, sizeof(ud.config.MouseFunctions));
     memset(ud.config.JoystickFunctions, -1, sizeof(ud.config.JoystickFunctions));
     memset(ud.config.JoystickDigitalFunctions, -1, sizeof(ud.config.JoystickDigitalFunctions));
 
-    CONTROL_MouseSensitivity = DEFAULTMOUSESENSITIVITY;
-    for (i=0; i<MAXMOUSEBUTTONS; i++)
-    {
-        ud.config.MouseFunctions[i][0] = CONFIG_FunctionNameToNum(mousedefaults[i]);
-        CONTROL_MapButton(ud.config.MouseFunctions[i][0], i, 0, controldevice_mouse);
-        if (i>=4) continue;
-        ud.config.MouseFunctions[i][1] = CONFIG_FunctionNameToNum(mouseclickeddefaults[i]);
-        CONTROL_MapButton(ud.config.MouseFunctions[i][1], i, 1, controldevice_mouse);
-    }
+    CONFIG_SetDefaultMouse();
 
 #if !defined GEKKO
     CONFIG_SetGameControllerDefaults();
 #else
+    int32_t i;
+
     for (i=0; i<MAXJOYBUTTONSANDHATS; i++)
     {
         ud.config.JoystickFunctions[i][0] = CONFIG_FunctionNameToNum(joystickdefaults[i]);

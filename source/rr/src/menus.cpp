@@ -902,7 +902,7 @@ MAKE_MENU_TOP_ENTRYLINK( "Player Setup", MEF_OptionsMenu, OPTIONS_PLAYERSETUP, M
 #ifndef EDUKE32_ANDROID_MENU
 MAKE_MENU_TOP_ENTRYLINK( "Control Setup", MEF_OptionsMenu, OPTIONS_CONTROLS, MENU_CONTROLS );
 
-MAKE_MENU_TOP_ENTRYLINK( "Keyboard Setup", MEF_BigOptionsRtSections, OPTIONS_KEYBOARDSETUP, MENU_KEYBOARDSETUP );
+MAKE_MENU_TOP_ENTRYLINK( "Mouse / Keyboard", MEF_BigOptionsRtSections, OPTIONS_KEYBOARDSETUP, MENU_KEYBOARDSETUP );
 MAKE_MENU_TOP_ENTRYLINK( "Mouse Setup", MEF_BigOptionsRtSections, OPTIONS_MOUSESETUP, MENU_MOUSESETUP );
 #endif
 MAKE_MENU_TOP_ENTRYLINK( "Controller Setup", MEF_BigOptionsRtSections, OPTIONS_JOYSTICKSETUP, MENU_JOYSTICKSETUP );
@@ -1149,7 +1149,6 @@ static MenuEntry_t *MEL_CONTROLS[] = {
 #ifndef EDUKE32_ANDROID_MENU
     &ME_OPTIONS_PLAYERINPUT,
     &ME_OPTIONS_KEYBOARDSETUP,
-    &ME_OPTIONS_MOUSESETUP,
     &ME_OPTIONS_JOYSTICKSETUP,
 #else
     &ME_OPTIONS_TOUCHSETUP
@@ -1282,15 +1281,11 @@ static MenuEntry_t ME_KEYBOARDSETUPFUNCS[NUMGAMEFUNCTIONS];
 static MenuEntry_t *MEL_KEYBOARDSETUPFUNCS[NUMGAMEFUNCTIONS];
 
 static MenuLink_t MEO_KEYBOARDSETUP_KEYS = { MENU_KEYBOARDKEYS, MA_Advance, };
-static MenuEntry_t ME_KEYBOARDSETUP_KEYS = MAKE_MENUENTRY( "Configure Keys", &MF_Redfont, &MEF_CenterMenu, &MEO_KEYBOARDSETUP_KEYS, Link );
-static MenuEntry_t ME_KEYBOARDSETUP_RESET = MAKE_MENUENTRY( "Reset To Defaults", &MF_Redfont, &MEF_CenterMenu, &MEO_NULL, Link );
+static MenuEntry_t ME_KEYBOARDSETUP_KEYS = MAKE_MENUENTRY( "Keyboard Setup", &MF_Redfont, &MEF_BigOptionsRt, &MEO_KEYBOARDSETUP_KEYS, Link );
+static MenuLink_t MEO_KEYBOARDSETUP_MOUSE = { MENU_MOUSESETUP, MA_Advance, };
+static MenuEntry_t ME_KEYBOARDSETUP_MOUSE = MAKE_MENUENTRY( "Mouse Setup", &MF_Redfont, &MEF_BigOptionsRt, &MEO_KEYBOARDSETUP_MOUSE, Link );
+static MenuEntry_t ME_KEYBOARDSETUP_RESET = MAKE_MENUENTRY( "Reset To Defaults", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link );
 static MenuEntry_t ME_KEYBOARDSETUP_RESETCLASSIC = MAKE_MENUENTRY( "Reset To Classic", &MF_Redfont, &MEF_CenterMenu, &MEO_NULL, Link );
-
-static MenuEntry_t *MEL_KEYBOARDSETUP[] = {
-    &ME_KEYBOARDSETUP_KEYS,
-    &ME_KEYBOARDSETUP_RESET,
-    &ME_KEYBOARDSETUP_RESETCLASSIC,
-};
 
 
 // There is no better way to do this than manually.
@@ -1340,7 +1335,7 @@ static MenuEntry_t *MEL_MOUSESETUPBTNS[MENUMOUSEFUNCTIONS];
 static MenuLink_t MEO_MOUSESETUP_BTNS = { MENU_MOUSEBTNS, MA_Advance, };
 static MenuEntry_t ME_MOUSESETUP_BTNS = MAKE_MENUENTRY( "Button assignment", &MF_Redfont, &MEF_BigOptionsRt, &MEO_MOUSESETUP_BTNS, Link );
 static MenuRangeFloat_t MEO_MOUSESETUP_SENSITIVITY = MAKE_MENURANGE( &CONTROL_MouseSensitivity, &MF_Redfont, .1f, 50.f, 50.f, 100, 1 );
-static MenuEntry_t ME_MOUSESETUP_SENSITIVITY = MAKE_MENUENTRY( "Sensitivity:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_MOUSESETUP_SENSITIVITY, RangeFloat );
+static MenuEntry_t ME_MOUSESETUP_SENSITIVITY = MAKE_MENUENTRY( "Sens.:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_MOUSESETUP_SENSITIVITY, RangeFloat );
 
 #ifndef EDUKE32_SIMPLE_MENU
 static char const *MEOSN_MOUSESETUP_AIM_TYPE [] = { "Toggle", "Hold" };
@@ -1353,11 +1348,11 @@ static MenuEntry_t ME_MOUSESETUP_MOUSEAIMING = MAKE_MENUENTRY( "Vertical aiming:
 static MenuOption_t MEO_MOUSESETUP_INVERT = MAKE_MENUOPTION( &MF_Redfont, &MEOS_YesNo, &ud.mouseflip );
 static MenuEntry_t ME_MOUSESETUP_INVERT = MAKE_MENUENTRY( "Invert aiming:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_MOUSESETUP_INVERT, Option );
 
-static MenuRangeFloat_t MEO_MOUSESETUP_XSENSITIVITY = MAKE_MENURANGE( &CONTROL_MouseAxesSensitivity[0], &MF_Redfont, 0.f, 10.f, 10.f, 101, DisplayTypeInteger|EnforceIntervals );
-static MenuEntry_t ME_MOUSESETUP_HORIZONTALSENSITIVITY = MAKE_MENUENTRY( "Horiz sens.:", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_MOUSESETUP_XSENSITIVITY, RangeFloat );
+static MenuRangeFloat_t MEO_MOUSESETUP_XSENSITIVITY = MAKE_MENURANGE( &CONTROL_MouseAxesSensitivity[0], &MF_Redfont, 0.f, 50.f, 50.f, 101, DisplayTypeInteger|EnforceIntervals );
+static MenuEntry_t ME_MOUSESETUP_HORIZONTALSENSITIVITY = MAKE_MENUENTRY( "X sens.:", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_MOUSESETUP_XSENSITIVITY, RangeFloat );
 
-static MenuRangeFloat_t MEO_MOUSESETUP_YSENSITIVITY = MAKE_MENURANGE( &CONTROL_MouseAxesSensitivity[1], &MF_Redfont, 0.f, 10.f, 10.f, 101, DisplayTypeInteger|EnforceIntervals );
-static MenuEntry_t ME_MOUSESETUP_VERTICALSENSITIVITY = MAKE_MENUENTRY( "Vert sens.:", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_MOUSESETUP_YSENSITIVITY, RangeFloat );
+static MenuRangeFloat_t MEO_MOUSESETUP_YSENSITIVITY = MAKE_MENURANGE( &CONTROL_MouseAxesSensitivity[1], &MF_Redfont, 0.f, 50.f, 50.f, 101, DisplayTypeInteger|EnforceIntervals );
+static MenuEntry_t ME_MOUSESETUP_VERTICALSENSITIVITY = MAKE_MENUENTRY( "Y sens.:", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_MOUSESETUP_YSENSITIVITY, RangeFloat );
 
 static MenuEntry_t *MEL_MOUSESETUP[] = {
     &ME_MOUSESETUP_BTNS,
@@ -1428,7 +1423,6 @@ static MenuLink_t MEO_JOYSTICK_DEFAULTS = { MENU_JOYDEFAULTVERIFY, MA_None, };
 static MenuEntry_t ME_JOYSTICK_DEFAULTS = MAKE_MENUENTRY( "Reset To Defaults", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_JOYSTICK_DEFAULTS, Link );
 
 static MenuEntry_t *MEL_JOYSTICKSETUP[] = {
-    &ME_JOYSTICK_ENABLE,
     &ME_JOYSTICK_LOOKXSCALE,
     &ME_JOYSTICK_LOOKYSCALE,
     &ME_JOYSTICK_LOOKINVERT,
@@ -1794,6 +1788,12 @@ static MenuEntry_t *MEL_NETWORK[] = {
     &ME_NETWORK_HOSTGAME,
 };
 
+static MenuEntry_t *MEL_KEYBOARDSETUP[] = {
+    &ME_KEYBOARDSETUP_KEYS,
+    &ME_KEYBOARDSETUP_MOUSE,
+    &ME_KEYBOARDSETUP_RESET,
+};
+
 static int32_t g_redSplitPlayerSetupPlayer = 0;
 static char const *MEOSN_PLAYER_SELECTOR[] = { "Player 1", "Player 2", "Player 3", "Player 4" };
 static MenuOptionSet_t MEOS_PLAYER_SELECTOR = MAKE_MENUOPTIONSET( MEOSN_PLAYER_SELECTOR, NULL, 0x2 );
@@ -1959,7 +1959,7 @@ static MenuMenu_t M_GAMESETUP = MAKE_MENUMENU( "Game Setup", &MMF_BigOptions, ME
 #endif
 static MenuMenu_t M_OPTIONS = MAKE_MENUMENU( s_Options, &MMF_Top_Options, MEL_OPTIONS );
 static MenuMenu_t M_VIDEOSETUP = MAKE_MENUMENU( "Video Mode", &MMF_BigOptions, MEL_VIDEOSETUP );
-static MenuMenu_t M_KEYBOARDSETUP = MAKE_MENUMENU( "Keyboard Setup", &MMF_Top_Options, MEL_KEYBOARDSETUP );
+static MenuMenu_t M_KEYBOARDSETUP = MAKE_MENUMENU( "Mouse / Keyboard", &MMF_BigOptions, MEL_KEYBOARDSETUP );
 static MenuMenu_t M_CONTROLS = MAKE_MENUMENU( "Control Setup", &MMF_BigOptions, MEL_CONTROLS );
 static MenuMenu_t M_PLAYERINPUT = MAKE_MENUMENU( "Player Input", &MMF_BigOptions, MEL_PLAYERINPUT );
 static MenuMenu_t M_CHEATS = MAKE_MENUMENU( "Cheats", &MMF_SmallOptions, MEL_CHEATS );
@@ -1973,7 +1973,7 @@ static MenuMenu_t M_JOYSTICKSETUP = MAKE_MENUMENU( "Controller Setup", &MMF_BigO
 static MenuMenu_t M_JOYSTICKADV  = MAKE_MENUMENU( "Controller Setup", &MMF_BigOptions, MEL_JOYSTICKADV );
 static MenuMenu_t M_JOYSTICKBTNS = MAKE_MENUMENU( "Controller Buttons", &MMF_MouseJoySetupBtns, MEL_JOYSTICKBTNS );
 static MenuMenu_t M_JOYSTICKAXES = MAKE_MENUMENU( "Axes and Triggers", &MMF_BigSliders, MEL_JOYSTICKAXES );
-static MenuMenu_t M_KEYBOARDKEYS = MAKE_MENUMENU( "Key Configuration", &MMF_KeyboardSetupFuncs, MEL_KEYBOARDSETUPFUNCS );
+static MenuMenu_t M_KEYBOARDKEYS = MAKE_MENUMENU( "Keyboard Setup", &MMF_KeyboardSetupFuncs, MEL_KEYBOARDSETUPFUNCS );
 static MenuMenu_t M_MOUSEBTNS = MAKE_MENUMENU( "Mouse Buttons", &MMF_MouseJoySetupBtns, MEL_MOUSESETUPBTNS );
 static MenuMenu_t M_JOYSTICKAXIS = MAKE_MENUMENU( NULL, &MMF_BigSliders, MEL_JOYSTICKAXIS );
 #ifdef USE_OPENGL
@@ -2093,7 +2093,7 @@ static Menu_t Menus[] = {
     { &M_OPTIONS, MENU_OPTIONS, MENU_MAIN, MA_Return, Menu },
     { &M_VIDEOSETUP, MENU_VIDEOSETUP, MENU_DISPLAYSETUP, MA_Return, Menu },
     { &M_KEYBOARDSETUP, MENU_KEYBOARDSETUP, MENU_CONTROLS, MA_Return, Menu },
-    { &M_MOUSESETUP, MENU_MOUSESETUP, MENU_CONTROLS, MA_Return, Menu },
+    { &M_MOUSESETUP, MENU_MOUSESETUP, MENU_KEYBOARDSETUP, MA_Return, Menu },
     { &M_JOYSTICKSETUP, MENU_JOYSTICKSETUP, MENU_CONTROLS, MA_Return, Menu },
     { &M_JOYSTICKBTNS, MENU_JOYSTICKBTNS, MENU_JOYSTICKSETUP, MA_Return, Menu },
     { &M_JOYSTICKAXES, MENU_JOYSTICKAXES, MENU_JOYSTICKADV, MA_Return, Menu },
@@ -6095,7 +6095,10 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
         videoSetPalette(ud.brightness>>2,g_player[myconnectindex].ps->palette,0);
     }
     else if (entry == &ME_KEYBOARDSETUP_RESET)
+    {
         CONFIG_SetDefaultKeys(keydefaults);
+        CONFIG_SetDefaultMouse();
+    }
     else if (entry == &ME_KEYBOARDSETUP_RESETCLASSIC)
         CONFIG_SetDefaultKeys(oldkeydefaults);
     else if (entry == &ME_NETHOST_LAUNCH)

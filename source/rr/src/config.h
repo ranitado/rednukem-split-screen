@@ -33,6 +33,7 @@ void CONFIG_WriteSetup(uint32_t flags);
 void CONFIG_SetupMouse( void );
 void CONFIG_SetupJoystick( void );
 void CONFIG_SetDefaultKeys(const char (*keyptr)[MAXGAMEFUNCLEN], bool lazy=false);
+void CONFIG_SetDefaultMouse(void);
 
 void CONFIG_SetGameControllerDefaults(void);
 void CONFIG_SetGameControllerDefaultsClear(void);

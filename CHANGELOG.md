@@ -7,6 +7,7 @@
 * Improves 2 player HUD and weapon tuning for inventory item icons, ammo icons, missile launcher pieces, tripmine placement, and several weapon flashes.
 * Improves player setup and input persistence, including default names `Player 1` through `Player 4` and saved player input assignments.
 * Fixes player input disconnect/rejoin behavior so disconnecting a player no longer clears its configured input, and automatic assignment no longer duplicates keyboard/mouse unless configured manually.
+* Reorganizes Control Setup with a Mouse / Keyboard submenu and fixes mouse reset defaults so camera movement sensitivity is restored correctly.
 * Fixes split-screen quote/obituary placement in quarter viewports and keeps normal top notifications centered where appropriate.
 * Keeps HUD and weapon debug tuning panels disabled in Release builds.
 * Note: 3 and 4 player split-screen modes are still experimental and need more optimization; that work is planned for upcoming versions.
