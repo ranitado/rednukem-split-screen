@@ -238,6 +238,10 @@ void CONTROL_ProcessBinds(void);
 
 UserInput *CONTROL_GetUserInput(UserInput *);
 void CONTROL_ClearUserInput(UserInput *);
+void CONTROL_SetUserInputFilter(int32_t allowedPad, bool allowKeyboard);
+void CONTROL_ClearUserInputFilter(void);
+bool CONTROL_UserInputFilterActive(void);
+bool CONTROL_UserInputFilterAllowsKeyboard(void);
 
 ////////////////////
 

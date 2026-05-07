@@ -43,6 +43,32 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define quotepulseshade (sintable[((uint32_t)totalclock<<5)&2047]>>11)
 
 palette_t CrosshairColors = { 255, 255, 255, 0 };
+
+static int32_t RedSplit_GameplayPauseTrigger(int32_t const menuActive)
+{
+    if (!REALITY || menuActive)
+        return I_EscapeTrigger();
+
+    if (KB_KeyPressed(sc_Escape))
+        return 1;
+
+    int32_t const playerOneInput = g_redSplitPlayerInput[0];
+    if (playerOneInput == RN_SPLIT_INPUT_KBM)
+        return 0;
+
+    if (g_fakeMultiMode >= 2)
+        return 0;
+
+    if (playerOneInput >= RN_SPLIT_INPUT_PAD1 && playerOneInput <= RN_SPLIT_INPUT_PAD5)
+    {
+        CONTROL_SetUserInputFilter(playerOneInput - RN_SPLIT_INPUT_PAD1, false);
+        int32_t const result = I_EscapeTrigger();
+        CONTROL_ClearUserInputFilter();
+        return result;
+    }
+
+    return 0;
+}
 palette_t DefaultCrosshairColors = { 0, 0, 0, 0 };
 int32_t g_crosshairSum = -1;
 // yxaspect and viewingrange just before the 'main' drawrooms call
@@ -1265,13 +1291,15 @@ void G_DisplayRest(int32_t smoothratio)
         }
     }
 
-    RedSplit_PollExtraMenuInputs();
+    int32_t const redSplitHandledMenuInput = RedSplit_PollExtraMenuInputs();
 
-    if (I_EscapeTrigger() && ud.overhead_on == 0
+    int32_t const redSplitMenuActive = (g_player[myconnectindex].ps->gm & MODE_MENU) == MODE_MENU;
+
+    if (!redSplitHandledMenuInput && RedSplit_GameplayPauseTrigger(redSplitMenuActive) && ud.overhead_on == 0
         && ud.show_help == 0
         && g_player[myconnectindex].ps->newowner == -1)
     {
-        if ((g_player[myconnectindex].ps->gm&MODE_MENU) == MODE_MENU && g_currentMenu <= MENU_MAIN_INGAME)
+        if (redSplitMenuActive && g_currentMenu <= MENU_MAIN_INGAME)
         {
             I_EscapeTriggerClear();
             S_PlaySound(REALITY ? 0xaa : EXITMENUSOUND);
@@ -1294,6 +1322,7 @@ void G_DisplayRest(int32_t smoothratio)
             if (g_player[myconnectindex].ps->gm&MODE_GAME) Menu_Change(MENU_MAIN_INGAME);
             else Menu_Change(MENU_MAIN);
             screenpeek = myconnectindex;
+            Menu_SuppressPauseMenuInputBriefly(RN_SPLIT_INPUT_KBM);
 
             S_MenuSound();
         }

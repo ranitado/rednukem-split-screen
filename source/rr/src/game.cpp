@@ -1705,6 +1705,9 @@ int32_t g_redSplitQuoteTextDrawing = 0;
 int32_t g_redSplitExtraMenuPlayer = -1;
 int32_t g_redSplitExtraMenuPage = 0;
 int32_t g_redSplitExtraMenuSelection = 0;
+static int32_t g_redSplitExtraMenuOpen[MAXPLAYERS] = {};
+static int32_t g_redSplitExtraMenuPages[MAXPLAYERS] = {};
+static int32_t g_redSplitExtraMenuSelections[MAXPLAYERS] = {};
 int32_t g_redSplitDeferHud = 0;
 int32_t g_redSplitSuppressMenuDraw = 0;
 static int32_t g_redSplitCapturingSaveShot = 0;
@@ -2191,13 +2194,36 @@ void RedSplit_OpenExtraMenu(int32_t const playerNum)
         return;
 
     g_redSplitExtraMenuPlayer = playerNum;
-    g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_MAIN;
-    g_redSplitExtraMenuSelection = 0;
+    g_redSplitExtraMenuOpen[playerNum] = 1;
+    g_redSplitExtraMenuPages[playerNum] = REDSPLIT_EXTRA_MENU_MAIN;
+    g_redSplitExtraMenuSelections[playerNum] = 0;
+    g_redSplitExtraMenuPage = g_redSplitExtraMenuPages[playerNum];
+    g_redSplitExtraMenuSelection = g_redSplitExtraMenuSelections[playerNum];
     S_MenuSound();
+}
+
+void RedSplit_CloseExtraMenuForPlayer(int32_t const playerNum)
+{
+    if (playerNum <= 0 || playerNum >= MAXPLAYERS)
+        return;
+
+    g_redSplitExtraMenuOpen[playerNum] = 0;
+    g_redSplitExtraMenuPages[playerNum] = REDSPLIT_EXTRA_MENU_MAIN;
+    g_redSplitExtraMenuSelections[playerNum] = 0;
+
+    if (g_redSplitExtraMenuPlayer == playerNum)
+    {
+        g_redSplitExtraMenuPlayer = -1;
+        g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_MAIN;
+        g_redSplitExtraMenuSelection = 0;
+    }
 }
 
 void RedSplit_CloseExtraMenu(void)
 {
+    Bmemset(g_redSplitExtraMenuOpen, 0, sizeof(g_redSplitExtraMenuOpen));
+    Bmemset(g_redSplitExtraMenuPages, 0, sizeof(g_redSplitExtraMenuPages));
+    Bmemset(g_redSplitExtraMenuSelections, 0, sizeof(g_redSplitExtraMenuSelections));
     g_redSplitExtraMenuPlayer = -1;
     g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_MAIN;
     g_redSplitExtraMenuSelection = 0;
@@ -2205,12 +2231,13 @@ void RedSplit_CloseExtraMenu(void)
 
 int32_t RedSplit_IsExtraMenuOpenForPlayer(int32_t const playerNum)
 {
-    return g_redSplitExtraMenuPlayer == playerNum;
+    return playerNum > 0 && playerNum < MAXPLAYERS && g_redSplitExtraMenuOpen[playerNum];
 }
 
-static void RedSplit_OpenSharedPauseMenu(MenuID_t const menuId)
+static void RedSplit_OpenSharedPauseMenu(MenuID_t const menuId, int32_t const playerNum)
 {
     RedSplit_CloseExtraMenu();
+    g_redSplitExtraMenuPlayer = playerNum;
     S_PauseSounds(true);
     Menu_Open(myconnectindex);
 
@@ -2219,17 +2246,18 @@ static void RedSplit_OpenSharedPauseMenu(MenuID_t const menuId)
 
     Menu_Change(menuId);
     screenpeek = myconnectindex;
+    Menu_SuppressPauseMenuInputBriefly((playerNum >= 0 && playerNum < MAXPLAYERS) ? g_redSplitPlayerInput[playerNum] : RN_SPLIT_INPUT_KBM);
     S_MenuSound();
 }
 
-void RedSplit_OpenPauseMenuFromExtra(void)
+void RedSplit_OpenPauseMenuFromExtra(int32_t const playerNum)
 {
-    RedSplit_OpenSharedPauseMenu(MENU_MAIN_INGAME);
+    RedSplit_OpenSharedPauseMenu(MENU_MAIN_INGAME, playerNum);
 }
 
-static int32_t RedSplit_ExtraMenuMaxSelection(void)
+static int32_t RedSplit_ExtraMenuMaxSelection(int32_t const page)
 {
-    switch (g_redSplitExtraMenuPage)
+    switch (page)
     {
     case REDSPLIT_EXTRA_MENU_PLAYER:
         return 2;
@@ -2240,12 +2268,18 @@ static int32_t RedSplit_ExtraMenuMaxSelection(void)
     }
 }
 
-void RedSplit_MoveExtraMenuSelection(int32_t const direction)
+void RedSplit_MoveExtraMenuSelection(int32_t const playerNum, int32_t const direction)
 {
-    int32_t const maxSelection = RedSplit_ExtraMenuMaxSelection();
-    int32_t const oldSelection = g_redSplitExtraMenuSelection;
-    g_redSplitExtraMenuSelection = clamp(g_redSplitExtraMenuSelection + direction, 0, maxSelection);
-    if (g_redSplitExtraMenuSelection != oldSelection)
+    if (!RedSplit_IsExtraMenuOpenForPlayer(playerNum))
+        return;
+
+    int32_t const maxSelection = RedSplit_ExtraMenuMaxSelection(g_redSplitExtraMenuPages[playerNum]);
+    int32_t const oldSelection = g_redSplitExtraMenuSelections[playerNum];
+    g_redSplitExtraMenuSelections[playerNum] = clamp(g_redSplitExtraMenuSelections[playerNum] + direction, 0, maxSelection);
+    g_redSplitExtraMenuPlayer = playerNum;
+    g_redSplitExtraMenuPage = g_redSplitExtraMenuPages[playerNum];
+    g_redSplitExtraMenuSelection = g_redSplitExtraMenuSelections[playerNum];
+    if (g_redSplitExtraMenuSelections[playerNum] != oldSelection)
         S_MenuSound();
 }
 
@@ -2272,16 +2306,21 @@ static void RedSplit_SetPlayerColor(int32_t const playerNum, int32_t const color
         sprite[g_player[playerNum].ps->i].pal = color;
 }
 
-void RedSplit_ChangeExtraMenuOption(int32_t const direction)
+void RedSplit_ChangeExtraMenuOption(int32_t const playerNum, int32_t const direction)
 {
-    int32_t const playerNum = g_redSplitExtraMenuPlayer;
-    if (playerNum <= 0 || playerNum >= MAXPLAYERS)
+    if (!RedSplit_IsExtraMenuOpenForPlayer(playerNum))
         return;
 
-    switch (g_redSplitExtraMenuPage)
+    int32_t const page = g_redSplitExtraMenuPages[playerNum];
+    int32_t const selection = g_redSplitExtraMenuSelections[playerNum];
+    g_redSplitExtraMenuPlayer = playerNum;
+    g_redSplitExtraMenuPage = page;
+    g_redSplitExtraMenuSelection = selection;
+
+    switch (page)
     {
     case REDSPLIT_EXTRA_MENU_PLAYER:
-        switch (g_redSplitExtraMenuSelection)
+        switch (selection)
         {
         case 0:
         {
@@ -2298,7 +2337,7 @@ void RedSplit_ChangeExtraMenuOption(int32_t const direction)
         }
         break;
     case REDSPLIT_EXTRA_MENU_CONTROLLER:
-        switch (g_redSplitExtraMenuSelection)
+        switch (selection)
         {
         case 0:
             g_redSplitLookSensitivityX[playerNum] = clamp(g_redSplitLookSensitivityX[playerNum] + direction, 1, 10);
@@ -2319,49 +2358,67 @@ void RedSplit_ChangeExtraMenuOption(int32_t const direction)
     S_MenuSound();
 }
 
-void RedSplit_BackExtraMenu(void)
+void RedSplit_BackExtraMenu(int32_t const playerNum)
 {
-    if (g_redSplitExtraMenuPage == REDSPLIT_EXTRA_MENU_MAIN)
-        RedSplit_CloseExtraMenu();
+    if (!RedSplit_IsExtraMenuOpenForPlayer(playerNum))
+        return;
+
+    if (g_redSplitExtraMenuPages[playerNum] == REDSPLIT_EXTRA_MENU_MAIN)
+        RedSplit_CloseExtraMenuForPlayer(playerNum);
     else
     {
-        g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_MAIN;
-        g_redSplitExtraMenuSelection = 0;
+        g_redSplitExtraMenuPages[playerNum] = REDSPLIT_EXTRA_MENU_MAIN;
+        g_redSplitExtraMenuSelections[playerNum] = 0;
+        g_redSplitExtraMenuPlayer = playerNum;
+        g_redSplitExtraMenuPage = g_redSplitExtraMenuPages[playerNum];
+        g_redSplitExtraMenuSelection = g_redSplitExtraMenuSelections[playerNum];
     }
 
     S_MenuSound();
 }
 
-void RedSplit_ActivateExtraMenuSelection(void)
+void RedSplit_ActivateExtraMenuSelection(int32_t const playerNum)
 {
-    int32_t const playerNum = g_redSplitExtraMenuPlayer;
+    if (!RedSplit_IsExtraMenuOpenForPlayer(playerNum))
+        return;
 
-    if (g_redSplitExtraMenuPage != REDSPLIT_EXTRA_MENU_MAIN)
+    int32_t const page = g_redSplitExtraMenuPages[playerNum];
+    int32_t const selection = g_redSplitExtraMenuSelections[playerNum];
+
+    if (page != REDSPLIT_EXTRA_MENU_MAIN)
     {
-        RedSplit_ChangeExtraMenuOption(1);
+        RedSplit_ChangeExtraMenuOption(playerNum, 1);
         return;
     }
 
-    switch (g_redSplitExtraMenuSelection)
+    g_redSplitExtraMenuPlayer = playerNum;
+    g_redSplitExtraMenuPage = page;
+    g_redSplitExtraMenuSelection = selection;
+
+    switch (selection)
     {
     case 0:
-        RedSplit_OpenSharedPauseMenu(MENU_MAIN_INGAME);
+        RedSplit_OpenSharedPauseMenu(MENU_MAIN_INGAME, playerNum);
         break;
     case 1:
-        g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_PLAYER;
-        g_redSplitExtraMenuSelection = 0;
+        g_redSplitExtraMenuPages[playerNum] = REDSPLIT_EXTRA_MENU_PLAYER;
+        g_redSplitExtraMenuSelections[playerNum] = 0;
+        g_redSplitExtraMenuPage = g_redSplitExtraMenuPages[playerNum];
+        g_redSplitExtraMenuSelection = g_redSplitExtraMenuSelections[playerNum];
         break;
     case 2:
-        g_redSplitExtraMenuPage = REDSPLIT_EXTRA_MENU_CONTROLLER;
-        g_redSplitExtraMenuSelection = 0;
+        g_redSplitExtraMenuPages[playerNum] = REDSPLIT_EXTRA_MENU_CONTROLLER;
+        g_redSplitExtraMenuSelections[playerNum] = 0;
+        g_redSplitExtraMenuPage = g_redSplitExtraMenuPages[playerNum];
+        g_redSplitExtraMenuSelection = g_redSplitExtraMenuSelections[playerNum];
         break;
     case 3:
-        RedSplit_CloseExtraMenu();
+        RedSplit_CloseExtraMenuForPlayer(playerNum);
         RedSplit_DisconnectPlayer(playerNum);
         break;
     }
 
-    if (g_redSplitExtraMenuPlayer >= 0)
+    if (RedSplit_IsExtraMenuOpenForPlayer(playerNum))
         S_MenuSound();
 }
 
@@ -2565,12 +2622,19 @@ static void RedSplit_DrawExtraMenuText(RedSplitViewport_t const &view, int32_t c
     int32_t pal = selected ? MF_Redfont.pal_selected : MF_Redfont.pal_deselected;
     int32_t const scalePercent = max<int32_t>(RedSplit_ViewScalePercent(view, baseScalePercent), RedSplit_ViewWidth(view) <= xdim / 2 ? 56 : 48);
     int32_t const zoom = scale(MF_Redfont.zoom, scalePercent, 100);
+    int32_t const quarterView = RedSplit_IsQuarterViewport(view);
+    int32_t const savedQuoteTextDrawing = g_redSplitQuoteTextDrawing;
 
-    G_ScreenText(MF_Redfont.tilenum, RedSplit_ViewXFrom320(view, 160) << 16, RedSplit_ViewYFrom100(view, y) << 16, zoom, 0, 0, text, shade, pal,
-        RedSplit_HudRotateFlags(view), 0, scale(MF_Redfont.emptychar.x, scalePercent, 100), scale(MF_Redfont.emptychar.y, scalePercent, 100),
+    g_redSplitQuoteTextDrawing = 6;
+
+    G_ScreenText(MF_Redfont.tilenum, 160 << 16, y << 16, zoom, 0, 0, text, shade, pal,
+        RedSplit_HudTextRotateFlags(), 0,
+        scale(MF_Redfont.emptychar.x, scalePercent, 100), scale(MF_Redfont.emptychar.y, scalePercent, 100),
         scale(MF_Redfont.between.x, scalePercent, 100), scale(MF_Redfont.between.y, scalePercent, 100),
         MF_Redfont.textflags | TEXT_XCENTER | TEXT_LITERALESCAPE | TEXT_RRMENUTEXTHACK,
           view.x1, view.y1, view.x2, view.y2);
+
+    g_redSplitQuoteTextDrawing = savedQuoteTextDrawing;
 }
 
 static int32_t RedSplit_HudTextTile(char ch)
@@ -3577,6 +3641,18 @@ static void RedSplit_DrawExtraMenuForPlayer(int32_t const playerNum, RedSplitVie
     if (!RedSplit_IsExtraMenuOpenForPlayer(playerNum))
         return;
 
+    int32_t const savedHudDrawingView = g_redSplitHudDrawingView;
+    int32_t const savedHudX1 = g_redSplitHudX1;
+    int32_t const savedHudY1 = g_redSplitHudY1;
+    int32_t const savedHudX2 = g_redSplitHudX2;
+    int32_t const savedHudY2 = g_redSplitHudY2;
+
+    g_redSplitHudDrawingView = playerNum;
+    g_redSplitHudX1 = view.x1;
+    g_redSplitHudY1 = view.y1;
+    g_redSplitHudX2 = view.x2;
+    g_redSplitHudY2 = view.y2;
+
     RedSplit_DrawBlackRectangle(view, 0, 0, 320, 100);
 
     char title[32];
@@ -3585,7 +3661,10 @@ static void RedSplit_DrawExtraMenuForPlayer(int32_t const playerNum, RedSplitVie
 
     Bsprintf(title, "Player %d", playerNum + 1);
 
-    switch (g_redSplitExtraMenuPage)
+    int32_t const page = g_redSplitExtraMenuPages[playerNum];
+    int32_t const selection = g_redSplitExtraMenuSelections[playerNum];
+
+    switch (page)
     {
     case REDSPLIT_EXTRA_MENU_PLAYER:
     {
@@ -3620,12 +3699,20 @@ static void RedSplit_DrawExtraMenuForPlayer(int32_t const playerNum, RedSplitVie
         break;
     }
 
-    RedSplit_DrawExtraMenuText(view, 13, title, 1, 91);
+    int32_t const quarterView = RedSplit_IsQuarterViewport(view);
+    RedSplit_DrawExtraMenuText(view, quarterView ? 12 : 10, title, 1, quarterView ? 252 : 72);
 
     for (int32_t i = 0; i < optionCount; ++i)
     {
-        RedSplit_DrawExtraMenuText(view, 35 + (i * 15) - min<int32_t>(i, 2), options[i], i == g_redSplitExtraMenuSelection, 78);
+        int32_t const optionY = quarterView ? 29 + (i * 11) : 29 + (i * 13) - min<int32_t>(i, 2);
+        RedSplit_DrawExtraMenuText(view, optionY, options[i], i == selection, quarterView ? 216 : 62);
     }
+
+    g_redSplitHudDrawingView = savedHudDrawingView;
+    g_redSplitHudX1 = savedHudX1;
+    g_redSplitHudY1 = savedHudY1;
+    g_redSplitHudX2 = savedHudX2;
+    g_redSplitHudY2 = savedHudY2;
 }
 
 static void RedSplit_SetOpenGLViewportForView(RedSplitViewport_t const &view)

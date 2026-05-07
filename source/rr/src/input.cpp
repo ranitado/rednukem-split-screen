@@ -30,12 +30,27 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "input.h"
 #include "menus.h"
 
+static int32_t I_CheckAnyGamepadInput(void)
+{
+    int32_t const padCount = joyGetConnectedGamepadCount();
+
+    for (int32_t padIndex = 0; padIndex < padCount; ++padIndex)
+    {
+        gamepadstate_t state;
+        if (joyGetGamepadState(padIndex, &state) >= 0 && state.buttons != 0)
+            return 1;
+    }
+
+    return 0;
+}
+
 int32_t I_CheckAllInput(void)
 {
     return
         KB_KeyWaiting()
         || MOUSE_GetButtons()
         || JOYSTICK_GetButtons()
+        || I_CheckAnyGamepadInput()
 #if defined EDUKE32_IOS
         || g_mouseClickState == MOUSE_PRESSED
 #endif
@@ -43,6 +58,12 @@ int32_t I_CheckAllInput(void)
 }
 void I_ClearAllInput(void)
 {
+    if (CONTROL_Started)
+    {
+        UserInput * const input = CONTROL_GetUserInput(nullptr);
+        CONTROL_ClearUserInput(input);
+    }
+
     KB_FlushKeyboardQueue();
     KB_ClearKeysDown();
     MOUSE_ClearAllButtons();
@@ -76,15 +97,20 @@ void I_AdvanceTriggerClear(void)
     KB_ClearKeyDown(sc_Space);
 }
 
+static int32_t I_MenuKeyboardAllowed(void)
+{
+    return !CONTROL_UserInputFilterActive() || CONTROL_UserInputFilterAllowsKeyboard();
+}
+
 int32_t I_GeneralTrigger(void)
 {
     return I_AdvanceTrigger() || I_ReturnTrigger() || I_EscapeTrigger()
 #if !defined GEKKO
-        || BUTTON(gamefunc_Open)
+        || (!CONTROL_UserInputFilterActive() && BUTTON(gamefunc_Open))
 # if !defined EDUKE32_TOUCH_DEVICES
-        || MOUSEINACTIVECONDITIONAL(BUTTON(gamefunc_Fire))
+        || (!CONTROL_UserInputFilterActive() && MOUSEINACTIVECONDITIONAL(BUTTON(gamefunc_Fire)))
 # else
-        || BUTTON(gamefunc_Fire)
+        || (!CONTROL_UserInputFilterActive() && BUTTON(gamefunc_Fire))
 # endif
 #endif
         ;
@@ -107,22 +133,22 @@ int32_t I_EscapeTrigger(void) { return CONTROL_GetUserInput(nullptr)->b_escape; 
 
 int32_t I_MenuUp(void)
 {
-    return CONTROL_GetUserInput(nullptr)->dir == dir_Up || BUTTON(gamefunc_Move_Forward);
+    return CONTROL_GetUserInput(nullptr)->dir == dir_Up || (!CONTROL_UserInputFilterActive() && BUTTON(gamefunc_Move_Forward));
 }
 
 int32_t I_MenuDown(void)
 {
-    return CONTROL_GetUserInput(nullptr)->dir == dir_Down || BUTTON(gamefunc_Move_Backward);
+    return CONTROL_GetUserInput(nullptr)->dir == dir_Down || (!CONTROL_UserInputFilterActive() && BUTTON(gamefunc_Move_Backward));
 }
 
-int32_t I_MenuLeft(void) { return CONTROL_GetUserInput(nullptr)->dir == dir_Left || BUTTON(gamefunc_Turn_Left) || BUTTON(gamefunc_Strafe_Left); }
-int32_t I_MenuRight(void) { return CONTROL_GetUserInput(nullptr)->dir == dir_Right || BUTTON(gamefunc_Turn_Right) || BUTTON(gamefunc_Strafe_Right); }
+int32_t I_MenuLeft(void) { return CONTROL_GetUserInput(nullptr)->dir == dir_Left || (!CONTROL_UserInputFilterActive() && (BUTTON(gamefunc_Turn_Left) || BUTTON(gamefunc_Strafe_Left))); }
+int32_t I_MenuRight(void) { return CONTROL_GetUserInput(nullptr)->dir == dir_Right || (!CONTROL_UserInputFilterActive() && (BUTTON(gamefunc_Turn_Right) || BUTTON(gamefunc_Strafe_Right))); }
 
-int32_t I_SliderLeft(void) { return I_MenuLeft() || /*MOUSEACTIVECONDITIONAL*/(MOUSE_GetButtons() & M_WHEELDOWN); }
-int32_t I_SliderRight(void) { return I_MenuRight() || /*MOUSEACTIVECONDITIONAL*/(MOUSE_GetButtons() & M_WHEELUP); }
+int32_t I_SliderLeft(void) { return I_MenuLeft() || (I_MenuKeyboardAllowed() && /*MOUSEACTIVECONDITIONAL*/(MOUSE_GetButtons() & M_WHEELDOWN)); }
+int32_t I_SliderRight(void) { return I_MenuRight() || (I_MenuKeyboardAllowed() && /*MOUSEACTIVECONDITIONAL*/(MOUSE_GetButtons() & M_WHEELUP)); }
 
-int32_t I_PanelUp(void) { return I_MenuUp() || I_MenuLeft() || KB_KeyPressed(sc_PgUp); }
-int32_t I_PanelDown(void) { return I_MenuDown() || I_MenuRight() || KB_KeyPressed(sc_PgDn); }
+int32_t I_PanelUp(void) { return I_MenuUp() || I_MenuLeft() || (I_MenuKeyboardAllowed() && KB_KeyPressed(sc_PgUp)); }
+int32_t I_PanelDown(void) { return I_MenuDown() || I_MenuRight() || (I_MenuKeyboardAllowed() && KB_KeyPressed(sc_PgDn)); }
 
 void I_PanelUpClear(void)
 {

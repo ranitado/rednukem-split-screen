@@ -515,6 +515,7 @@ int32_t Menu_RunRednukemUpdaterMode(int argc, char const* const* argv);
 #endif
 void M_DisplayMenus(void);
 void Menu_SuppressMouseHoverFromGamepad(void);
+void Menu_SuppressPauseMenuInputBriefly(int32_t inputSource);
 
 extern MenuFont_t MF_Redfont, MF_Bluefont, MF_Minifont;
 

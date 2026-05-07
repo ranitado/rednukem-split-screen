@@ -57,6 +57,8 @@ static ControlButtonState_t mouseButtons[MAXMOUSEBUTTONS];
 static ControlButtonState_t joyButtons[MAXJOYBUTTONS];
 
 static UserInputState_t userInput;
+static int32_t CONTROL_UserInputAllowedPad = -2;
+static bool CONTROL_UserInputAllowKeyboard = true;
 
 static int32_t (*ExtGetTime)(void);
 static int32_t ticrate;
@@ -792,6 +794,103 @@ void CONTROL_Shutdown(void)
 #define SCALEAXIS(x) (joyAxes[CONTROLLER_AXIS_ ## x].axis.analog * 10000 / 32767)
 #define SATU(x) (joyAxes[CONTROLLER_AXIS_ ## x].saturation)
 
+static uint32_t CONTROL_GetAllGamepadButtons(void)
+{
+    if (CONTROL_UserInputAllowedPad >= 0)
+    {
+        gamepadstate_t state;
+        return joyGetGamepadState(CONTROL_UserInputAllowedPad, &state) >= 0 ? state.buttons : 0;
+    }
+
+    if (CONTROL_UserInputFilterActive())
+        return 0;
+
+    uint32_t buttons = JOYSTICK_GetControllerButtons();
+
+    int32_t const padCount = joyGetConnectedGamepadCount();
+    for (int32_t padIndex = 0; padIndex < padCount; ++padIndex)
+    {
+        gamepadstate_t state;
+        if (joyGetGamepadState(padIndex, &state) >= 0)
+            buttons |= state.buttons;
+    }
+
+    return buttons;
+}
+
+static direction CONTROL_GetAllGamepadMenuDirection(void)
+{
+    constexpr int32_t deadzone = 16000;
+
+    if (CONTROL_UserInputAllowedPad >= 0)
+    {
+        gamepadstate_t state;
+        if (joyGetGamepadState(CONTROL_UserInputAllowedPad, &state) < 0)
+            return dir_None;
+
+        int32_t const leftX = state.axes[GAMEPAD_AXIS_LEFTX];
+        int32_t const leftY = state.axes[GAMEPAD_AXIS_LEFTY];
+
+        if (leftY <= -deadzone || (state.buttons & (1 << CONTROLLER_BUTTON_DPAD_UP)))
+            return dir_Up;
+        if (leftY >= deadzone || (state.buttons & (1 << CONTROLLER_BUTTON_DPAD_DOWN)))
+            return dir_Down;
+        if (leftX <= -deadzone || (state.buttons & (1 << CONTROLLER_BUTTON_DPAD_LEFT)))
+            return dir_Left;
+        if (leftX >= deadzone || (state.buttons & (1 << CONTROLLER_BUTTON_DPAD_RIGHT)))
+            return dir_Right;
+
+        return dir_None;
+    }
+
+    if (CONTROL_UserInputFilterActive())
+        return dir_None;
+
+    int32_t const padCount = joyGetConnectedGamepadCount();
+    for (int32_t padIndex = 0; padIndex < padCount; ++padIndex)
+    {
+        gamepadstate_t state;
+        if (joyGetGamepadState(padIndex, &state) < 0)
+            continue;
+
+        int32_t const leftX = state.axes[GAMEPAD_AXIS_LEFTX];
+        int32_t const leftY = state.axes[GAMEPAD_AXIS_LEFTY];
+
+        if (leftY <= -deadzone || (state.buttons & (1 << CONTROLLER_BUTTON_DPAD_UP)))
+            return dir_Up;
+        if (leftY >= deadzone || (state.buttons & (1 << CONTROLLER_BUTTON_DPAD_DOWN)))
+            return dir_Down;
+        if (leftX <= -deadzone || (state.buttons & (1 << CONTROLLER_BUTTON_DPAD_LEFT)))
+            return dir_Left;
+        if (leftX >= deadzone || (state.buttons & (1 << CONTROLLER_BUTTON_DPAD_RIGHT)))
+            return dir_Right;
+    }
+
+    return dir_None;
+}
+
+void CONTROL_SetUserInputFilter(int32_t const allowedPad, bool const allowKeyboard)
+{
+    CONTROL_UserInputAllowedPad = allowedPad;
+    CONTROL_UserInputAllowKeyboard = allowKeyboard;
+}
+
+void CONTROL_ClearUserInputFilter(void)
+{
+    CONTROL_UserInputAllowedPad = -2;
+    CONTROL_UserInputAllowKeyboard = true;
+}
+
+bool CONTROL_UserInputFilterActive(void)
+{
+    return CONTROL_UserInputAllowedPad != -2 || !CONTROL_UserInputAllowKeyboard;
+}
+
+bool CONTROL_UserInputFilterAllowsKeyboard(void)
+{
+    return !CONTROL_UserInputFilterActive() || CONTROL_UserInputAllowKeyboard;
+}
+
 UserInput *CONTROL_GetUserInput(UserInput *info)
 {
     if (info == nullptr)
@@ -799,18 +898,24 @@ UserInput *CONTROL_GetUserInput(UserInput *info)
 
     direction newdir = dir_None;
 
-    if ((joyAxes[CONTROLLER_AXIS_LEFTY].axis.digital == -1 && SCALEAXIS(LEFTY) <= -SATU(LEFTY))
-        || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_DPAD_UP)))
-        newdir = dir_Up;
-    else if ((joyAxes[CONTROLLER_AXIS_LEFTY].axis.digital == 1 && SCALEAXIS(LEFTY) >= SATU(LEFTY))
-                || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_DPAD_DOWN)))
-        newdir = dir_Down;
-    else if ((joyAxes[CONTROLLER_AXIS_LEFTX].axis.digital == -1 && SCALEAXIS(LEFTX) <= -SATU(LEFTX))
-                || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_DPAD_LEFT)))
-        newdir = dir_Left;
-    else if ((joyAxes[CONTROLLER_AXIS_LEFTX].axis.digital == 1 && SCALEAXIS(LEFTX) >= SATU(LEFTX))
-                || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_DPAD_RIGHT)))
-        newdir = dir_Right;
+    if (!CONTROL_UserInputFilterActive())
+    {
+        if ((joyAxes[CONTROLLER_AXIS_LEFTY].axis.digital == -1 && SCALEAXIS(LEFTY) <= -SATU(LEFTY))
+            || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_DPAD_UP)))
+            newdir = dir_Up;
+        else if ((joyAxes[CONTROLLER_AXIS_LEFTY].axis.digital == 1 && SCALEAXIS(LEFTY) >= SATU(LEFTY))
+                    || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_DPAD_DOWN)))
+            newdir = dir_Down;
+        else if ((joyAxes[CONTROLLER_AXIS_LEFTX].axis.digital == -1 && SCALEAXIS(LEFTX) <= -SATU(LEFTX))
+                    || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_DPAD_LEFT)))
+            newdir = dir_Left;
+        else if ((joyAxes[CONTROLLER_AXIS_LEFTX].axis.digital == 1 && SCALEAXIS(LEFTX) >= SATU(LEFTX))
+                    || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_DPAD_RIGHT)))
+            newdir = dir_Right;
+    }
+
+    if (newdir == dir_None)
+        newdir = CONTROL_GetAllGamepadMenuDirection();
 
     // allow the user to press the dpad as fast as they like without being rate limited
     if (newdir == dir_None)
@@ -821,19 +926,25 @@ UserInput *CONTROL_GetUserInput(UserInput *info)
 
     info->dir = (ExtGetTime() >= userInput.clock) ? newdir : dir_None;
 
-    if (KB_KeyDown[sc_kpad_8] || KB_KeyDown[sc_UpArrow])
-        info->dir = dir_Up;
-    else if (KB_KeyDown[sc_kpad_2] || KB_KeyDown[sc_DownArrow])
-        info->dir = dir_Down;
-    else if (KB_KeyDown[sc_kpad_4] || KB_KeyDown[sc_LeftArrow])
-        info->dir = dir_Left;
-    else if (KB_KeyDown[sc_kpad_6] || KB_KeyDown[sc_RightArrow])
-        info->dir = dir_Right;
+    if (CONTROL_UserInputAllowKeyboard)
+    {
+        if (KB_KeyDown[sc_kpad_8] || KB_KeyDown[sc_UpArrow])
+            info->dir = dir_Up;
+        else if (KB_KeyDown[sc_kpad_2] || KB_KeyDown[sc_DownArrow])
+            info->dir = dir_Down;
+        else if (KB_KeyDown[sc_kpad_4] || KB_KeyDown[sc_LeftArrow])
+            info->dir = dir_Left;
+        else if (KB_KeyDown[sc_kpad_6] || KB_KeyDown[sc_RightArrow])
+            info->dir = dir_Right;
+    }
 
-    info->b_advance = KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || (MOUSE_GetButtons() & M_LEFTBUTTON)
-                    || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_A));
-    info->b_return   = KB_KeyPressed(sc_Escape) || (MOUSE_GetButtons() & M_RIGHTBUTTON) || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_B));
-    info->b_escape = KB_KeyPressed(sc_Escape) || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_START));
+    uint32_t const allGamepadButtons = CONTROL_GetAllGamepadButtons();
+
+    info->b_advance = (CONTROL_UserInputAllowKeyboard && (KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || (MOUSE_GetButtons() & M_LEFTBUTTON)))
+                    || (allGamepadButtons & (1 << CONTROLLER_BUTTON_A));
+    info->b_return   = (CONTROL_UserInputAllowKeyboard && (KB_KeyPressed(sc_Escape) || (MOUSE_GetButtons() & M_RIGHTBUTTON)))
+                    || (allGamepadButtons & (1 << CONTROLLER_BUTTON_B));
+    info->b_escape = (CONTROL_UserInputAllowKeyboard && KB_KeyPressed(sc_Escape)) || (allGamepadButtons & (1 << CONTROLLER_BUTTON_START));
 
 #if defined(GEKKO)
     if (JOYSTICK_GetButtons()&(WII_A))

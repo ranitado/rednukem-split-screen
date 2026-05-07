@@ -1847,9 +1847,19 @@ static inline int32_t RedSplit_PadToInputSource(int32_t const padIndex)
     return RN_SPLIT_INPUT_PAD1 + padIndex;
 }
 
+static int32_t RedSplit_PlayerForInputSource(int32_t inputSource);
+static inline int32_t RedSplit_AxisAfterDeadzone(int16_t value);
+static uint32_t RedSplit_BuildMenuBits(gamepadstate_t const &state, int32_t leftX, int32_t leftY);
+
 static int32_t RedSplit_PlayerForPad(int32_t const padIndex)
 {
-    int32_t const inputSource = RedSplit_PadToInputSource(padIndex);
+    return RedSplit_PlayerForInputSource(RedSplit_PadToInputSource(padIndex));
+}
+
+static int32_t RedSplit_PlayerForInputSource(int32_t const inputSource)
+{
+    if (inputSource == RN_SPLIT_INPUT_NONE)
+        return -1;
 
     for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
         if (g_redSplitPlayerInput[playerNum] == inputSource)
@@ -1915,8 +1925,44 @@ static int32_t RedSplit_PlayerNeedsConnectedInput(int32_t const playerNum)
     return 0;
 }
 
-static int32_t RedSplit_AssignPadToPlayerNeedingInput(int32_t const padIndex)
+static void RedSplit_LatchPadInputForPlayer(int32_t const playerNum, int32_t const padIndex)
 {
+    if ((unsigned)playerNum >= MAXPLAYERS)
+        return;
+
+    gamepadstate_t state;
+    if (padIndex < 0 || joyGetGamepadState(padIndex, &state) < 0)
+    {
+        s_redSplitPrevMenuBits[playerNum] = 0;
+        s_redSplitPrevGameplayBits[playerNum] = 0;
+        return;
+    }
+
+    int32_t const leftX = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTX]);
+    int32_t const leftY = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTY]);
+    uint32_t const menuBits = RedSplit_BuildMenuBits(state, leftX, leftY);
+
+    s_redSplitPrevMenuBits[playerNum] = menuBits;
+    s_redSplitPrevGameplayBits[playerNum] = menuBits;
+}
+
+static void RedSplit_AssignInputSourceToPlayer(int32_t const playerNum, int32_t const inputSource)
+{
+    if ((unsigned)playerNum >= MAXPLAYERS || inputSource == RN_SPLIT_INPUT_NONE)
+        return;
+
+    for (int32_t i = 0; i < MAXPLAYERS; ++i)
+        if (i != playerNum && g_redSplitPlayerInput[i] == inputSource)
+            g_redSplitPlayerInput[i] = RN_SPLIT_INPUT_NONE;
+
+    g_redSplitPlayerInput[playerNum] = inputSource;
+}
+
+static int32_t RedSplit_AssignInputToPlayerNeedingInput(int32_t const inputSource)
+{
+    if (RedSplit_PlayerForInputSource(inputSource) >= 0)
+        return 0;
+
     int32_t const playerCount = RedSplit_CurrentPlayerCount();
 
     for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
@@ -1924,9 +1970,7 @@ static int32_t RedSplit_AssignPadToPlayerNeedingInput(int32_t const padIndex)
         if (!RedSplit_PlayerNeedsConnectedInput(playerNum))
             continue;
 
-        g_redSplitPlayerInput[playerNum] = RedSplit_PadToInputSource(padIndex);
-        s_redSplitPrevMenuBits[playerNum] |= BIT(RN_PAD_START);
-        s_redSplitPrevGameplayBits[playerNum] |= BIT(RN_PAD_START);
+        RedSplit_AssignInputSourceToPlayer(playerNum, inputSource);
         return 1;
     }
 
@@ -1941,18 +1985,53 @@ static int32_t RedSplit_JoinPlayerWithPad(int32_t const padIndex)
         return 0;
 
     int32_t const newPlayer = playerCount;
-    g_redSplitPlayerInput[newPlayer] = RedSplit_PadToInputSource(padIndex);
+    RedSplit_AssignInputSourceToPlayer(newPlayer, RedSplit_PadToInputSource(padIndex));
     RedSplit_SetPlayerCount(playerCount + 1);
-    s_redSplitPrevMenuBits[newPlayer] |= BIT(RN_PAD_START);
-    s_redSplitPrevGameplayBits[newPlayer] |= BIT(RN_PAD_START);
+    RedSplit_LatchPadInputForPlayer(newPlayer, padIndex);
     s_redSplitSuppressEscapeTicks = 2;
     I_EscapeTriggerClear();
+    return 1;
+}
+
+static int32_t RedSplit_KbmInputActive(void)
+{
+    if (MOUSE_GetButtons() != 0 || KB_KeyWaiting())
+        return 1;
+
+    for (int32_t sc = 0; sc < MAXKEYBOARDSCAN; ++sc)
+        if (KB_KeyPressed(sc))
+            return 1;
+
+    return 0;
+}
+
+static int32_t RedSplit_PollUnassignedKbmInput(void)
+{
+    int32_t const assignedPlayer = RedSplit_PlayerForInputSource(RN_SPLIT_INPUT_KBM);
+    int32_t const playerCount = RedSplit_CurrentPlayerCount();
+
+    if (assignedPlayer >= 0 && assignedPlayer < playerCount)
+        return 0;
+
+    if (!RedSplit_KbmInputActive())
+        return 0;
+
+    if (KB_KeyPressed(sc_Escape))
+        return 0;
+
+    if (RedSplit_AssignInputToPlayerNeedingInput(RN_SPLIT_INPUT_KBM))
+    {
+        I_ClearAllInput();
+        return 1;
+    }
+
     return 1;
 }
 
 static int32_t RedSplit_PollUnassignedPadJoins(void)
 {
     int32_t const padCount = min<int32_t>(joyGetConnectedGamepadCount(), (int32_t)ARRAY_SIZE(s_redSplitPrevJoinPadBits));
+    int32_t handled = RedSplit_PollUnassignedKbmInput();
 
     for (int32_t padIndex = 0; padIndex < padCount; ++padIndex)
     {
@@ -1964,33 +2043,48 @@ static int32_t RedSplit_PollUnassignedPadJoins(void)
         uint32_t const menuPressed = menuBits & ~s_redSplitPrevJoinPadBits[padIndex];
         s_redSplitPrevJoinPadBits[padIndex] = menuBits;
 
-        if (!(menuPressed & BIT(RN_PAD_START)))
-            continue;
-
         int32_t const assignedPlayer = RedSplit_PlayerForPad(padIndex);
         int32_t const playerCount = RedSplit_CurrentPlayerCount();
 
         if (assignedPlayer >= 0 && assignedPlayer < playerCount)
             continue;
 
+        if (menuBits == 0)
+            continue;
+
+        handled = 1;
+
+        if (menuPressed == 0)
+            continue;
+
+        int32_t const inputSource = RedSplit_PadToInputSource(padIndex);
+
         if (assignedPlayer >= playerCount && assignedPlayer < 4)
         {
-            RedSplit_SetPlayerCount(assignedPlayer + 1);
-            s_redSplitPrevMenuBits[assignedPlayer] |= BIT(RN_PAD_START);
-            s_redSplitPrevGameplayBits[assignedPlayer] |= BIT(RN_PAD_START);
-            s_redSplitSuppressEscapeTicks = 2;
-            I_EscapeTriggerClear();
+            if (menuPressed & BIT(RN_PAD_START))
+            {
+                RedSplit_SetPlayerCount(assignedPlayer + 1);
+                RedSplit_LatchPadInputForPlayer(assignedPlayer, padIndex);
+                s_redSplitSuppressEscapeTicks = 2;
+                I_EscapeTriggerClear();
+                return 1;
+            }
+
+            continue;
+        }
+
+        if (RedSplit_AssignInputToPlayerNeedingInput(inputSource))
+        {
+            int32_t const newAssignedPlayer = RedSplit_PlayerForPad(padIndex);
+            RedSplit_LatchPadInputForPlayer(newAssignedPlayer, padIndex);
             return 1;
         }
 
-        if (RedSplit_AssignPadToPlayerNeedingInput(padIndex))
-            return 1;
-
-        if (RedSplit_JoinPlayerWithPad(padIndex))
+        if ((menuPressed & BIT(RN_PAD_START)) && RedSplit_JoinPlayerWithPad(padIndex))
             return 1;
     }
 
-    return 0;
+    return handled;
 }
 
 static void RedSplit_ConsumePlayerStart(int32_t const playerNum)
@@ -2029,6 +2123,35 @@ static uint32_t RedSplit_BuildMenuBits(gamepadstate_t const &state, int32_t cons
     return menuBits;
 }
 
+static int32_t RedSplit_SharedPauseMenuActive(void)
+{
+    DukePlayer_t *const pPlayer = g_player[myconnectindex].ps;
+    return ud.pause_on || (pPlayer != nullptr && (pPlayer->gm & MODE_MENU));
+}
+
+static void RedSplit_RefreshMenuLatchesForActivePlayers(void)
+{
+    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 1, MAXPLAYERS);
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        int32_t const padIndex = RedSplit_InputSourceToPad(g_redSplitPlayerInput[playerNum]);
+        if (padIndex < 0)
+            continue;
+
+        gamepadstate_t state;
+        if (joyGetGamepadState(padIndex, &state) < 0)
+        {
+            s_redSplitPrevMenuBits[playerNum] = 0;
+            continue;
+        }
+
+        int32_t const leftX = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTX]);
+        int32_t const leftY = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTY]);
+        s_redSplitPrevMenuBits[playerNum] = RedSplit_BuildMenuBits(state, leftX, leftY);
+    }
+}
+
 static int32_t RedSplit_HandleExtraMenuPressed(int32_t const playerNum, uint32_t const menuPressed)
 {
     if (menuPressed != 0)
@@ -2040,29 +2163,32 @@ static int32_t RedSplit_HandleExtraMenuPressed(int32_t const playerNum, uint32_t
     if (playerNum <= 0)
         return 0;
 
+    if (RedSplit_SharedPauseMenuActive())
+        return 0;
+
     if (RedSplit_IsExtraMenuOpenForPlayer(playerNum))
     {
         if (menuPressed == 0)
             return 1;
 
         if (menuPressed & BIT(RN_MENU_UP))
-            RedSplit_MoveExtraMenuSelection(-1);
+            RedSplit_MoveExtraMenuSelection(playerNum, -1);
         if (menuPressed & BIT(RN_MENU_DOWN))
-            RedSplit_MoveExtraMenuSelection(1);
+            RedSplit_MoveExtraMenuSelection(playerNum, 1);
         if (menuPressed & BIT(RN_MENU_LEFT))
-            RedSplit_ChangeExtraMenuOption(-1);
+            RedSplit_ChangeExtraMenuOption(playerNum, -1);
         if (menuPressed & BIT(RN_MENU_RIGHT))
-            RedSplit_ChangeExtraMenuOption(1);
+            RedSplit_ChangeExtraMenuOption(playerNum, 1);
 
         if (menuPressed & BIT(RN_PAD_B))
-            RedSplit_BackExtraMenu();
+            RedSplit_BackExtraMenu(playerNum);
         else if (menuPressed & BIT(RN_PAD_START))
         {
-            RedSplit_CloseExtraMenu();
+            RedSplit_CloseExtraMenuForPlayer(playerNum);
             RedSplit_ConsumePlayerStart(playerNum);
         }
         else if (menuPressed & BIT(RN_PAD_A))
-            RedSplit_ActivateExtraMenuSelection();
+            RedSplit_ActivateExtraMenuSelection(playerNum);
 
         I_EscapeTriggerClear();
         return 1;
@@ -2080,59 +2206,41 @@ static int32_t RedSplit_HandleExtraMenuPressed(int32_t const playerNum, uint32_t
 
 int32_t RedSplit_PollExtraMenuInputs(void)
 {
-    if (g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME) && RedSplit_PollUnassignedPadJoins())
-        return 1;
+    if (!RedSplit_SharedPauseMenuActive()
+        && g_player[myconnectindex].ps != nullptr
+        && (g_player[myconnectindex].ps->gm & MODE_GAME)
+        && RedSplit_PollUnassignedPadJoins())
+            return 1;
 
     if (g_fakeMultiMode < 2 || ud.multimode < 2)
         return 0;
 
-    if (g_redSplitExtraMenuPlayer > 0)
+    if (RedSplit_SharedPauseMenuActive())
     {
-        int32_t const extraMenuPlayer = g_redSplitExtraMenuPlayer;
-        int32_t const extraMenuPad = RedSplit_InputSourceToPad(g_redSplitPlayerInput[extraMenuPlayer]);
-        if (extraMenuPad >= 0)
+        RedSplit_CloseExtraMenu();
+        RedSplit_RefreshMenuLatchesForActivePlayers();
+        return 0;
+    }
+
+    int32_t const playerOnePad = RedSplit_InputSourceToPad(g_redSplitPlayerInput[0]);
+    if (playerOnePad >= 0)
+    {
+        gamepadstate_t state;
+        if (joyGetGamepadState(playerOnePad, &state) >= 0)
         {
-            gamepadstate_t state;
-            if (joyGetGamepadState(extraMenuPad, &state) >= 0)
+            int32_t const leftX = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTX]);
+            int32_t const leftY = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTY]);
+            uint32_t const menuBits = RedSplit_BuildMenuBits(state, leftX, leftY);
+            uint32_t const menuPressed = menuBits & ~s_redSplitPrevMenuBits[0];
+            s_redSplitPrevMenuBits[0] = menuBits;
+
+            if (menuPressed & BIT(RN_PAD_START))
             {
-                int32_t const leftX = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTX]);
-                int32_t const leftY = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTY]);
-                uint32_t const menuBits = RedSplit_BuildMenuBits(state, leftX, leftY);
-                uint32_t const menuPressed = menuBits & ~s_redSplitPrevMenuBits[extraMenuPlayer];
-                s_redSplitPrevMenuBits[extraMenuPlayer] = menuBits;
-
-                if (menuPressed != 0 && RedSplit_HandleExtraMenuPressed(extraMenuPlayer, menuPressed))
-                    return 1;
-            }
-        }
-
-        if (I_EscapeTrigger())
-        {
-            RedSplit_OpenPauseMenuFromExtra();
-            I_EscapeTriggerClear();
-            return 1;
-        }
-
-        int32_t const playerOnePad = RedSplit_InputSourceToPad(g_redSplitPlayerInput[0]);
-        if (playerOnePad >= 0)
-        {
-            gamepadstate_t state;
-            if (joyGetGamepadState(playerOnePad, &state) >= 0)
-            {
-                int32_t const leftX = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTX]);
-                int32_t const leftY = RedSplit_AxisAfterDeadzone(state.axes[GAMEPAD_AXIS_LEFTY]);
-                uint32_t const menuBits = RedSplit_BuildMenuBits(state, leftX, leftY);
-                uint32_t const menuPressed = menuBits & ~s_redSplitPrevMenuBits[0];
-                s_redSplitPrevMenuBits[0] = menuBits;
-
-                if (menuPressed & BIT(RN_PAD_START))
-                {
-                    CONTROL_LastSeenInput = LastSeenInput::Joystick;
-                    Menu_SuppressMouseHoverFromGamepad();
-                    RedSplit_OpenPauseMenuFromExtra();
-                    I_EscapeTriggerClear();
-                    return 1;
-                }
+                CONTROL_LastSeenInput = LastSeenInput::Joystick;
+                Menu_SuppressMouseHoverFromGamepad();
+                RedSplit_OpenPauseMenuFromExtra(0);
+                I_EscapeTriggerClear();
+                return 1;
             }
         }
     }
@@ -2154,7 +2262,7 @@ int32_t RedSplit_PollExtraMenuInputs(void)
 
         s_redSplitPrevMenuBits[playerNum] = menuBits;
 
-        if (RedSplit_HandleExtraMenuPressed(playerNum, menuPressed))
+        if (menuPressed != 0 && RedSplit_HandleExtraMenuPressed(playerNum, menuPressed))
             return 1;
     }
 
@@ -2184,16 +2292,16 @@ static void RedSplit_BuildGamepadInput(int32_t playerNum, int32_t padIndex, inpu
     s_redSplitPrevMenuBits[playerNum] = menuBits;
     s_redSplitPrevGameplayBits[playerNum] = menuBits;
 
-    if (playerNum == 0 && g_redSplitExtraMenuPlayer > 0 && (menuPressed & BIT(RN_PAD_START)))
+    if (playerNum == 0 && g_fakeMultiMode >= 2 && (menuPressed & BIT(RN_PAD_START)))
     {
         CONTROL_LastSeenInput = LastSeenInput::Joystick;
         Menu_SuppressMouseHoverFromGamepad();
-        RedSplit_OpenPauseMenuFromExtra();
+        RedSplit_OpenPauseMenuFromExtra(0);
         I_EscapeTriggerClear();
         return;
     }
 
-    if (RedSplit_HandleExtraMenuPressed(playerNum, menuPressed))
+    if (!RedSplit_SharedPauseMenuActive() && RedSplit_HandleExtraMenuPressed(playerNum, menuPressed))
         return;
 
     int32_t const runHeld = state.axes[GAMEPAD_AXIS_TRIGGERLEFT] > 16000;
@@ -2321,7 +2429,8 @@ void Net_GetInput(void)
         return;
 
     s_redSplitCachedKbmInputValid = 0;
-    RedSplit_PollUnassignedPadJoins();
+    if (!RedSplit_SharedPauseMenuActive())
+        RedSplit_PollUnassignedPadJoins();
 
     RedSplit_GetInputForPlayer(myconnectindex, &playerInput);
     localInput = playerInput;

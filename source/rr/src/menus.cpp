@@ -56,9 +56,11 @@ int32_t g_skillSoundVoice = -1;
 #define USERMAPENTRYLENGTH 25
 
 void RedSplit_SetPlayerCount(int32_t const playerCount);
+void RedSplit_AssignInputsForPlayerCount(int32_t playerCount);
 extern void app_exit(int returnCode);
 
 static int32_t g_redSplitPendingNewGamePlayerCount = 1;
+static int32_t g_redSplitPauseMenuInputSuppressUntil = 0;
 
 static void Menu_PopulateReplayLevelMenu(void);
 static void Menu_DrawReplayLevelDetails(vec2_t const origin);
@@ -574,6 +576,7 @@ static void Menu_UpdateReplayLevelFonts(void)
 
 
 static MenuMenuFormat_t MMF_Top_Main =             { {  MENU_MARGIN_CENTER<<16, 55<<16, }, -(170<<16) };
+static MenuMenuFormat_t MMF_Top_MainInGame =       { {  MENU_MARGIN_CENTER<<16, 48<<16, }, -(170<<16) };
 static MenuMenuFormat_t MMF_Top_Episode =          { {  MENU_MARGIN_CENTER<<16, 48<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_Top_Skill =            { {  MENU_MARGIN_CENTER<<16, 58<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_Top_LevelReplay =      { {  MENU_MARGIN_CENTER<<16, 163<<16, }, 178<<16 };
@@ -1948,7 +1951,7 @@ static MenuEntry_t *MEL_DHWEAPON[] = {
 #define MAKE_MENUMENU_CUSTOMSIZE(Title, Format, Entries) { Title, Format, Entries, 0, 0, 0, 0 }
 
 static MenuMenu_t M_MAIN = MAKE_MENUMENU( NoTitle, &MMF_Top_Main, MEL_MAIN );
-static MenuMenu_t M_MAIN_INGAME = MAKE_MENUMENU( NoTitle, &MMF_Top_Main, MEL_MAIN_INGAME );
+static MenuMenu_t M_MAIN_INGAME = MAKE_MENUMENU( NoTitle, &MMF_Top_MainInGame, MEL_MAIN_INGAME );
 static MenuMenu_t M_NEWGAMEMODE = MAKE_MENUMENU( "Select Mode", &MMF_Top_Episode, MEL_NEWGAMEMODE );
 static MenuMenu_t M_COOPPLAYERS = MAKE_MENUMENU( "Coop Players", &MMF_Top_Episode, MEL_COOPPLAYERS );
 static MenuMenu_t M_EPISODE = MAKE_MENUMENU( "Select An Episode", &MMF_Top_Episode, MEL_EPISODE );
@@ -5310,6 +5313,7 @@ static void Menu_StartGameWithoutSkill(void)
     ud.m_respawn_items = 0;
     ud.m_respawn_inventory = 0;
 
+    RedSplit_AssignInputsForPlayerCount(g_redSplitPendingNewGamePlayerCount);
     RedSplit_SetPlayerCount(g_redSplitPendingNewGamePlayerCount);
     M_ResetReplayCampaignProgress();
 
@@ -5326,6 +5330,10 @@ static inline int32_t RedSplit_MenuCurrentPlayerCount(void)
 {
     return g_fakeMultiMode > 1 ? clamp<int32_t>(g_fakeMultiMode, 2, 4) : 1;
 }
+
+static uint32_t s_redSplitGlobalMenuPadButtons[RN_SPLIT_INPUT_PAD5 - RN_SPLIT_INPUT_PAD1 + 1] = {};
+static int32_t s_redSplitLastMenuPad = -1;
+static int32_t s_redSplitLastMenuPadClock = 0;
 
 static inline int32_t RedSplit_MenuInGame(void)
 {
@@ -5379,6 +5387,79 @@ static int32_t RedSplit_MenuInputUsedByEarlierPlayerStrict(int32_t const inputSo
     return 0;
 }
 
+static void RedSplit_PollGlobalMenuPads(void)
+{
+    int32_t const padCount = min<int32_t>(joyGetConnectedGamepadCount(), (int32_t)ARRAY_SIZE(s_redSplitGlobalMenuPadButtons));
+
+    for (int32_t padIndex = 0; padIndex < padCount; ++padIndex)
+    {
+        gamepadstate_t state;
+        if (joyGetGamepadState(padIndex, &state) < 0)
+        {
+            s_redSplitGlobalMenuPadButtons[padIndex] = 0;
+            continue;
+        }
+
+        uint32_t const pressed = state.buttons & ~s_redSplitGlobalMenuPadButtons[padIndex];
+        s_redSplitGlobalMenuPadButtons[padIndex] = state.buttons;
+
+        if (pressed & ((1u << CONTROLLER_BUTTON_A) | (1u << CONTROLLER_BUTTON_START)))
+        {
+            s_redSplitLastMenuPad = padIndex;
+            s_redSplitLastMenuPadClock = (int32_t)totalclock;
+            CONTROL_LastSeenInput = LastSeenInput::Joystick;
+            Menu_SuppressMouseHoverFromGamepad();
+        }
+    }
+
+    for (int32_t padIndex = padCount; padIndex < (int32_t)ARRAY_SIZE(s_redSplitGlobalMenuPadButtons); ++padIndex)
+        s_redSplitGlobalMenuPadButtons[padIndex] = 0;
+}
+
+static int32_t RedSplit_LastMenuPadInputSource(void)
+{
+    if (s_redSplitLastMenuPad < 0)
+        return RN_SPLIT_INPUT_NONE;
+
+    if ((int32_t)(totalclock - s_redSplitLastMenuPadClock) > TICRATE * 4)
+        return RN_SPLIT_INPUT_NONE;
+
+    int32_t const inputSource = RedSplit_MenuPadToInputSource(s_redSplitLastMenuPad);
+    return RedSplit_MenuInputSourceConnected(inputSource) ? inputSource : RN_SPLIT_INPUT_NONE;
+}
+
+static void RedSplit_AssignLastMenuPadForPlayerCount(int32_t const playerCount)
+{
+    int32_t const inputSource = RedSplit_LastMenuPadInputSource();
+    if (inputSource == RN_SPLIT_INPUT_NONE)
+        return;
+
+    int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
+
+    for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
+        if (g_redSplitPlayerInput[playerNum] == inputSource)
+            return;
+
+    int32_t targetPlayer = -1;
+    for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
+    {
+        if (g_redSplitPlayerInput[playerNum] == RN_SPLIT_INPUT_NONE)
+        {
+            targetPlayer = playerNum;
+            break;
+        }
+    }
+
+    if (targetPlayer < 0)
+        targetPlayer = 0;
+
+    for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
+        if (playerNum != targetPlayer && g_redSplitPlayerInput[playerNum] == inputSource)
+            g_redSplitPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
+
+    g_redSplitPlayerInput[targetPlayer] = inputSource;
+}
+
 static int32_t RedSplit_MenuFindAvailableInput(int32_t const playerNum)
 {
     if (playerNum == 0 && !RedSplit_MenuInputUsedByEarlierPlayerStrict(RN_SPLIT_INPUT_KBM, playerNum))
@@ -5401,6 +5482,8 @@ static int32_t RedSplit_MenuFindAvailableInput(int32_t const playerNum)
 void RedSplit_AssignInputsForPlayerCount(int32_t playerCount)
 {
     playerCount = clamp<int32_t>(playerCount, 1, 4);
+
+    RedSplit_AssignLastMenuPadForPlayerCount(playerCount);
 
     for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
     {
@@ -5672,6 +5755,9 @@ void RedSplit_DisconnectPlayer(int32_t const playerNum)
     if (playerNum <= 0 || playerNum >= playerCount)
         return;
 
+    int32_t savedPlayerInput[MAXPLAYERS];
+    Bmemcpy(savedPlayerInput, g_redSplitPlayerInput, sizeof(savedPlayerInput));
+
     int32_t const lastPlayer = playerCount - 1;
     int32_t spriteToHide = g_player[playerNum].ps != nullptr ? g_player[playerNum].ps->i : -1;
 
@@ -5691,7 +5777,6 @@ void RedSplit_DisconnectPlayer(int32_t const playerNum)
         g_player[playerNum].pcolor = g_player[lastPlayer].pcolor;
         g_player[playerNum].pteam = g_player[lastPlayer].pteam;
         g_player[playerNum].playerquitflag = 1;
-        g_redSplitPlayerInput[playerNum] = g_redSplitPlayerInput[lastPlayer];
 
         if ((unsigned)target->i < MAXSPRITES)
             sprite[target->i].yvel = playerNum;
@@ -5716,6 +5801,7 @@ void RedSplit_DisconnectPlayer(int32_t const playerNum)
     g_fakeMultiMode = newPlayerCount > 1 ? newPlayerCount : 0;
     ud.multimode = newPlayerCount;
     RedSplit_RebuildConnectChain(newPlayerCount);
+    Bmemcpy(g_redSplitPlayerInput, savedPlayerInput, sizeof(savedPlayerInput));
     RedSplit_ResetInputLatches();
     RedSplit_ResetInputQueues();
 }
@@ -5933,6 +6019,7 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
         ud.m_respawn_items = 0;
         ud.m_respawn_inventory = 0;
 
+        RedSplit_AssignInputsForPlayerCount(g_redSplitPendingNewGamePlayerCount);
         RedSplit_SetPlayerCount(g_redSplitPendingNewGamePlayerCount);
         M_ResetReplayCampaignProgress();
 
@@ -7692,6 +7779,22 @@ void Menu_SuppressMouseHoverFromGamepad(void)
 #endif
 }
 
+void Menu_SuppressPauseMenuInputBriefly(int32_t const inputSource)
+{
+    if (!REALITY)
+        return;
+
+    g_redSplitPauseMenuInputSuppressUntil = (int32_t)totalclock + TICRATE;
+
+    if (inputSource >= RN_SPLIT_INPUT_PAD1 && inputSource <= RN_SPLIT_INPUT_PAD5)
+        CONTROL_SetUserInputFilter(inputSource - RN_SPLIT_INPUT_PAD1, false);
+    else
+        CONTROL_SetUserInputFilter(-1, true);
+
+    I_ClearAllInput();
+    Menu_SuppressMouseHoverFromGamepad();
+}
+
 int32_t Menu_Anim_SinOutRight(MenuAnimation_t *animdata)
 {
     return sintable[divscale10((int32_t) totalclock - animdata->start, animdata->length) + 512] - 16384;
@@ -8222,6 +8325,12 @@ void Menu_Open(uint8_t playerID)
 
 void Menu_Close(uint8_t playerID)
 {
+    if (REALITY)
+    {
+        g_redSplitPauseMenuInputSuppressUntil = 0;
+        CONTROL_ClearUserInputFilter();
+    }
+
     if (g_player[playerID].ps->gm & (MODE_GAME|MODE_DEMO))
     {
         // The following lines are here so that you cannot close the menu when no game is running.
@@ -10293,6 +10402,21 @@ static void Menu_RunInput_FileSelect_Select(MenuFileSelect_t *object)
 
 static void Menu_RunInput(Menu_t *cm)
 {
+    if (REALITY)
+        RedSplit_PollGlobalMenuPads();
+
+    if (REALITY && g_redSplitPauseMenuInputSuppressUntil > 0)
+    {
+        if ((int32_t)(g_redSplitPauseMenuInputSuppressUntil - (int32_t)totalclock) > 0)
+            goto process_input;
+
+        g_redSplitPauseMenuInputSuppressUntil = 0;
+        CONTROL_ClearUserInputFilter();
+        I_ClearAllInput();
+        return;
+    }
+
+process_input:
     if (I_AdvanceTrigger() || I_ReturnTrigger() || I_EscapeTrigger()
         || I_MenuUp() || I_MenuDown() || I_MenuLeft() || I_MenuRight()
         || I_PanelUp() || I_PanelDown())

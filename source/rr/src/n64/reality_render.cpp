@@ -4569,6 +4569,12 @@ void RT_RotateSpriteText(float x, float y, float sx, float sy, int tilenum, int 
         vx1 = (float)g_redSplitHudX1 + x1 * quoteScale;
         vx2 = (float)g_redSplitHudX1 + x2 * quoteScale;
     }
+    else if (g_redSplitQuoteTextDrawing == 6 && g_redSplitHudDrawingView >= 0)
+    {
+        float const menuScaleX = ((float)g_redSplitHudX2 - (float)g_redSplitHudX1 + 1.f) / 320.f;
+        vx1 = (float)g_redSplitHudX1 + x1 * menuScaleX;
+        vx2 = (float)g_redSplitHudX1 + x2 * menuScaleX;
+    }
     else if (g_redSplitQuoteTextDrawing == 3 && g_redSplitHudDrawingView >= 0)
     {
         float const quoteScale = scl * 0.70f;
@@ -4598,6 +4604,13 @@ void RT_RotateSpriteText(float x, float y, float sx, float sy, int tilenum, int 
         float const quoteScale = scl * 0.70f;
         vy1 = (float)g_redSplitHudY1 + y1 * quoteScale;
         vy2 = (float)g_redSplitHudY1 + y2 * quoteScale;
+    }
+    else if (g_redSplitQuoteTextDrawing == 6 && g_redSplitHudDrawingView >= 0)
+    {
+        float const menuScaleY = ((float)g_redSplitHudY2 - (float)g_redSplitHudY1 + 1.f) / 100.f;
+        float const menuGlyphScale = ((float)g_redSplitHudX2 - (float)g_redSplitHudX1 + 1.f) / 320.f;
+        vy1 = (float)g_redSplitHudY1 + y1 * menuScaleY;
+        vy2 = vy1 + (y2 - y1) * menuGlyphScale;
     }
     else if (g_redSplitQuoteTextDrawing == 3 && g_redSplitHudDrawingView >= 0)
     {
