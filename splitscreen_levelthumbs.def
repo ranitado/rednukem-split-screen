@@ -195,3 +195,6 @@ tilefromtexture 20105 {
 tilefromtexture 20106 {
     file "levelthumbs/levelthumb_a2_winter_l07.png"
 }
+tilefromtexture 20200 {
+    file "levelthumbs/level_arrow.png"
+}

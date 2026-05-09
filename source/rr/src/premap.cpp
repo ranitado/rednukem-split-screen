@@ -770,6 +770,14 @@ void P_RandomSpawnPoint(int playerNum)
 {
     DukePlayer_t *const pPlayer = g_player[playerNum].ps;
 
+    if (g_playerSpawnCnt <= 0)
+    {
+        updatesector(pPlayer->pos.x, pPlayer->pos.y, &pPlayer->cursectnum);
+        if ((unsigned)pPlayer->i < MAXSPRITES)
+            sprite[pPlayer->i].cstat = 1 + 256;
+        return;
+    }
+
     int32_t i = playerNum;
 
     if ((g_netServer || ud.multimode > 1) && !(g_gametypeFlags[ud.coop] & GAMETYPE_FIXEDRESPAWN))
@@ -797,7 +805,7 @@ void P_RandomSpawnPoint(int playerNum)
         }
     }
 
-    if (g_fakeMultiMode)
+    if (g_fakeMultiMode && !g_redSplitDukeMatchMode)
         i = 0;
 
     pPlayer->pos        = g_playerSpawnPoints[i].pos;
@@ -2028,7 +2036,7 @@ void G_NewGame(int volumeNum, int levelNum, int skillNum)
 
     int const UserMap = Menu_HaveUserMap();
 
-    if (REALITY && !g_netServer && (ud.multimode < 2 || g_fakeMultiMode > 1) && UserMap == 0 && levelNum == 0)
+    if (REALITY && !g_redSplitDukeMatchMode && !g_netServer && (ud.multimode < 2 || g_fakeMultiMode > 1) && UserMap == 0 && levelNum == 0)
         RT_Intro();
 
     // we don't want the intro to play after the multiplayer setup screen
@@ -2268,7 +2276,7 @@ static void resetpspritevars(char gameMode)
                 int16_t spawnSect = s->sectnum;
                 int16_t spawnAng  = s->ang;
 
-                if (g_fakeMultiMode && g_playerSpawnCnt > 0)
+                if (g_fakeMultiMode && !g_redSplitDukeMatchMode && g_playerSpawnCnt > 0)
                 {
                     spawnPos  = g_playerSpawnPoints[0].pos;
                     spawnSect = g_playerSpawnPoints[0].sect;
@@ -2296,6 +2304,68 @@ static void resetpspritevars(char gameMode)
         else A_DeleteSprite(i);
 
         i = nexti;
+    }
+
+    if (g_redSplitDukeMatchMode && g_playerSpawnCnt <= 0)
+    {
+        DukePlayer_t *const ps = g_player[0].ps;
+        if (ps != nullptr)
+        {
+            int16_t sectNum = ps->cursectnum;
+            updatesector(ps->pos.x, ps->pos.y, &sectNum);
+            if ((unsigned)sectNum < (unsigned)numsectors)
+            {
+                g_playerSpawnPoints[0].pos  = ps->pos;
+                g_playerSpawnPoints[0].ang  = fix16_to_int(ps->q16ang);
+                g_playerSpawnPoints[0].sect = sectNum;
+                g_playerSpawnCnt = 1;
+            }
+        }
+    }
+
+    while (g_redSplitDukeMatchMode && g_playerSpawnCnt > 0 && j < ud.multimode && j < MAXPLAYERS)
+    {
+        playerspawn_t const &spawn = g_playerSpawnPoints[j % g_playerSpawnCnt];
+        int32_t const spriteNum = A_InsertSprite(spawn.sect, spawn.pos.x, spawn.pos.y, spawn.pos.z, APLAYER, 0,
+                                                 RR ? 24 : 42, RR ? 17 : 36, spawn.ang, 0, 0, 0, STAT_PLAYER);
+        if ((unsigned)spriteNum >= MAXSPRITES)
+            break;
+
+        spritetype *const s = &sprite[spriteNum];
+        DukePlayer_t *const ps = g_player[j].ps;
+        if (ps == nullptr)
+        {
+            A_DeleteSprite(spriteNum);
+            ++j;
+            continue;
+        }
+
+        int32_t const pal = g_player[j].pcolor != 0 ? g_player[j].pcolor : 9 + (j % 8);
+
+        s->owner = spriteNum;
+        s->shade = 0;
+        s->cstat = 1 + 256;
+        s->xoffset = 0;
+        s->clipdist = 64;
+        s->extra = ps->max_player_health;
+        s->yvel = j;
+        s->pal = ps->palookup = g_player[j].pcolor = pal;
+
+        ps->i = spriteNum;
+        ps->frag_ps = j;
+        ps->last_extra = ps->max_player_health;
+        ps->runspeed = g_playerFriction;
+        ps->autostep = (20L<<8);
+        ps->autostep_sbw = (4L<<8);
+        ps->bobpos.x = ps->opos.x = ps->pos.x = actor[spriteNum].bpos.x = spawn.pos.x;
+        ps->bobpos.y = ps->opos.y = ps->pos.y = actor[spriteNum].bpos.y = spawn.pos.y;
+        ps->opos.z = ps->pos.z = actor[spriteNum].bpos.z = spawn.pos.z;
+        ps->oq16ang = ps->q16ang = fix16_from_int(spawn.ang);
+        ps->cursectnum = spawn.sect;
+        actor[spriteNum].owner = spriteNum;
+
+        RedSplit_BeginSpawnPlayerClipGrace();
+        ++j;
     }
 }
 

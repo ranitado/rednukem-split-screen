@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "duke3d.h"
 #include "game.h"
+#include "gameexec.h"
 #include "gamedef.h"
 #include "net.h"
 #include "premap.h"
@@ -158,6 +159,9 @@ void faketimerhandler(void)
 
 void Net_WaitForEverybody(void)
 {
+    if (g_fakeMultiMode > 1 && g_netServer == NULL && g_netClient == NULL)
+        return;
+
     if (numplayers < 2) return;
 
     packbuf[0] = PACKET_TYPE_PLAYER_READY;
@@ -2394,6 +2398,71 @@ static void RedSplit_BuildGamepadInput(int32_t playerNum, int32_t padIndex, inpu
     out->q16horz = input.q16horz;
 }
 
+static void RedSplit_GetDukeBotInput(int32_t playerNum, input_t *out)
+{
+    Bmemset(out, 0, sizeof(input_t));
+
+    DukePlayer_t *const pPlayer = g_player[playerNum].ps;
+    if (pPlayer == nullptr || (unsigned)pPlayer->i >= MAXSPRITES)
+        return;
+
+    if (sprite[pPlayer->i].extra <= 0 || pPlayer->dead_flag)
+    {
+        out->bits |= BIT(SK_OPEN);
+        return;
+    }
+
+    int32_t targetPlayer = -1;
+    int64_t bestDist = INT64_MAX;
+
+    for (int32_t other = 0; other < ud.multimode && other < MAXPLAYERS; ++other)
+    {
+        if (other == playerNum || g_player[other].ps == nullptr)
+            continue;
+
+        DukePlayer_t *const pOther = g_player[other].ps;
+        if ((unsigned)pOther->i >= MAXSPRITES || sprite[pOther->i].extra <= 0 || pOther->dead_flag)
+            continue;
+
+        int64_t const dx = (int64_t)pOther->pos.x - pPlayer->pos.x;
+        int64_t const dy = (int64_t)pOther->pos.y - pPlayer->pos.y;
+        int64_t const dist = dx*dx + dy*dy;
+
+        if (dist < bestDist)
+        {
+            bestDist = dist;
+            targetPlayer = other;
+        }
+    }
+
+    if (targetPlayer < 0)
+        return;
+
+    DukePlayer_t *const pTarget = g_player[targetPlayer].ps;
+    int32_t const currentAng = fix16_to_int(pPlayer->q16ang) & 2047;
+    int32_t const targetAng = getangle(pTarget->pos.x - pPlayer->pos.x, pTarget->pos.y - pPlayer->pos.y);
+    int32_t const angleDelta = G_GetAngleDelta(currentAng, targetAng);
+    int32_t const turn = clamp<int32_t>(angleDelta >> 2, -(REDSPLIT_NORMALTURN << 1), REDSPLIT_NORMALTURN << 1);
+    int32_t const move = bestDist > (int64_t)1024*1024 ? REDSPLIT_NORMALKEYMOVE + 20 : 0;
+    int32_t const strafe = bestDist > (int64_t)1536*1536 ? ((((int32_t)totalclock + playerNum * 37) & 127) < 64 ? 14 : -14) : 0;
+
+    out->fvel = mulscale9(move, sintable[(currentAng + 2560) & 2047]) +
+                mulscale9(strafe, sintable[(currentAng + 2048) & 2047]) +
+                pPlayer->fric.x;
+    out->svel = mulscale9(move, sintable[(currentAng + 2048) & 2047]) +
+                mulscale9(strafe, sintable[(currentAng + 1536) & 2047]) +
+                pPlayer->fric.y;
+    out->q16avel = fix16_from_int(turn);
+    out->bits |= BIT(SK_RUN);
+
+    if (klabs(angleDelta) < 170 && bestDist < (int64_t)12288*12288)
+        out->bits |= BIT(SK_FIRE);
+
+    out->extbits = (move > 0);
+    out->extbits |= (strafe > 0) << 2;
+    out->extbits |= (strafe < 0) << 3;
+}
+
 static void RedSplit_GetInputForPlayer(int32_t playerNum, input_t *out)
 {
     if (g_player[playerNum].ps == nullptr)
@@ -2498,7 +2567,10 @@ void Net_GetInput(void)
                 continue;
 
             input_t remoteInput;
-            RedSplit_GetInputForPlayer(i, &remoteInput);
+            if (g_redSplitDukeMatchMode && ud.playerai && i >= g_fakeMultiMode)
+                RedSplit_GetDukeBotInput(i, &remoteInput);
+            else
+                RedSplit_GetInputForPlayer(i, &remoteInput);
             inputfifo[g_player[i].movefifoend & (MOVEFIFOSIZ - 1)][i] = remoteInput;
             g_player[i].movefifoend++;
         }

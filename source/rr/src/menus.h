@@ -44,6 +44,7 @@ enum MenuIndex_t {
     MENU_MAIN_INGAME    = 50,
     MENU_NEWGAMEMODE    = 90,
     MENU_COOPPLAYERS    = 95,
+    MENU_DUKEMATCHSETUP = 96,
     MENU_EPISODE        = 100,
     MENU_USERMAP        = 101,
     MENU_SKILL          = 110,

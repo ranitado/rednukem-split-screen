@@ -2120,6 +2120,11 @@ GAMEEXEC_STATIC void VM_Execute(native_t loop)
                 continue;
 
             case CON_ENDOFGAME:
+                if (REALITY && g_redSplitDukeMatchMode)
+                {
+                    insptr += 2;
+                    continue;
+                }
                 insptr++;
                 pPlayer->timebeforeexit  = *insptr++;
                 pPlayer->customexitsound = -1;
@@ -3626,6 +3631,11 @@ GAMEEXEC_STATIC void RT_VM_Execute(native_t loop)
                 continue;
 
             case RT_CON_ENDOFGAME:
+                if (g_redSplitDukeMatchMode)
+                {
+                    insptr += 2;
+                    continue;
+                }
                 insptr++;
                 RedSplit_SetAllPlayerQuakes(*insptr);
                 pPlayer->timebeforeexit  = *insptr++;

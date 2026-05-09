@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.9
+
+* Adds an experimental local Duke Match mode for Duke Nukem 64, including the original Duke Match map list, local player setup, and basic Duke Bot support.
+* Improves the in-game Levels menu with self-contained arrow icons, better mouse hitboxes, and layout tuning.
+* Fixes Duke Match level flow so campaign exit buttons and end-level triggers do not end a match.
+* Improves split-screen loading, spawn, and local multiplayer initialization safety around Duke Match and fallback player spawns.
+* Includes additional input, HUD, weapon, pause/menu, and 2, 3, and 4 player split-screen tuning since v0.8.
+* Note: 3 and 4 player split-screen modes, and Duke Match bots, are still experimental and need more optimization; that work is planned for upcoming versions.
+
 ## v0.8
 
 * Reworks local split-screen death and respawn handling to follow the original single-player behavior more closely, fixing repeated instant deaths, dead-player state mixups, and player-vs-player stomp/squish issues in 3 and 4 player sessions.

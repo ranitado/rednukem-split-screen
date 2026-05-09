@@ -9574,6 +9574,8 @@ ACTOR_STATIC void G_MoveEffectors(void)   //STATNUM 3
         case SE_77:
             if (!REALITY)
                 break;
+            if (g_redSplitDukeMatchMode)
+                break;
             // if (ud.multimode > 1 && ud.coop == 0 && dukematch_mode != 1)
             //     break;
             

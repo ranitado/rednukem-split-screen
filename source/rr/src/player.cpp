@@ -89,7 +89,7 @@ static bool P_NewWeaponPickupSwitchAllowed(DukePlayer_t const * const pPlayer, b
     if (!forceAllow && (int32_t)(g_newWeaponPickupSwitchLockUntil[playerNum] - now) > 0)
         return false;
 
-    g_newWeaponPickupSwitchLockUntil[playerNum] = now + (TICRATE * 2);
+    g_newWeaponPickupSwitchLockUntil[playerNum] = now + TICRATE;
     return true;
 }
 
@@ -7342,6 +7342,9 @@ static void P_ProcessWeapon(int playerNum)
 
 void P_EndLevel(void)
 {
+    if (REALITY && g_redSplitDukeMatchMode)
+        return;
+
     // if (REALITY)
     // {
     //     if (ud.multimode != 1 && ud.coop != 1 && dukematch_mode != 1)
@@ -7378,7 +7381,12 @@ static int P_DoFist(DukePlayer_t *pPlayer)
 
     if (pPlayer->fist_incs > 42)
     {
-        if (REALITY)
+        if (REALITY && g_redSplitDukeMatchMode)
+        {
+            pPlayer->fist_incs = 0;
+            return 1;
+        }
+        else if (REALITY)
             pPlayer->timebeforeexit = 17;
         else if (pPlayer->buttonpalette && ud.from_bonus == 0)
         {

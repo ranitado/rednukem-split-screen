@@ -1642,6 +1642,9 @@ default_case:
 
     if ((uint16_t)lotag == UINT16_MAX)
     {
+        if (REALITY && g_redSplitDukeMatchMode)
+            return 0;
+
         P_EndLevel();
         return 1;
     }
@@ -4937,6 +4940,9 @@ void P_CheckSectors(int playerNum)
                 return;
 
             case UINT16_MAX:
+                if (REALITY && g_redSplitDukeMatchMode)
+                    return;
+
                 // if (REALITY && ud.multimode > 1 && ud.coop == 0 && dukematch_mode != 1)
                 //     break;
                 pSector->lotag = 0;
@@ -4963,6 +4969,9 @@ void P_CheckSectors(int playerNum)
                 return;
 
             case UINT16_MAX-1:
+                if (REALITY && g_redSplitDukeMatchMode)
+                    return;
+
                 // if (REALITY && ud.multimode > 1 && ud.coop == 0 && dukematch_mode != 1)
                 //     break;
                 pSector->lotag           = 0;

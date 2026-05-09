@@ -45,7 +45,7 @@ droidinput_t droidinput;
 #define MENU_MARGIN_CENTER  160
 #define MENU_HEIGHT_CENTER  100
 
-#define REDNUKEM_SPLITSCREEN_VERSION "v0.8"
+#define REDNUKEM_SPLITSCREEN_VERSION "v0.9"
 
 int32_t g_skillSoundVoice = -1;
 
@@ -59,7 +59,15 @@ void RedSplit_SetPlayerCount(int32_t const playerCount);
 void RedSplit_AssignInputsForPlayerCount(int32_t playerCount);
 extern void app_exit(int returnCode);
 
+static void RedSplit_RebuildConnectChain(int32_t const playerCount);
+
 static int32_t g_redSplitPendingNewGamePlayerCount = 1;
+static int32_t g_redSplitPendingNewGameMode = 0;
+static int32_t g_redSplitPendingDukeMatchHumanPlayers = 0;
+static int32_t g_redSplitPendingDukeMatchBots = 0;
+static int32_t g_redSplitPendingDukeMatchBotSkill = 1;
+static int32_t g_redSplitPendingDukeMatchType = 0;
+static int32_t g_redSplitPendingDukeMatchLevel = 30;
 static int32_t g_redSplitPauseMenuInputSuppressUntil = 0;
 
 static void Menu_PopulateReplayLevelMenu(void);
@@ -75,7 +83,8 @@ struct ReplayLevelArrowButtons_t
 {
     int32_t leftX;
     int32_t rightX;
-    int32_t y;
+    int32_t leftY;
+    int32_t rightY;
     int32_t canMoveLeft;
     int32_t canMoveRight;
 };
@@ -593,9 +602,11 @@ static void Menu_UpdateReplayLevelFonts(void)
 static MenuMenuFormat_t MMF_Top_Main =             { {  MENU_MARGIN_CENTER<<16, 55<<16, }, -(170<<16) };
 static MenuMenuFormat_t MMF_Top_MainInGame =       { {  MENU_MARGIN_CENTER<<16, 48<<16, }, -(170<<16) };
 static MenuMenuFormat_t MMF_Top_Episode =          { {  MENU_MARGIN_CENTER<<16, 48<<16, }, -(190<<16) };
+static MenuMenuFormat_t MMF_NewGameMode =          { {  MENU_MARGIN_CENTER<<16, 71<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_Top_Skill =            { {  MENU_MARGIN_CENTER<<16, 58<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_Top_LevelReplay =      { {  MENU_MARGIN_CENTER<<16, 163<<16, }, 178<<16 };
 static MenuMenuFormat_t MMF_Top_Options =          { {  MENU_MARGIN_CENTER<<16, 38<<16, }, -(190<<16) };
+static MenuMenuFormat_t MMF_DukeMatchOptions =     { {  MENU_MARGIN_CENTER<<16, 58<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_Top_Joystick_Network = { {  MENU_MARGIN_CENTER<<16, 70<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_BigOptions =           { {    MENU_MARGIN_WIDE<<16, 38<<16, }, -(190<<16) };
 static MenuMenuFormat_t MMF_SmallOptions =         { {    MENU_MARGIN_WIDE<<16, 37<<16, },    170<<16 };
@@ -763,10 +774,13 @@ static MenuEntry_t *MEL_MAIN_INGAME[] = {
 // Episode and Skill will be dynamically generated after CONs are parsed
 static MenuLink_t MEO_NEWGAMEMODE_SINGLE = { MENU_SKILL, MA_Advance, };
 static MenuEntry_t ME_NEWGAMEMODE_SINGLE = MAKE_MENUENTRY( "Single Player", &MF_Redfont, &MEF_CenterMenu, &MEO_NEWGAMEMODE_SINGLE, Link );
+static MenuLink_t MEO_NEWGAMEMODE_DUKEMATCH = { MENU_DUKEMATCHSETUP, MA_Advance, };
+static MenuEntry_t ME_NEWGAMEMODE_DUKEMATCH = MAKE_MENUENTRY( "Duke Match", &MF_Redfont, &MEF_CenterMenu, &MEO_NEWGAMEMODE_DUKEMATCH, Link );
 static MenuLink_t MEO_NEWGAMEMODE_COOP = { MENU_COOPPLAYERS, MA_Advance, };
 static MenuEntry_t ME_NEWGAMEMODE_COOP = MAKE_MENUENTRY( "Coop", &MF_Redfont, &MEF_CenterMenu, &MEO_NEWGAMEMODE_COOP, Link );
 static MenuEntry_t *MEL_NEWGAMEMODE[] = {
     &ME_NEWGAMEMODE_SINGLE,
+    &ME_NEWGAMEMODE_DUKEMATCH,
     &ME_NEWGAMEMODE_COOP,
 };
 
@@ -778,6 +792,37 @@ static MenuEntry_t *MEL_COOPPLAYERS[] = {
     &ME_COOPPLAYERS_2,
     &ME_COOPPLAYERS_3,
     &ME_COOPPLAYERS_4,
+};
+
+static char const *MEOSN_DUKEMATCH_PLAYERS[] = { "2 Players", "3 Players", "4 Players" };
+static char const *MEOSN_DUKEMATCH_BOTS[] = { "No Duke Bots", "1 Duke Bot", "2 Duke Bots", "3 Duke Bots", "4 Duke Bots", "5 Duke Bots", "6 Duke Bots", "7 Duke Bots", "8 Duke Bots" };
+static char const *MEOSN_DUKEMATCH_BOTSKILL[] = { "Piece Of Cake", "Let's Rock", "Come Get Some", "Damn I'm Good" };
+static char const *MEOSN_DUKEMATCH_TYPE[] = { "Normal", "Time Limit", "Kill Count", "Survivor" };
+static char const *MEOSN_DUKEMATCH_LEVELS[] = { "Stadium", "Castle Dukenstein", "Piracy", "Shaft", "Noctis Labyrinthus" };
+static int32_t MEOSV_DUKEMATCH_LEVELS[] = { 27, 30, 31, 32, 33 };
+static MenuOptionSet_t MEOS_DUKEMATCH_PLAYERS = MAKE_MENUOPTIONSET( MEOSN_DUKEMATCH_PLAYERS, NULL, 0x2 );
+static MenuOption_t MEO_DUKEMATCH_PLAYERS = MAKE_MENUOPTION( &MF_ReplayBluefont, &MEOS_DUKEMATCH_PLAYERS, &g_redSplitPendingDukeMatchHumanPlayers );
+static MenuEntry_t ME_DUKEMATCH_PLAYERS = MAKE_MENUENTRY( "", &MF_ReplayBluefont, &MEF_CenterMenu, &MEO_DUKEMATCH_PLAYERS, Option );
+static MenuOptionSet_t MEOS_DUKEMATCH_BOTS = MAKE_MENUOPTIONSET( MEOSN_DUKEMATCH_BOTS, NULL, 0x2 );
+static MenuOption_t MEO_DUKEMATCH_BOTS = MAKE_MENUOPTION( &MF_ReplayBluefont, &MEOS_DUKEMATCH_BOTS, &g_redSplitPendingDukeMatchBots );
+static MenuEntry_t ME_DUKEMATCH_BOTS = MAKE_MENUENTRY( "", &MF_ReplayBluefont, &MEF_CenterMenu, &MEO_DUKEMATCH_BOTS, Option );
+static MenuOptionSet_t MEOS_DUKEMATCH_BOTSKILL = MAKE_MENUOPTIONSET( MEOSN_DUKEMATCH_BOTSKILL, NULL, 0x2 );
+static MenuOption_t MEO_DUKEMATCH_BOTSKILL = MAKE_MENUOPTION( &MF_ReplayBluefont, &MEOS_DUKEMATCH_BOTSKILL, &g_redSplitPendingDukeMatchBotSkill );
+static MenuEntry_t ME_DUKEMATCH_BOTSKILL = MAKE_MENUENTRY( "", &MF_ReplayBluefont, &MEF_CenterMenu, &MEO_DUKEMATCH_BOTSKILL, Option );
+static MenuOptionSet_t MEOS_DUKEMATCH_TYPE = MAKE_MENUOPTIONSET( MEOSN_DUKEMATCH_TYPE, NULL, 0x2 );
+static MenuOption_t MEO_DUKEMATCH_TYPE = MAKE_MENUOPTION( &MF_ReplayBluefont, &MEOS_DUKEMATCH_TYPE, &g_redSplitPendingDukeMatchType );
+static MenuEntry_t ME_DUKEMATCH_TYPE = MAKE_MENUENTRY( "", &MF_ReplayBluefont, &MEF_CenterMenu, &MEO_DUKEMATCH_TYPE, Option );
+static MenuOptionSet_t MEOS_DUKEMATCH_LEVEL = MAKE_MENUOPTIONSET( MEOSN_DUKEMATCH_LEVELS, MEOSV_DUKEMATCH_LEVELS, 0x2 );
+static MenuOption_t MEO_DUKEMATCH_LEVEL = MAKE_MENUOPTION( &MF_ReplayBluefont, &MEOS_DUKEMATCH_LEVEL, &g_redSplitPendingDukeMatchLevel );
+static MenuEntry_t ME_DUKEMATCH_LEVEL = MAKE_MENUENTRY( "", &MF_ReplayBluefont, &MEF_CenterMenu, &MEO_DUKEMATCH_LEVEL, Option );
+static MenuEntry_t ME_DUKEMATCH_START = MAKE_MENUENTRY( "Start Match", &MF_ReplayBluefont, &MEF_CenterMenu, &MEO_NULL, Link );
+static MenuEntry_t *MEL_DUKEMATCHSETUP[] = {
+    &ME_DUKEMATCH_PLAYERS,
+    &ME_DUKEMATCH_BOTS,
+    &ME_DUKEMATCH_BOTSKILL,
+    &ME_DUKEMATCH_TYPE,
+    &ME_DUKEMATCH_LEVEL,
+    &ME_DUKEMATCH_START,
 };
 
 static MenuLink_t MEO_EPISODE = { MENU_SKILL, MA_Advance, };
@@ -1995,8 +2040,9 @@ static MenuEntry_t *MEL_DHWEAPON[] = {
 
 static MenuMenu_t M_MAIN = MAKE_MENUMENU( NoTitle, &MMF_Top_Main, MEL_MAIN );
 static MenuMenu_t M_MAIN_INGAME = MAKE_MENUMENU( NoTitle, &MMF_Top_MainInGame, MEL_MAIN_INGAME );
-static MenuMenu_t M_NEWGAMEMODE = MAKE_MENUMENU( "Select Mode", &MMF_Top_Episode, MEL_NEWGAMEMODE );
+static MenuMenu_t M_NEWGAMEMODE = MAKE_MENUMENU( "Select Mode", &MMF_NewGameMode, MEL_NEWGAMEMODE );
 static MenuMenu_t M_COOPPLAYERS = MAKE_MENUMENU( "Coop Players", &MMF_Top_Episode, MEL_COOPPLAYERS );
+static MenuMenu_t M_DUKEMATCHSETUP = MAKE_MENUMENU( "Dukematch Options", &MMF_DukeMatchOptions, MEL_DUKEMATCHSETUP );
 static MenuMenu_t M_EPISODE = MAKE_MENUMENU( "Select An Episode", &MMF_Top_Episode, MEL_EPISODE );
 static MenuMenu_t M_SKILL = MAKE_MENUMENU( "Select Skill", &MMF_Top_Skill, MEL_SKILL );
 static MenuMenu_t M_LEVELREPLAY = MAKE_MENUMENU( "Levels", &MMF_Top_LevelReplay, MEL_REPLAY_LEVEL );
@@ -2130,6 +2176,7 @@ static Menu_t Menus[] = {
     { &M_MAIN_INGAME, MENU_MAIN_INGAME, MENU_CLOSE, MA_None, Menu },
     { &M_NEWGAMEMODE, MENU_NEWGAMEMODE, MENU_MAIN, MA_Return, Menu },
     { &M_COOPPLAYERS, MENU_COOPPLAYERS, MENU_NEWGAMEMODE, MA_Return, Menu },
+    { &M_DUKEMATCHSETUP, MENU_DUKEMATCHSETUP, MENU_NEWGAMEMODE, MA_Return, Menu },
     { &M_EPISODE, MENU_EPISODE, MENU_NEWGAMEMODE, MA_Return, Menu },
     { &M_USERMAP, MENU_USERMAP, MENU_EPISODE, MA_Return, FileSelect },
     { &M_SKILL, MENU_SKILL, MENU_PREVIOUS, MA_Return, Menu },
@@ -2491,6 +2538,13 @@ void Menu_Init(void)
     if (REALITY)
     {
         M_EPISODE.numEntries = 3;
+        for (j = 0; j < (int32_t)ARRAY_SIZE(MEOSV_DUKEMATCH_LEVELS); ++j)
+        {
+            int32_t const levelNum = MEOSV_DUKEMATCH_LEVELS[j];
+            char const * const levelName = g_mapInfo[levelNum].name;
+            if (levelName != nullptr && levelName[0] != '\0')
+                MEOSN_DUKEMATCH_LEVELS[j] = levelName;
+        }
     }
     else
     {
@@ -4594,9 +4648,9 @@ static void Menu_PreInput(MenuEntry_t *entry)
             ReplayLevelArrowButtons_t const buttons = Menu_GetReplayLevelArrowButtons(replayOrigin, entryIndex);
             int32_t direction = 0;
 
-            if (buttons.canMoveLeft && Menu_ReplayLevelArrowMouse(buttons.leftX, buttons.y))
+            if (buttons.canMoveLeft && Menu_ReplayLevelArrowMouse(buttons.leftX, buttons.leftY))
                 direction = -1;
-            else if (buttons.canMoveRight && Menu_ReplayLevelArrowMouse(buttons.rightX, buttons.y))
+            else if (buttons.canMoveRight && Menu_ReplayLevelArrowMouse(buttons.rightX, buttons.rightY))
                 direction = 1;
 
             if (direction != 0)
@@ -5470,11 +5524,83 @@ static void Menu_StartGameWithoutSkill(void)
 
     ud.m_respawn_items = 0;
     ud.m_respawn_inventory = 0;
+    ud.m_coop = g_redSplitPendingNewGamePlayerCount > 1 ? 1 : 0;
+    ud.playerai = 0;
+    g_redSplitDukeMatchMode = 0;
+    g_redSplitDukeMatchHumanPlayers = g_redSplitPendingNewGamePlayerCount;
+    g_redSplitDukeMatchBots = 0;
+    g_redSplitDukeMatchType = 0;
 
     RedSplit_AssignInputsForPlayerCount(g_redSplitPendingNewGamePlayerCount);
     RedSplit_SetPlayerCount(g_redSplitPendingNewGamePlayerCount);
     M_ResetReplayCampaignProgress();
 
+    G_NewGame_EnterLevel();
+}
+
+static int32_t Menu_ValidateDukeMatchLevel(int32_t const levelNum)
+{
+    for (int32_t i = 0; i < (int32_t)ARRAY_SIZE(MEOSV_DUKEMATCH_LEVELS); ++i)
+    {
+        if (MEOSV_DUKEMATCH_LEVELS[i] == levelNum)
+            return levelNum;
+    }
+
+    return MEOSV_DUKEMATCH_LEVELS[0];
+}
+
+static void Menu_StartDukeMatchGame(void)
+{
+    int32_t const humanPlayers = clamp<int32_t>(g_redSplitPendingDukeMatchHumanPlayers + 2, 2, 4);
+    int32_t const requestedBots = clamp<int32_t>(g_redSplitPendingDukeMatchBots, 0, 8);
+    int32_t const totalPlayers = clamp<int32_t>(humanPlayers + requestedBots, humanPlayers, MAXPLAYERS);
+    int32_t const botPlayers = totalPlayers - humanPlayers;
+
+    g_redSplitDukeMatchMode = 1;
+    g_redSplitDukeMatchHumanPlayers = humanPlayers;
+    g_redSplitDukeMatchBots = botPlayers;
+    g_redSplitDukeMatchType = clamp<int32_t>(g_redSplitPendingDukeMatchType, 0, 3);
+
+    ud.m_volume_number = 0;
+    ud.m_level_number = Menu_ValidateDukeMatchLevel(g_redSplitPendingDukeMatchLevel);
+    ud.m_player_skill = clamp<int32_t>(g_redSplitPendingDukeMatchBotSkill, 0, g_skillCnt > 0 ? g_skillCnt - 1 : 3) + 1;
+    ud.m_coop = 0;
+    ud.m_ffire = 1;
+    ud.m_marker = 1;
+    ud.m_noexits = 1;
+    ud.playerai = botPlayers > 0;
+    ud.m_respawn_monsters = 0;
+    ud.m_monsters_off = ud.monsters_off = 1;
+    ud.m_respawn_items = 1;
+    ud.m_respawn_inventory = 1;
+
+    RedSplit_AssignInputsForPlayerCount(humanPlayers);
+    RedSplit_SetPlayerCount(humanPlayers);
+
+    if (totalPlayers > humanPlayers)
+    {
+        for (int32_t playerNum = humanPlayers; playerNum < totalPlayers; ++playerNum)
+        {
+            G_MaybeAllocPlayer(playerNum);
+            g_player[playerNum].playerquitflag = 1;
+            g_player[playerNum].pcolor = 0;
+            g_player[playerNum].pteam = playerNum & 1;
+            Bsnprintf(g_player[playerNum].user_name, sizeof(g_player[playerNum].user_name), "Duke Bot %d", playerNum - humanPlayers + 1);
+            if (g_player[playerNum].ps != nullptr)
+            {
+                g_player[playerNum].ps->team = g_player[playerNum].pteam;
+                g_player[playerNum].ps->weaponswitch = 3;
+                g_player[playerNum].ps->auto_aim = 0;
+            }
+        }
+
+        ud.multimode = totalPlayers;
+        g_mostConcurrentPlayers = totalPlayers;
+        RedSplit_RebuildConnectChain(totalPlayers);
+        RedSplit_ResetInputQueues();
+    }
+
+    M_ResetReplayCampaignProgress();
     G_NewGame_EnterLevel();
 }
 
@@ -6061,14 +6187,24 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
     case MENU_NEWGAMEMODE:
         if (entry == &ME_NEWGAMEMODE_SINGLE)
         {
+            g_redSplitPendingNewGameMode = 0;
             g_redSplitPendingNewGamePlayerCount = 1;
             Menu_PrepareNewGameFirstLevel();
             if (g_skillCnt == 0)
                 Menu_StartGameWithoutSkill();
         }
+        else if (entry == &ME_NEWGAMEMODE_DUKEMATCH)
+        {
+            g_redSplitPendingNewGameMode = 2;
+        }
+        else if (entry == &ME_NEWGAMEMODE_COOP)
+        {
+            g_redSplitPendingNewGameMode = 1;
+        }
         break;
 
     case MENU_COOPPLAYERS:
+        g_redSplitPendingNewGameMode = 1;
         if (entry == &ME_COOPPLAYERS_2)
             g_redSplitPendingNewGamePlayerCount = 2;
         else if (entry == &ME_COOPPLAYERS_3)
@@ -6079,6 +6215,11 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
         Menu_PrepareNewGameFirstLevel();
         if (g_skillCnt == 0)
             Menu_StartGameWithoutSkill();
+        break;
+
+    case MENU_DUKEMATCHSETUP:
+        if (entry == &ME_DUKEMATCH_START)
+            Menu_StartDukeMatchGame();
         break;
 
     case MENU_PLAYERINPUT:
@@ -6194,6 +6335,12 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
 
         ud.m_respawn_items = 0;
         ud.m_respawn_inventory = 0;
+        ud.m_coop = g_redSplitPendingNewGamePlayerCount > 1 ? 1 : 0;
+        ud.playerai = 0;
+        g_redSplitDukeMatchMode = 0;
+        g_redSplitDukeMatchHumanPlayers = g_redSplitPendingNewGamePlayerCount;
+        g_redSplitDukeMatchBots = 0;
+        g_redSplitDukeMatchType = 0;
 
         RedSplit_AssignInputsForPlayerCount(g_redSplitPendingNewGamePlayerCount);
         RedSplit_SetPlayerCount(g_redSplitPendingNewGamePlayerCount);
@@ -7467,40 +7614,49 @@ static ReplayLevelArrowButtons_t Menu_GetReplayLevelArrowButtons(vec2_t const or
     if (g_replayLevelCount <= 1)
         return buttons;
 
-    int32_t const titleX = origin.x + (160<<16);
-    int32_t const titleY = origin.y + (45<<16);
-    vec2_t const titleSize = G_ScreenTextSize(MF_Redfont.tilenum, titleX, titleY, MF_Redfont.zoom, 0,
-                                              g_replayLevelNames[entryIndex], 2|8|16|ROTATESPRITE_FULL16,
-                                              MF_Redfont.emptychar.x, MF_Redfont.emptychar.y,
-                                              MF_Redfont.between.x, MF_Redfont.between.y,
-                                              MF_Redfont.textflags | TEXT_XCENTER, 0, 0, xdim-1, ydim-1);
-    int32_t const titleHalf = titleSize.x >> 1;
-
-    buttons.leftX = max<int32_t>(origin.x + (24<<16), titleX - titleHalf - (22<<16));
-    buttons.rightX = min<int32_t>(origin.x + (296<<16), titleX + titleHalf + (22<<16));
-    buttons.y = origin.y + (50<<16);
+    buttons.leftX = origin.x + (29<<16);
+    buttons.rightX = origin.x + (291<<16);
+    buttons.leftY = origin.y + (51<<16);
+    buttons.rightY = buttons.leftY + (14<<16);
     buttons.canMoveLeft = entryIndex > 0;
     buttons.canMoveRight = entryIndex < g_replayLevelCount - 1;
 
     return buttons;
 }
 
+enum { REDSPLIT_LEVEL_ARROW_TILE = 20200 };
+
 static void Menu_DrawReplayLevelArrow(int32_t const x, int32_t const y, int32_t const direction)
 {
-    int32_t const buttonW = 24<<16;
-    int32_t const buttonH = 18<<16;
-    int32_t const buttonX = x - (buttonW >> 1);
-    int32_t const buttonY = y - (buttonH >> 1);
+    int32_t const z = 56525;
+    int32_t const drawY = y - (6<<16);
+    int32_t arrowTile = -1;
 
-    Menu_BlackRectangle(buttonX, buttonY, buttonW, buttonH, 1|32);
+    if ((unsigned)REDSPLIT_LEVEL_ARROW_TILE < MAXTILES && tilesiz[REDSPLIT_LEVEL_ARROW_TILE].x > 0 && tilesiz[REDSPLIT_LEVEL_ARROW_TILE].y > 0)
+        arrowTile = REDSPLIT_LEVEL_ARROW_TILE;
+    else if ((unsigned)SELECTDIR < MAXTILES && tilesiz[SELECTDIR].x > 0 && tilesiz[SELECTDIR].y > 0)
+        arrowTile = SELECTDIR;
 
-    if ((unsigned)ARROW < MAXTILES && tilesiz[ARROW].x > 0 && tilesiz[ARROW].y > 0)
+    if (arrowTile >= 0)
     {
-        rotatesprite_fs(x, y, 49152, direction < 0 ? 1024 : 0, ARROW, -8, 0, 2|8|16);
+        int32_t const posx = tilesiz[arrowTile].y * z;
+        int32_t const clipWidth = max<int32_t>((posx>>17)<<16, 14<<16);
+        int32_t const clipLeft = x - (clipWidth>>1);
+        int32_t const x1 = xdim_from_320_16(clipLeft);
+        int32_t const y1 = ydim_from_200_16(drawY - (16<<16));
+        int32_t const x2 = xdim_from_320_16(clipLeft + clipWidth);
+        int32_t const y2 = ydim_from_200_16(drawY + (16<<16));
+        int32_t const angle = direction < 0 ? 512 : 1536;
+        int32_t const spriteX = direction < 0 ? clipLeft + posx : clipLeft + clipWidth - posx;
+
+        rotatesprite_(spriteX, drawY, z, angle, arrowTile, Menu_CursorShade(), 0, 2|8|16, 0, 0, x1, y1, x2, y2);
         return;
     }
 
-    creditsminitext(x, y - (3<<16), direction < 0 ? "PREV" : "NEXT", 8);
+    G_ScreenText(MF_Redfont.tilenum, x, drawY - (3<<16), MF_Redfont.zoom, 0, 0,
+                 direction < 0 ? "<" : ">", 0, MF_ReplayRedfont.pal, 2|8|16|ROTATESPRITE_FULL16, 0,
+                 MF_Redfont.emptychar.x, MF_Redfont.emptychar.y, MF_Redfont.between.x, MF_Redfont.between.y,
+                 MF_Redfont.textflags | TEXT_XCENTER, 0, 0, xdim-1, ydim-1);
 }
 
 static void Menu_DrawReplayLevelDetails(vec2_t const origin)
@@ -7530,9 +7686,9 @@ static void Menu_DrawReplayLevelDetails(vec2_t const origin)
         ReplayLevelArrowButtons_t const buttons = Menu_GetReplayLevelArrowButtons(origin, entryIndex);
 
         if (buttons.canMoveLeft)
-            Menu_DrawReplayLevelArrow(buttons.leftX, buttons.y, -1);
+            Menu_DrawReplayLevelArrow(buttons.leftX, buttons.leftY, -1);
         if (buttons.canMoveRight)
-            Menu_DrawReplayLevelArrow(buttons.rightX, buttons.y, 1);
+            Menu_DrawReplayLevelArrow(buttons.rightX, buttons.rightY, 1);
     }
 
     int32_t const thumbnailTile = Menu_GetReplayLevelThumbnailTile(entryIndex);
@@ -8638,13 +8794,12 @@ static int32_t m_mousepos_initialized;
 
 static int32_t Menu_ReplayLevelArrowMouse(int32_t const centerX, int32_t const centerY)
 {
-    int32_t const buttonW = 28<<16;
-    int32_t const buttonH = 22<<16;
+    int32_t const buttonW = 36<<16;
+    int32_t const buttonH = 40<<16;
     int32_t const buttonX = centerX - (buttonW >> 1);
-    int32_t const buttonY = centerY - (buttonH >> 1);
+    int32_t const buttonY = centerY - (26<<16);
 
-    return !Menu_MouseOutsideBounds(&m_mousepos, buttonX, buttonY, buttonW, buttonH)
-        && !Menu_MouseOutsideBounds(&m_mousedownpos, buttonX, buttonY, buttonW, buttonH);
+    return !Menu_MouseOutsideBounds(&m_mousepos, buttonX, buttonY, buttonW, buttonH);
 }
 
 static void Menu_SkipRealityStartupLogo(void)
@@ -9169,20 +9324,28 @@ static int32_t M_RunMenu_Menu(Menu_t *cm, MenuMenu_t *menu, MenuEntry_t *current
                             currentOption < 0 ? MenuCustom : currentOption < object->options->numOptions ? object->options->optionNames[currentOption] : NULL,
                             status, ydim_upper, ydim_lower);
 
-                        if (entry->format->width > 0)
-                            mousewidth += optiontextsize.x;
+                        int32_t optionmousex = mousex;
+                        int32_t optionmousewidth = mousewidth;
+
+                        if (entry->format->width == 0 && entry->name != nullptr && entry->name[0] == '\0')
+                        {
+                            optionmousex = optiontextx - (optiontextsize.x>>1);
+                            optionmousewidth = optiontextsize.x;
+                        }
+                        else if (entry->format->width > 0)
+                            optionmousewidth += optiontextsize.x;
                         else
                             optiontextx -= optiontextsize.x;
 
-                        if (MOUSEACTIVECONDITIONAL(state != 1 && cm == m_currentMenu && !Menu_MouseOutsideBounds(&m_mousepos, mousex, mousey, mousewidth, height)))
+                        if (MOUSEACTIVECONDITIONAL(state != 1 && cm == m_currentMenu && !Menu_MouseOutsideBounds(&m_mousepos, optionmousex, mousey, optionmousewidth, height)))
                         {
-                            if (MOUSEWATCHPOINTCONDITIONAL(Menu_MouseOutsideBounds(&m_prevmousepos, mousex, mousey, mousewidth, height)))
+                            if (MOUSEWATCHPOINTCONDITIONAL(Menu_MouseOutsideBounds(&m_prevmousepos, optionmousex, mousey, optionmousewidth, height)))
                             {
                                 menu->currentEntry = e;
                                 Menu_RunInput_Menu_MovementVerify(menu);
                             }
 
-                            if (!m_mousecaught && g_mouseClickState == MOUSE_RELEASED && !Menu_MouseOutsideBounds(&m_mousedownpos, mousex, mousey, mousewidth, entry->font->get_yline()))
+                            if (!m_mousecaught && g_mouseClickState == MOUSE_RELEASED && !Menu_MouseOutsideBounds(&m_mousedownpos, optionmousex, mousey, optionmousewidth, entry->font->get_yline()))
                             {
                                 menu->currentEntry = e;
                                 Menu_RunInput_Menu_MovementVerify(menu);
