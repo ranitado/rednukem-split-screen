@@ -7631,12 +7631,7 @@ static void P_Dead(int const playerNum, int const sectorLotag, int const floorZ,
         pPlayer->opyoff = pPlayer->pyoff;
         pPlayer->on_warping_sector = 0;
 
-        if (g_redSplitDukeMatchMode && (int32_t)(g_redSplitDeathRespawnClock[playerNum] - (int32_t)totalclock) <= 0)
-        {
-            P_ResetPlayer(playerNum);
-            pus = NUMPAGES;
-        }
-        else if (!g_redSplitDukeMatchMode && P_RedSplitManualRespawnPressed(playerNum))
+        if (P_RedSplitManualRespawnPressed(playerNum))
         {
             P_ResetPlayer(playerNum);
             pus = NUMPAGES;

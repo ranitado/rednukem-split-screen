@@ -2307,6 +2307,57 @@ static void resetpspritevars(char gameMode)
         i = nexti;
     }
 
+    while (g_fakeMultiMode && !g_redSplitDukeMatchMode && g_playerSpawnCnt > 0 && j < ud.multimode && j < MAXPLAYERS)
+    {
+        playerspawn_t const &spawn = g_playerSpawnPoints[0];
+        int32_t const spriteNum = A_InsertSprite(spawn.sect, spawn.pos.x, spawn.pos.y, spawn.pos.z, APLAYER, 0,
+                                                 RR ? 24 : 42, RR ? 17 : 36, spawn.ang, 0, 0, 0, STAT_PLAYER);
+        if ((unsigned)spriteNum >= MAXSPRITES)
+            break;
+
+        spritetype *const s = &sprite[spriteNum];
+        DukePlayer_t *const ps = g_player[j].ps;
+        if (ps == nullptr)
+        {
+            A_DeleteSprite(spriteNum);
+            ++j;
+            continue;
+        }
+
+        int32_t const pal = g_player[j].pcolor != 0 ? g_player[j].pcolor : 9 + (j % 8);
+
+        s->owner = spriteNum;
+        s->shade = 0;
+        s->cstat = 1 + 256;
+        s->xoffset = 0;
+        s->clipdist = 64;
+        s->extra = ps->max_player_health;
+        s->yvel = j;
+        s->pal = ps->palookup = g_player[j].pcolor = pal;
+
+        ps->i = spriteNum;
+        ps->frag_ps = j;
+        ps->last_extra = ps->max_player_health;
+        ps->runspeed = g_playerFriction;
+        ps->autostep = (20L<<8);
+        ps->autostep_sbw = (4L<<8);
+        ps->dead_flag = 0;
+        ps->wackedbyactor = -1;
+        ps->bobpos.x = ps->opos.x = ps->pos.x = actor[spriteNum].bpos.x = spawn.pos.x;
+        ps->bobpos.y = ps->opos.y = ps->pos.y = actor[spriteNum].bpos.y = spawn.pos.y;
+        ps->opos.z = ps->pos.z = actor[spriteNum].bpos.z = spawn.pos.z;
+        ps->oq16ang = ps->q16ang = fix16_from_int(spawn.ang);
+        ps->cursectnum = spawn.sect;
+
+        actor[spriteNum].owner = spriteNum;
+        actor[spriteNum].picnum = APLAYER;
+        actor[spriteNum].extra = -1;
+        Bmemset(actor[spriteNum].t_data, 0, sizeof(actor[spriteNum].t_data));
+
+        RedSplit_BeginSpawnPlayerClipGrace();
+        ++j;
+    }
+
     if (g_redSplitDukeMatchMode && g_playerSpawnCnt <= 0)
     {
         DukePlayer_t *const ps = g_player[0].ps;
