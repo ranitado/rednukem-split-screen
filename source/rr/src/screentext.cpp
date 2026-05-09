@@ -1110,7 +1110,7 @@ void G_PrintGameQuotes(int32_t snum)
         {
             pal = g_player[snum].pcolor;
             if (redSplitQuoteQuarterView)
-                x = reserved_quote ? (2<<16) : (160<<16);
+                x = 160<<16;
             else if ((g_redSplitHudX2 - g_redSplitHudX1 + 1) <= (xdim / 2))
                 x = scale(g_redSplitHudX1 + 8, 320, xdim) << 16;
             else
@@ -1119,16 +1119,13 @@ void G_PrintGameQuotes(int32_t snum)
         if (REALITY)
             RT_RotateSpriteSetColor(64, 200, 200, 256 - texta(k));
         int32_t const quoteFlags =
-            (redSplitQuoteQuarterView && reserved_quote)
-                ? (REALITY ? TEXT_N64NOPAL : 0)
-                :
             (redSplitQuoteText && !redSplitQuoteQuarterView && (g_redSplitHudX2 - g_redSplitHudX1 + 1) <= (xdim / 2))
                 ? (REALITY ? TEXT_N64NOPAL : 0)
                 :
                 (TEXT_XCENTER | (REALITY ? TEXT_N64NOPAL : 0));
         int32_t const savedRedSplitQuoteTextDrawing = g_redSplitQuoteTextDrawing;
         if (g_redSplitHudDrawingView >= 0)
-            g_redSplitQuoteTextDrawing = (redSplitQuoteQuarterView && reserved_quote) ? 5 : redSplitQuoteQuarterView ? 3 : 1;
+            g_redSplitQuoteTextDrawing = redSplitQuoteQuarterView ? 3 : 1;
         height = gametext_(x, y, apStrings[ps->ftq], textsh(k), pal, texto(k), texta(k), quoteFlags).y + (1<<16);
         g_redSplitQuoteTextDrawing = savedRedSplitQuoteTextDrawing;
     }

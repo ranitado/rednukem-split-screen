@@ -3566,7 +3566,7 @@ default_case:
                 if (ps->newowner >= 0)
                     G_ClearCameraView(ps);
 
-                if (!RR && sprite[spriteNum].xrepeat < 24 && sprite[dmgSrc].picnum == SHRINKSPARK)
+                if (!RR && sprite[spriteNum].xrepeat < 24 && sprite[dmgSrc].picnum == SHRINKSPARK && PN(spriteNum) != APLAYER)
                     return;
 
                 if (sprite[actor[spriteNum].owner].picnum != APLAYER)

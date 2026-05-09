@@ -60,7 +60,14 @@ static int32_t P_RedSplitManualRespawnPressed(int32_t const playerNum)
         return 0;
     }
 
-    if ((int32_t)(g_redSplitDeathRespawnClock[playerNum] - (int32_t)totalclock) > 0 || g_redSplitRespawnOpenWasDown[playerNum])
+    if ((int32_t)(g_redSplitDeathRespawnClock[playerNum] - (int32_t)totalclock) > 0)
+    {
+        g_redSplitRespawnOpenWasDown[playerNum] = 1;
+        g_player[playerNum].inputBits->bits &= ~BIT(SK_OPEN);
+        return 0;
+    }
+
+    if (g_redSplitRespawnOpenWasDown[playerNum])
         return 0;
 
     g_redSplitRespawnOpenWasDown[playerNum] = 1;
@@ -72,6 +79,18 @@ static int32_t P_GetPlayerIndexFromPs(DukePlayer_t const * const pPlayer)
 {
     for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
         if (g_player[playerNum].ps == pPlayer)
+            return playerNum;
+
+    return -1;
+}
+
+static int32_t P_GetPlayerIndexFromSprite(int32_t const spriteNum)
+{
+    if ((unsigned)spriteNum >= MAXSPRITES)
+        return -1;
+
+    for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
+        if (g_player[playerNum].ps != nullptr && g_player[playerNum].ps->i == spriteNum)
             return playerNum;
 
     return -1;
@@ -347,7 +366,7 @@ static int A_FindTargetSprite(const spritetype *pSprite, int projAng, int projec
                          (GTFLAGS(GAMETYPE_TDM) && g_player[P_Get(spriteNum)].ps->team == g_player[playerNum].ps->team)))
                         continue;
 
-                    if ((isShrinker && sprite[spriteNum].xrepeat < 30
+                    if ((isShrinker && sprite[spriteNum].xrepeat < 30 && PN(spriteNum) != APLAYER
                         && (PN(spriteNum) == SHARK || !(!RR && PN(spriteNum) >= GREENSLIME && PN(spriteNum) <= GREENSLIME + 7)))
                         || (isFreezer && sprite[spriteNum].pal == 1))
                         continue;
@@ -646,7 +665,9 @@ int A_Shoot(int const spriteNum, int projecTile)
     
     spritetype *const   pSprite       = &sprite[spriteNum];
     int const           spriteSectnum = pSprite->sectnum;
-    int const           playerNum     = (pSprite->picnum == APLAYER) ? P_GetP(pSprite) : -1;
+    int                 playerNum     = (pSprite->picnum == APLAYER) ? P_GetP(pSprite) : -1;
+    if (playerNum >= 0 && (g_player[playerNum].ps == nullptr || g_player[playerNum].ps->i != spriteNum))
+        playerNum = P_GetPlayerIndexFromSprite(spriteNum);
     DukePlayer_t *const pPlayer       = playerNum >= 0 ? g_player[playerNum].ps : NULL;
     int32_t             Zvel          = 0;
 
@@ -7479,8 +7500,14 @@ static void P_DoWater(int const playerNum, int const playerBits, int const floor
     pPlayer->jumping_counter = 0;
     pPlayer->pyoff           = sintable[pPlayer->pycount] >> 7;
 
-    if (!A_CheckSoundPlaying(pPlayer->i, REALITY ? 37 : DUKE_UNDERWATER))
-        A_PlaySound(REALITY ? 37 : DUKE_UNDERWATER, pPlayer->i);
+    int const underwaterSound = REALITY ? 37 : DUKE_UNDERWATER;
+    if (REALITY && g_fakeMultiMode > 1)
+    {
+        if (!A_CheckSoundPlaying(-1, underwaterSound))
+            A_PlaySound(underwaterSound, pPlayer->i);
+    }
+    else if (!A_CheckSoundPlaying(pPlayer->i, underwaterSound))
+        A_PlaySound(underwaterSound, pPlayer->i);
 
     if (TEST_SYNC_KEY(playerBits, SK_JUMP) && (!RRRA || !pPlayer->on_motorcycle))
     {
@@ -7604,7 +7631,12 @@ static void P_Dead(int const playerNum, int const sectorLotag, int const floorZ,
         pPlayer->opyoff = pPlayer->pyoff;
         pPlayer->on_warping_sector = 0;
 
-        if (P_RedSplitManualRespawnPressed(playerNum))
+        if (g_redSplitDukeMatchMode && (int32_t)(g_redSplitDeathRespawnClock[playerNum] - (int32_t)totalclock) <= 0)
+        {
+            P_ResetPlayer(playerNum);
+            pus = NUMPAGES;
+        }
+        else if (!g_redSplitDukeMatchMode && P_RedSplitManualRespawnPressed(playerNum))
         {
             P_ResetPlayer(playerNum);
             pus = NUMPAGES;
@@ -9662,11 +9694,7 @@ HORIZONLY:;
             pPlayer->holster_weapon = 0;
             pPlayer->weapon_pos     = klabs(pPlayer->weapon_pos);
 
-            if (REALITY && g_fakeMultiMode > 1 && pPlayer->actorsqu >= 0 && sprite[pPlayer->actorsqu].picnum == APLAYER)
-            {
-                pPlayer->actorsqu = -1;
-            }
-            else if (pPlayer->actorsqu >= 0 && sprite[pPlayer->actorsqu].statnum != MAXSTATUS &&
+            if (pPlayer->actorsqu >= 0 && sprite[pPlayer->actorsqu].statnum != MAXSTATUS &&
                 dist(&sprite[pPlayer->i], &sprite[pPlayer->actorsqu]) < 1400)
             {
                 A_DoGuts(pPlayer->actorsqu, JIBS6, 7);

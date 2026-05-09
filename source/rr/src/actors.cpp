@@ -206,7 +206,8 @@ SKIPWALLCHECK:
                 (!RR && pOther->picnum == TRIPBOMB) || pOther->picnum == QUEBALL || (RR && pOther->picnum == RRTILE3440) || pOther->picnum == STRIPEBALL || pOther->picnum == DUKELYINGDEAD ||
                 A_CheckEnemySprite(pOther)))
             {
-                if ((!RR && pSprite->picnum == SHRINKSPARK && pOther->picnum != SHARK && (otherSprite == pSprite->owner || pOther->xrepeat < 24))
+                if ((!RR && pSprite->picnum == SHRINKSPARK && pOther->picnum != SHARK
+                    && (otherSprite == pSprite->owner || (pOther->xrepeat < 24 && pOther->picnum != APLAYER)))
                     || ((pSprite->picnum == MORTER || (REALITY && pSprite->picnum == DN64TILE3841)) && otherSprite == pSprite->owner)
                     || (RRRA && ((pSprite->picnum == CHEERBOMB && otherSprite == pSprite->owner) || (pOther->picnum == MINION && pOther->pal == 19))))
                     goto next_sprite;
@@ -1208,7 +1209,45 @@ ACTOR_STATIC void G_MovePlayers(void)
                 if (G_HaveActor(sprite[spriteNum].picnum))
                     A_Execute(spriteNum, playerNum, otherPlayerDist);
 
-                if ((g_netServer || ud.multimode > 1) && !(REALITY && g_fakeMultiMode > 1))
+                if (REALITY && g_fakeMultiMode > 1)
+                {
+                    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4);
+
+                    if (pPlayer->knee_incs == 0 && pSprite->extra > 0 && pSprite->yrepeat > 32)
+                    {
+                        for (int32_t otherPlayer = 0; otherPlayer < playerCount; ++otherPlayer)
+                        {
+                            if (otherPlayer == playerNum || g_player[otherPlayer].ps == nullptr)
+                                continue;
+
+                            DukePlayer_t *const pOtherPlayer = g_player[otherPlayer].ps;
+                            spritetype *const pOtherSprite = &sprite[pOtherPlayer->i];
+
+                            if (pOtherSprite->picnum != APLAYER || pOtherSprite->statnum == MAXSTATUS || pOtherSprite->extra <= 0 || pOtherPlayer->dead_flag)
+                                continue;
+
+                            if (pOtherSprite->yrepeat >= 32 && pOtherSprite->xrepeat >= 32)
+                                continue;
+
+                            int32_t const otherPlayerDist = klabs(pOtherPlayer->opos.x - pPlayer->pos.x) +
+                                                            klabs(pOtherPlayer->opos.y - pPlayer->pos.y) +
+                                                            (klabs(pOtherPlayer->opos.z - pPlayer->pos.z) >> 4);
+
+                            if (otherPlayerDist >= 1400)
+                                continue;
+
+                            if (!cansee(pOtherSprite->x, pOtherSprite->y, pOtherSprite->z - ZOFFSET6, pOtherSprite->sectnum,
+                                        pPlayer->pos.x, pPlayer->pos.y, pPlayer->pos.z + ZOFFSET2, pSprite->sectnum))
+                                continue;
+
+                            pPlayer->knee_incs = 1;
+                            pPlayer->weapon_pos = -1;
+                            pPlayer->actorsqu = pOtherPlayer->i;
+                            break;
+                        }
+                    }
+                }
+                else if (g_netServer || ud.multimode > 1)
                 {
                     if (sprite[g_player[otherp].ps->i].extra > 0)
                     {
@@ -3303,14 +3342,15 @@ static int P_Submerge(int const spriteNum, int const playerNum, DukePlayer_t * c
     {
         if (pPlayer->on_boat) return 0;
 
-        if (screenpeek == playerNum)
+        if (screenpeek == playerNum && (!REALITY || g_fakeMultiMode <= 1))
         {
             FX_StopAllSounds();
             S_ClearSoundLocks();
         }
 
-        if (RR || sprite[pPlayer->i].extra > 0)
-            A_PlaySound(REALITY ? 37 : DUKE_UNDERWATER, spriteNum);
+        int const underwaterSound = REALITY ? 37 : DUKE_UNDERWATER;
+        if ((RR || sprite[pPlayer->i].extra > 0) && (!REALITY || g_fakeMultiMode <= 1 || !A_CheckSoundPlaying(-1, underwaterSound)))
+            A_PlaySound(underwaterSound, spriteNum);
 
         pPlayer->opos.z = pPlayer->pos.z = sector[otherSect].ceilingz + (7<<8);
 

@@ -875,7 +875,8 @@ void P_ResetPlayer(int playerNum)
     pPlayer->fta                    = 0;
     pPlayer->ftq                    = 0;
     pPlayer->vel.x = pPlayer->vel.y = pPlayer->vel.z = 0;
-    pSprite->xvel = pSprite->yvel = pSprite->zvel = 0;
+    pSprite->xvel = pSprite->zvel = 0;
+    pSprite->yvel = playerNum;
     if (!RR) pPlayer->rotscrnang             = 0;
     pPlayer->runspeed               = g_playerFriction;
     pPlayer->falling_counter        = 0;
