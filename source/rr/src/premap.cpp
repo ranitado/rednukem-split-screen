@@ -812,6 +812,9 @@ void P_RandomSpawnPoint(int playerNum)
 static inline void P_ResetTintFade(DukePlayer_t *const pPlayer)
 {
     pPlayer->pals.f = 0;
+    pPlayer->pals.r = 0;
+    pPlayer->pals.g = 0;
+    pPlayer->pals.b = 0;
 }
 
 void P_ResetPlayer(int playerNum)
@@ -840,8 +843,12 @@ void P_ResetPlayer(int playerNum)
     pSprite->xrepeat  = RR ? 24 : 42;
     pSprite->yrepeat  = RR ? 17 : 36;
     pSprite->owner    = pPlayer->i;
+    pSprite->yvel     = playerNum;
     pSprite->xoffset  = 0;
     pSprite->pal      = pPlayer->palookup;
+    pSprite->picnum   = APLAYER;
+    pSprite->lotag    = 0;
+    pSprite->hitag    = 0;
 
     pPlayer->last_extra = pSprite->extra = pPlayer->max_player_health;
     RedSplit_BeginSpawnPlayerClipGrace();
@@ -859,10 +866,24 @@ void P_ResetPlayer(int playerNum)
     pPlayer->weapreccnt             = 0;
     pPlayer->fta                    = 0;
     pPlayer->ftq                    = 0;
-    pPlayer->vel.x = pPlayer->vel.y = 0;
+    pPlayer->vel.x = pPlayer->vel.y = pPlayer->vel.z = 0;
+    pSprite->xvel = pSprite->yvel = pSprite->zvel = 0;
     if (!RR) pPlayer->rotscrnang             = 0;
     pPlayer->runspeed               = g_playerFriction;
     pPlayer->falling_counter        = 0;
+    pPlayer->hard_landing           = 0;
+    pPlayer->jumping_counter        = 0;
+    pPlayer->on_ground              = 1;
+    pPlayer->extra_extra8           = 0;
+    pPlayer->quick_kick             = 0;
+    pPlayer->knee_incs              = 0;
+    pPlayer->fist_incs              = 0;
+    pPlayer->tipincs                = 0;
+    pPlayer->access_incs            = 0;
+    pPlayer->on_warping_sector      = 0;
+    pPlayer->transporter_hold       = 0;
+    pPlayer->rotscrnang             = 0;
+    pPlayer->orotscrnang            = 0;
 
     P_ResetTintFade(pPlayer);
 
@@ -873,8 +894,9 @@ void P_ResetPlayer(int playerNum)
     actor[pPlayer->i].tempang      = 0;
     actor[pPlayer->i].actorstayput = -1;
     actor[pPlayer->i].dispicnum    = 0;
+    actor[pPlayer->i].picnum       = APLAYER;
     actor[pPlayer->i].owner        = pPlayer->i;
-    actor[pPlayer->i].t_data[4]    = 0;
+    Bmemset(actor[pPlayer->i].t_data, 0, sizeof(actor[pPlayer->i].t_data));
 
     P_ResetInventory(playerNum);
     P_ResetWeapons(playerNum);
@@ -2006,7 +2028,7 @@ void G_NewGame(int volumeNum, int levelNum, int skillNum)
 
     int const UserMap = Menu_HaveUserMap();
 
-    if (REALITY && (!g_netServer && ud.multimode < 2) && UserMap == 0 && levelNum == 0)
+    if (REALITY && !g_netServer && (ud.multimode < 2 || g_fakeMultiMode > 1) && UserMap == 0 && levelNum == 0)
         RT_Intro();
 
     // we don't want the intro to play after the multiplayer setup screen

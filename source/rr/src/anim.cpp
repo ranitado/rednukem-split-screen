@@ -597,6 +597,7 @@ end_anim_restore_gl:
 #endif
 end_anim:
     I_ClearAllInput();
+    RedSplit_SuppressGameplayFireBriefly();
     ANIM_FreeAnim();
     walock[TILE_ANIM] = 1;
     anim->animlock = 0;

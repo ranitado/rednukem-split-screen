@@ -1710,6 +1710,8 @@ static int32_t g_redSplitExtraMenuPages[MAXPLAYERS] = {};
 static int32_t g_redSplitExtraMenuSelections[MAXPLAYERS] = {};
 int32_t g_redSplitDeferHud = 0;
 int32_t g_redSplitSuppressMenuDraw = 0;
+int32_t g_redSplitSuppressGameplayFireFrames = 0;
+int32_t g_redSplitSkipNextMenuLogo = 0;
 static int32_t g_redSplitCapturingSaveShot = 0;
 int32_t g_redSplitLookSensitivityX[MAXPLAYERS] = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
 int32_t g_redSplitLookSensitivityY[MAXPLAYERS] = { 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };
@@ -1895,7 +1897,7 @@ static void RedSplit_ApplySpawnPlayerClipGrace(void)
         if (g_redSplitSpawnPlayerClipActive)
             pSprite->cstat &= ~CSTAT_SPRITE_BLOCK;
         else if ((pSprite->cstat & CSTAT_SPRITE_INVISIBLE) == 0)
-            pSprite->cstat |= CSTAT_SPRITE_BLOCK;
+            pSprite->cstat |= CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN;
     }
 }
 
@@ -2050,6 +2052,16 @@ static int32_t g_redSplitHudQuarterGlobalY = 0;
 static int32_t g_redSplitHudQuarterGlobalScale = 100;
 static int32_t g_redSplitHudQuarterDrawScale = 180;
 static int32_t g_redSplitHudQuarterTextSpacing = 0;
+
+void RedSplit_SuppressGameplayFireBriefly(void)
+{
+    if (!REALITY)
+        return;
+
+    g_redSplitSuppressGameplayFireFrames = 4;
+    CONTROL_ClearButton(gamefunc_Fire);
+    g_mouseClickState = MOUSE_IDLE;
+}
 
 static int32_t *g_redSplitHudDebugHealthIconX = &g_redSplitHudHealthIconX;
 static int32_t *g_redSplitHudDebugHealthIconY = &g_redSplitHudHealthIconY;
@@ -4918,7 +4930,7 @@ rrbloodpool_fallthrough:
                     pSprite->picnum = DN64TILE3805;
                 else if (pSprite->picnum == FEM6)
                     pSprite->picnum = DN64TILE3797;
-                if (ud.multimode > 1 && ud.coop == 0)
+                if (ud.multimode > 1 && ud.coop == 0 && g_fakeMultiMode <= 1)
                 {
                     pSprite->xrepeat = pSprite->yrepeat = 0;
                     changespritestat(newSprite, STAT_MISC);
@@ -7792,7 +7804,7 @@ default_case1:
             break;
         case APLAYER__STATIC:
             playerNum = P_GetP(pSprite);
-
+        {
             if (!REALITY && t->pal == 1) t->z -= (18<<8);
 
             if (g_player[playerNum].ps->over_shoulder_on > 0 && g_player[playerNum].ps->newowner < 0)
@@ -8036,6 +8048,7 @@ PALONLY:
             }
 
             break;
+        }
         case RRTILE2460__STATICRR:
         case RRTILE2465__STATICRR:
         case BIKEJIBA__STATICRR:
@@ -11395,7 +11408,9 @@ int G_DoMoveThings(void)
     }
 
     if (ud.pause_on == 0)
+    {
         RedSplit_UpdateSpawnPlayerClipGrace();
+    }
 
     for (bssize_t TRAVERSE_CONNECT(i))
     {
@@ -11426,7 +11441,9 @@ int G_DoMoveThings(void)
     }
 
     if (ud.pause_on == 0)
+    {
         G_MoveWorld();
+    }
 
     Net_CorrectPrediction();
 

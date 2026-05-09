@@ -43,6 +43,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define quotepulseshade (sintable[((uint32_t)totalclock<<5)&2047]>>11)
 
 palette_t CrosshairColors = { 255, 255, 255, 0 };
+static int32_t g_redSplitGameplayPauseInputSource = RN_SPLIT_INPUT_KBM;
 
 static int32_t RedSplit_GameplayPauseTrigger(int32_t const menuActive)
 {
@@ -50,7 +51,10 @@ static int32_t RedSplit_GameplayPauseTrigger(int32_t const menuActive)
         return I_EscapeTrigger();
 
     if (KB_KeyPressed(sc_Escape))
+    {
+        g_redSplitGameplayPauseInputSource = RN_SPLIT_INPUT_KBM;
         return 1;
+    }
 
     int32_t const playerOneInput = g_redSplitPlayerInput[0];
     if (playerOneInput == RN_SPLIT_INPUT_KBM)
@@ -64,6 +68,8 @@ static int32_t RedSplit_GameplayPauseTrigger(int32_t const menuActive)
         CONTROL_SetUserInputFilter(playerOneInput - RN_SPLIT_INPUT_PAD1, false);
         int32_t const result = I_EscapeTrigger();
         CONTROL_ClearUserInputFilter();
+        if (result)
+            g_redSplitGameplayPauseInputSource = playerOneInput;
         return result;
     }
 
@@ -1322,7 +1328,7 @@ void G_DisplayRest(int32_t smoothratio)
             if (g_player[myconnectindex].ps->gm&MODE_GAME) Menu_Change(MENU_MAIN_INGAME);
             else Menu_Change(MENU_MAIN);
             screenpeek = myconnectindex;
-            Menu_SuppressPauseMenuInputBriefly(RN_SPLIT_INPUT_KBM);
+            Menu_SuppressPauseMenuInputBriefly(g_redSplitGameplayPauseInputSource);
 
             S_MenuSound();
         }
@@ -1822,7 +1828,9 @@ void G_DisplayLogo(void)
         G_FadePalette(0, 0, 0, 0);
         totalclock = 0;
 
-        while ((int)totalclock < (4 * (16 + 120 + 16)) && !I_CheckAllInput())
+        int32_t const introTicks = 4 * (16 + 120 + 16);
+
+        while ((int)totalclock < introTicks && !I_CheckAllInput())
         {
             if (engineFPSLimit())
             {
@@ -1849,6 +1857,9 @@ void G_DisplayLogo(void)
                 videoNextPage();
             }
         }
+
+        if ((int)totalclock < introTicks)
+            g_redSplitSkipNextMenuLogo = 1;
 
         I_ClearAllInput();
 

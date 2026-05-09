@@ -873,6 +873,27 @@ int32_t CONFIG_ReadSetup(void)
         Bsprintf(splitInputKey, "PlayerInput%d", dummy + 1);
         if (!SCRIPT_GetNumber(ud.config.scripthandle, "Split Screen", splitInputKey, &inputSource))
             g_redSplitPlayerInput[dummy] = clamp<int32_t>(inputSource, RN_SPLIT_INPUT_NONE, RN_SPLIT_INPUT_PAD5);
+
+        Bsprintf(splitInputKey, "PlayerInputManual%d", dummy + 1);
+        if (!SCRIPT_GetNumber(ud.config.scripthandle, "Split Screen", splitInputKey, &inputSource))
+            g_redSplitPlayerInputManual[dummy] = inputSource != 0;
+        else
+            g_redSplitPlayerInputManual[dummy] = 0;
+    }
+
+    for (dummy = 0; dummy < MAXPLAYERS; ++dummy)
+    {
+        if (g_redSplitPlayerInput[dummy] == RN_SPLIT_INPUT_NONE || g_redSplitPlayerInputManual[dummy])
+            continue;
+
+        for (int32_t previousPlayer = 0; previousPlayer < dummy; ++previousPlayer)
+        {
+            if (g_redSplitPlayerInput[previousPlayer] != g_redSplitPlayerInput[dummy])
+                continue;
+
+            g_redSplitPlayerInput[dummy] = RN_SPLIT_INPUT_NONE;
+            break;
+        }
     }
 #endif
 
@@ -998,6 +1019,9 @@ void CONFIG_WriteSetup(uint32_t flags)
         Bsprintf(buf, "PlayerInput%d", dummy + 1);
         SCRIPT_PutNumber(ud.config.scripthandle, "Split Screen", buf,
                          clamp<int32_t>(g_redSplitPlayerInput[dummy], RN_SPLIT_INPUT_NONE, RN_SPLIT_INPUT_PAD5), FALSE, FALSE);
+        Bsprintf(buf, "PlayerInputManual%d", dummy + 1);
+        SCRIPT_PutNumber(ud.config.scripthandle, "Split Screen", buf,
+                         g_redSplitPlayerInputManual[dummy] != 0, FALSE, FALSE);
     }
 #endif
 

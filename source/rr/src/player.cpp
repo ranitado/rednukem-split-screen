@@ -44,6 +44,29 @@ int32_t g_numSelfObituaries = 0;
 
 static int32_t g_newWeaponPickupSwitchLockUntil[MAXPLAYERS];
 static int32_t g_redSplitDeathRespawnClock[MAXPLAYERS];
+static int32_t g_redSplitRespawnOpenWasDown[MAXPLAYERS];
+
+static int32_t P_GetPlayerIndexFromPs(DukePlayer_t const * const pPlayer);
+
+static int32_t P_RedSplitManualRespawnPressed(int32_t const playerNum)
+{
+    if ((unsigned)playerNum >= MAXPLAYERS || g_player[playerNum].ps == nullptr)
+        return 0;
+
+    int32_t const openDown = TEST_SYNC_KEY(g_player[playerNum].inputBits->bits, SK_OPEN);
+    if (!openDown)
+    {
+        g_redSplitRespawnOpenWasDown[playerNum] = 0;
+        return 0;
+    }
+
+    if ((int32_t)(g_redSplitDeathRespawnClock[playerNum] - (int32_t)totalclock) > 0 || g_redSplitRespawnOpenWasDown[playerNum])
+        return 0;
+
+    g_redSplitRespawnOpenWasDown[playerNum] = 1;
+    g_player[playerNum].inputBits->bits &= ~BIT(SK_OPEN);
+    return 1;
+}
 
 static int32_t P_GetPlayerIndexFromPs(DukePlayer_t const * const pPlayer)
 {
@@ -54,7 +77,7 @@ static int32_t P_GetPlayerIndexFromPs(DukePlayer_t const * const pPlayer)
     return -1;
 }
 
-static bool P_NewWeaponPickupSwitchAllowed(DukePlayer_t const * const pPlayer)
+static bool P_NewWeaponPickupSwitchAllowed(DukePlayer_t const * const pPlayer, bool const forceAllow)
 {
     int32_t const playerNum = P_GetPlayerIndexFromPs(pPlayer);
 
@@ -63,11 +86,23 @@ static bool P_NewWeaponPickupSwitchAllowed(DukePlayer_t const * const pPlayer)
 
     int32_t const now = (int32_t)totalclock;
 
-    if ((int32_t)(g_newWeaponPickupSwitchLockUntil[playerNum] - now) > 0)
+    if (!forceAllow && (int32_t)(g_newWeaponPickupSwitchLockUntil[playerNum] - now) > 0)
         return false;
 
     g_newWeaponPickupSwitchLockUntil[playerNum] = now + (TICRATE * 2);
     return true;
+}
+
+static int32_t P_RedSplitFireButton(void)
+{
+    if (REALITY && g_redSplitSuppressGameplayFireFrames > 0)
+    {
+        --g_redSplitSuppressGameplayFireFrames;
+        CONTROL_ClearButton(gamefunc_Fire);
+        return 0;
+    }
+
+    return BUTTON(gamefunc_Fire);
 }
 
 static void P_GetDisplayPlayerName(int32_t const playerNum, char * const buffer, size_t const bufferSize)
@@ -3674,7 +3709,7 @@ void P_GetInput(int playerNum)
     else if (weaponSelection == gamefunc_Weapon_1-1)
         weaponSelection = 0;
 
-    localInput.bits = (weaponSelection << SK_WEAPON_BITS) | (BUTTON(gamefunc_Fire) << SK_FIRE);
+    localInput.bits = (weaponSelection << SK_WEAPON_BITS) | (P_RedSplitFireButton() << SK_FIRE);
     localInput.bits |= (BUTTON(gamefunc_Open) << SK_OPEN);
 
     int const sectorLotag = pPlayer->cursectnum != -1 ? sector[pPlayer->cursectnum].lotag : 0;
@@ -3862,7 +3897,7 @@ void P_GetInputMotorcycle(int playerNum)
 
     pPlayer->crouch_toggle = 0;
 
-    localInput.bits = BUTTON(gamefunc_Fire) << SK_FIRE;
+    localInput.bits = P_RedSplitFireButton() << SK_FIRE;
     if (!REALITY)
     {
         localInput.bits |= BUTTON(gamefunc_Steroids) << SK_STEROIDS;
@@ -4170,7 +4205,7 @@ void P_GetInputBoat(int playerNum)
 
     pPlayer->crouch_toggle = 0;
 
-    localInput.bits = BUTTON(gamefunc_Fire) << SK_FIRE;
+    localInput.bits = P_RedSplitFireButton() << SK_FIRE;
     if (!REALITY)
     {
         localInput.bits |= BUTTON(gamefunc_Steroids) << SK_STEROIDS;
@@ -4545,7 +4580,7 @@ void P_DHGetInput(int const playerNum)
     input.q16avel = fix16_clamp(input.q16avel, F16(-MAXANGVEL), F16(MAXANGVEL));
     input.q16horz = fix16_clamp(input.q16horz, F16(-MAXHORIZ), F16(MAXHORIZ));
 
-    localInput.bits = (BUTTON(gamefunc_Fire) << SK_FIRE);
+    localInput.bits = (P_RedSplitFireButton() << SK_FIRE);
 
     localInput.bits |= (playerJump << SK_JUMP) | (playerCrouch << SK_CROUCH);
 
@@ -5220,7 +5255,8 @@ void P_AddWeapon(DukePlayer_t *pPlayer, int weaponNum)
     else
         curr_weapon = weaponNum;
 
-    if (!hadWeapon && curr_weapon != pPlayer->curr_weapon && !P_NewWeaponPickupSwitchAllowed(pPlayer))
+    if (!hadWeapon && curr_weapon != pPlayer->curr_weapon
+        && !P_NewWeaponPickupSwitchAllowed(pPlayer, pPlayer->curr_weapon == KNEE_WEAPON || pPlayer->curr_weapon == PISTOL_WEAPON))
         return;
 
     if (RR && weaponNum == HANDBOMB_WEAPON)
@@ -5651,6 +5687,8 @@ void P_FragPlayer(int playerNum)
 
     if (REALITY && g_fakeMultiMode > 1)
     {
+        g_redSplitRespawnOpenWasDown[playerNum] = TEST_SYNC_KEY(g_player[playerNum].inputBits->bits, SK_OPEN) ? 1 : 0;
+
         if ((unsigned)pPlayer->frag_ps >= MAXPLAYERS || g_player[pPlayer->frag_ps].ps == nullptr)
             pPlayer->frag_ps = playerNum;
 
@@ -5693,6 +5731,8 @@ void P_FragPlayer(int playerNum)
 
         g_redSplitDeathRespawnClock[playerNum] = (int32_t)totalclock + TICRATE * 2;
         pPlayer->frag_ps = playerNum;
+        if ((pSprite->cstat & 32768) == 0)
+            pSprite->cstat = 0;
         pus = NUMPAGES;
         return;
     }
@@ -7544,12 +7584,19 @@ static void P_Dead(int const playerNum, int const sectorLotag, int const floorZ,
     if (REALITY && g_fakeMultiMode > 1)
     {
         if (pPlayer->dead_flag == 0)
-        {
             P_FragPlayer(playerNum);
-            return;
-        }
 
-        if ((int32_t)(g_redSplitDeathRespawnClock[playerNum] - (int32_t)totalclock) <= 0)
+        pPlayer->pals.f = 64;
+        pPlayer->pals.r = max<int>(pPlayer->pals.r - 1, 0);
+        pPlayer->pals.g = max<int>(pPlayer->pals.g - 1, 0);
+        pPlayer->pals.b = max<int>(pPlayer->pals.b - 1, 0);
+
+        Bmemcpy(&pPlayer->opos, &pPlayer->pos, sizeof(vec3_t));
+        pPlayer->oq16ang = pPlayer->q16ang;
+        pPlayer->opyoff = pPlayer->pyoff;
+        pPlayer->on_warping_sector = 0;
+
+        if (P_RedSplitManualRespawnPressed(playerNum))
         {
             P_ResetPlayer(playerNum);
             pus = NUMPAGES;
@@ -9607,7 +9654,11 @@ HORIZONLY:;
             pPlayer->holster_weapon = 0;
             pPlayer->weapon_pos     = klabs(pPlayer->weapon_pos);
 
-            if (pPlayer->actorsqu >= 0 && sprite[pPlayer->actorsqu].statnum != MAXSTATUS &&
+            if (REALITY && g_fakeMultiMode > 1 && pPlayer->actorsqu >= 0 && sprite[pPlayer->actorsqu].picnum == APLAYER)
+            {
+                pPlayer->actorsqu = -1;
+            }
+            else if (pPlayer->actorsqu >= 0 && sprite[pPlayer->actorsqu].statnum != MAXSTATUS &&
                 dist(&sprite[pPlayer->i], &sprite[pPlayer->actorsqu]) < 1400)
             {
                 A_DoGuts(pPlayer->actorsqu, JIBS6, 7);

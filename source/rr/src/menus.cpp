@@ -45,7 +45,7 @@ droidinput_t droidinput;
 #define MENU_MARGIN_CENTER  160
 #define MENU_HEIGHT_CENTER  100
 
-#define REDNUKEM_SPLITSCREEN_VERSION "v0.7"
+#define REDNUKEM_SPLITSCREEN_VERSION "v0.8"
 
 int32_t g_skillSoundVoice = -1;
 
@@ -70,9 +70,24 @@ static int32_t Menu_IsReplayLevelCurrent(int32_t entryIndex);
 static void Menu_UpdateCurrentReplayLevelProgress(void);
 static int32_t Menu_GetReplayCampaignSecretTotal(void);
 static void Menu_StartReplayLevel(void);
+
+struct ReplayLevelArrowButtons_t
+{
+    int32_t leftX;
+    int32_t rightX;
+    int32_t y;
+    int32_t canMoveLeft;
+    int32_t canMoveRight;
+};
+
+static ReplayLevelArrowButtons_t Menu_GetReplayLevelArrowButtons(vec2_t origin, int32_t entryIndex);
+static int32_t Menu_ReplayLevelArrowMouse(int32_t centerX, int32_t centerY);
+extern int32_t m_mousecaught;
+
 void M_ResetReplayCampaignProgress(void);
 void M_RecordReplayCurrentLevelCompleted(void);
 void M_RecordReplayCurrentLevelProgress(void);
+void M_RecordReplayCurrentLevelBabeSaved(int32_t count);
 
 #ifdef _WIN32
 enum RednukemUpdateInstallMode_t
@@ -788,6 +803,8 @@ static int32_t g_replayLevelVolumes[MAXVOLUMES * MAXLEVELS];
 static int32_t g_replayLevelIndices[MAXVOLUMES * MAXLEVELS];
 static int32_t g_replayLevelSecrets[MAXVOLUMES * MAXLEVELS];
 static int32_t g_replayLevelMaxSecrets[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelBabes[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelMaxBabes[MAXVOLUMES * MAXLEVELS];
 static int32_t g_replayLevelBestTimes[MAXVOLUMES * MAXLEVELS];
 static int32_t g_replayLevelCount = 0;
 static int32_t g_replayLevelSelectedIndex = 0;
@@ -797,6 +814,8 @@ static int32_t g_replayLevelPlayed[MAXVOLUMES * MAXLEVELS];
 static int32_t g_replayLevelCompleted[MAXVOLUMES * MAXLEVELS];
 static int32_t g_replayLevelCampaignSecrets[MAXVOLUMES * MAXLEVELS];
 static int32_t g_replayLevelCampaignMaxSecrets[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelCampaignBabes[MAXVOLUMES * MAXLEVELS];
+static int32_t g_replayLevelCampaignMaxBabes[MAXVOLUMES * MAXLEVELS];
 static int32_t g_replayLevelCampaignBestTimes[MAXVOLUMES * MAXLEVELS];
 
 #ifdef EDUKE32_SIMPLE_MENU
@@ -1172,6 +1191,7 @@ static MenuEntry_t ME_PLAYERINPUT_P4 = MAKE_MENUENTRY("Player 4:", &MF_Redfont, 
 static MenuEntry_t ME_PLAYERINPUT_JOIN2 = MAKE_MENUENTRY("Join Player 2", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
 static MenuEntry_t ME_PLAYERINPUT_JOIN3 = MAKE_MENUENTRY("Join Player 3", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
 static MenuEntry_t ME_PLAYERINPUT_JOIN4 = MAKE_MENUENTRY("Join Player 4", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
+static MenuEntry_t ME_PLAYERINPUT_DISCONNECT1 = MAKE_MENUENTRY("Disconnect Player 1", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
 static MenuEntry_t ME_PLAYERINPUT_DISCONNECT2 = MAKE_MENUENTRY("Disconnect Player 2", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
 static MenuEntry_t ME_PLAYERINPUT_DISCONNECT3 = MAKE_MENUENTRY("Disconnect Player 3", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
 static MenuEntry_t ME_PLAYERINPUT_DISCONNECT4 = MAKE_MENUENTRY("Disconnect Player 4", &MF_Redfont, &MEF_BigOptionsRt, &MEO_NULL, Link);
@@ -1184,10 +1204,25 @@ static MenuEntry_t *MEL_PLAYERINPUT[] = {
     &ME_PLAYERINPUT_JOIN2,
     &ME_PLAYERINPUT_JOIN3,
     &ME_PLAYERINPUT_JOIN4,
+    &ME_PLAYERINPUT_DISCONNECT1,
     &ME_PLAYERINPUT_DISCONNECT2,
     &ME_PLAYERINPUT_DISCONNECT3,
     &ME_PLAYERINPUT_DISCONNECT4,
 };
+
+static int32_t RedSplit_PlayerInputEntryToPlayer(MenuEntry_t const * const entry)
+{
+    if (entry == &ME_PLAYERINPUT_P1)
+        return 0;
+    if (entry == &ME_PLAYERINPUT_P2)
+        return 1;
+    if (entry == &ME_PLAYERINPUT_P3)
+        return 2;
+    if (entry == &ME_PLAYERINPUT_P4)
+        return 3;
+
+    return -1;
+}
 
 static MenuEntry_t *MEL_CHEATS[ARRAY_SIZE(ME_CheatCodes)+1] = {
     &ME_ENTERCHEAT,
@@ -1413,11 +1448,17 @@ static MenuEntry_t ME_JOYSTICK_ENABLE = MAKE_MENUENTRY( "Use Controller:", &MF_R
 MAKE_MENU_TOP_ENTRYLINK( "Button Assignment", MEF_BigOptionsRtSections, JOYSTICK_EDITBUTTONS, MENU_JOYSTICKBTNS );
 MAKE_MENU_TOP_ENTRYLINK( "Advanced", MEF_BigOptionsRtSections, JOYSTICK_ADV, MENU_JOYSTICKADV );
 
+static int32_t g_redSplitControllerSetupPlayer = 0;
+static char const *MEOSN_CONTROLLER_PLAYER_SELECTOR[] = { "Player 1", "Player 2", "Player 3", "Player 4" };
+static MenuOptionSet_t MEOS_CONTROLLER_PLAYER_SELECTOR = MAKE_MENUOPTIONSET( MEOSN_CONTROLLER_PLAYER_SELECTOR, NULL, 0x2 );
+static MenuOption_t MEO_CONTROLLER_PLAYER_SELECTOR = MAKE_MENUOPTION( &MF_Redfont, &MEOS_CONTROLLER_PLAYER_SELECTOR, &g_redSplitControllerSetupPlayer );
+static MenuEntry_t ME_CONTROLLER_PLAYER_SELECTOR = MAKE_MENUENTRY( "Player:", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_CONTROLLER_PLAYER_SELECTOR, Option );
+
 static MenuRangeInt32_t MEO_JOYSTICK_LOOKXSCALE = MAKE_MENURANGE( NULL, &MF_Redfont, 0, 131072, 131072, 101, 2 | EnforceIntervals );
-static MenuEntry_t ME_JOYSTICK_LOOKXSCALE = MAKE_MENUENTRY( "Turn sens.:", &MF_Redfont, &MEF_BigSliders, &MEO_JOYSTICK_LOOKXSCALE, RangeInt32 );
+static MenuEntry_t ME_JOYSTICK_LOOKXSCALE = MAKE_MENUENTRY( "X axis sens.:", &MF_Redfont, &MEF_BigSliders, &MEO_JOYSTICK_LOOKXSCALE, RangeInt32 );
 
 static MenuRangeInt32_t MEO_JOYSTICK_LOOKYSCALE = MAKE_MENURANGE( NULL, &MF_Redfont, 0, 131072, 131072, 101, 2 | EnforceIntervals );
-static MenuEntry_t ME_JOYSTICK_LOOKYSCALE = MAKE_MENUENTRY( "Aim sens.:", &MF_Redfont, &MEF_BigSliders, &MEO_JOYSTICK_LOOKYSCALE, RangeInt32 );
+static MenuEntry_t ME_JOYSTICK_LOOKYSCALE = MAKE_MENUENTRY( "Y axis sens.:", &MF_Redfont, &MEF_BigSliders, &MEO_JOYSTICK_LOOKYSCALE, RangeInt32 );
 
 static MenuOption_t MEO_JOYSTICK_LOOKINVERT = MAKE_MENUOPTION( &MF_Redfont, &MEOS_OffOn, NULL );
 static MenuEntry_t ME_JOYSTICK_LOOKINVERT = MAKE_MENUENTRY( "Invert aiming:", &MF_Redfont, &MEF_BigSliders, &MEO_JOYSTICK_LOOKINVERT, Option );
@@ -1426,6 +1467,7 @@ static MenuLink_t MEO_JOYSTICK_DEFAULTS = { MENU_JOYDEFAULTVERIFY, MA_None, };
 static MenuEntry_t ME_JOYSTICK_DEFAULTS = MAKE_MENUENTRY( "Reset To Defaults", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_JOYSTICK_DEFAULTS, Link );
 
 static MenuEntry_t *MEL_JOYSTICKSETUP[] = {
+    &ME_CONTROLLER_PLAYER_SELECTOR,
     &ME_JOYSTICK_LOOKXSCALE,
     &ME_JOYSTICK_LOOKYSCALE,
     &ME_JOYSTICK_LOOKINVERT,
@@ -1448,6 +1490,7 @@ static MenuOption_t MEO_JOYSTICK_AIM_ASSIST = MAKE_MENUOPTION( &MF_Redfont, &MEO
 static MenuEntry_t ME_JOYSTICK_AIM_ASSIST = MAKE_MENUENTRY( "Aim assist:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_JOYSTICK_AIM_ASSIST, Option );
 
 static MenuEntry_t *MEL_JOYSTICKADV[] = {
+    &ME_CONTROLLER_PLAYER_SELECTOR,
     &ME_JOYSTICK_WEIGHTED_AIMING,
     &ME_JOYSTICK_VIEW_CENTERING,
     &ME_JOYSTICK_AIM_ASSIST,
@@ -2271,6 +2314,19 @@ static int32_t SELECTDIR_z = 65536;
 static ClockTicks m_menustarttics;
 static int m_logosoundcnt = 0; // DN64 logo
 
+#define RED_SPLIT_REALITY_LOGO_TICS 125
+#define RED_SPLIT_MOUSE_STARTUP_IGNORE_TICS 4
+
+static int32_t Menu_RealityStartupLogoActive(void)
+{
+    return REALITY
+        && g_currentMenu == MENU_MAIN
+        && !(g_player[myconnectindex].ps->gm & MODE_GAME)
+        && (int32_t)(totalclock - m_menustarttics) < RED_SPLIT_REALITY_LOGO_TICS;
+}
+
+static void Menu_SkipRealityStartupLogo(void);
+
 
 static void Menu_PopulateJoystick(void)
 {
@@ -2794,6 +2850,84 @@ static void RedSplit_ApplyPlayerSetupMenuData(void)
     }
 }
 
+static int32_t RedSplit_ControllerSetupPlayer(void)
+{
+    g_redSplitControllerSetupPlayer = clamp<int32_t>(g_redSplitControllerSetupPlayer, 0, 3);
+    return g_redSplitControllerSetupPlayer;
+}
+
+static void RedSplit_SyncControllerSetupMenuData(void)
+{
+    int32_t const playerNum = RedSplit_ControllerSetupPlayer();
+
+    if (REALITY)
+    {
+        MEO_JOYSTICK_LOOKXSCALE.variable = &g_redSplitLookSensitivityX[playerNum];
+        MEO_JOYSTICK_LOOKXSCALE.min = 1;
+        MEO_JOYSTICK_LOOKXSCALE.max = 10;
+        MEO_JOYSTICK_LOOKXSCALE.onehundredpercent = 5;
+        MEO_JOYSTICK_LOOKXSCALE.steps = 10;
+        MEO_JOYSTICK_LOOKXSCALE.flags = DisplayTypeInteger | EnforceIntervals;
+
+        MEO_JOYSTICK_LOOKYSCALE.variable = &g_redSplitLookSensitivityY[playerNum];
+        MEO_JOYSTICK_LOOKYSCALE.min = 1;
+        MEO_JOYSTICK_LOOKYSCALE.max = 10;
+        MEO_JOYSTICK_LOOKYSCALE.onehundredpercent = 3;
+        MEO_JOYSTICK_LOOKYSCALE.steps = 10;
+        MEO_JOYSTICK_LOOKYSCALE.flags = DisplayTypeInteger | EnforceIntervals;
+
+        MEO_JOYSTICK_LOOKINVERT.data = &g_redSplitInvertAim[playerNum];
+
+        MEO_JOYSTICK_VIEW_CENTERING.variable = &g_redSplitViewCentering[playerNum];
+        MEO_JOYSTICK_VIEW_CENTERING.min = 0;
+        MEO_JOYSTICK_VIEW_CENTERING.max = 3;
+        MEO_JOYSTICK_VIEW_CENTERING.onehundredpercent = 0;
+        MEO_JOYSTICK_VIEW_CENTERING.steps = 4;
+        MEO_JOYSTICK_VIEW_CENTERING.flags = DisplayTypeInteger | EnforceIntervals;
+        return;
+    }
+
+    MEO_JOYSTICK_LOOKXSCALE.min = 0;
+    MEO_JOYSTICK_LOOKXSCALE.max = 131072;
+    MEO_JOYSTICK_LOOKXSCALE.onehundredpercent = 131072;
+    MEO_JOYSTICK_LOOKXSCALE.steps = 101;
+    MEO_JOYSTICK_LOOKXSCALE.flags = DisplayTypePercent | EnforceIntervals;
+
+    MEO_JOYSTICK_LOOKYSCALE.min = 0;
+    MEO_JOYSTICK_LOOKYSCALE.max = 131072;
+    MEO_JOYSTICK_LOOKYSCALE.onehundredpercent = 131072;
+    MEO_JOYSTICK_LOOKYSCALE.steps = 101;
+    MEO_JOYSTICK_LOOKYSCALE.flags = DisplayTypePercent | EnforceIntervals;
+
+    MEO_JOYSTICK_VIEW_CENTERING.variable = &ud.config.JoystickViewCentering;
+    MEO_JOYSTICK_VIEW_CENTERING.min = 0;
+    MEO_JOYSTICK_VIEW_CENTERING.max = 8;
+    MEO_JOYSTICK_VIEW_CENTERING.onehundredpercent = 0;
+    MEO_JOYSTICK_VIEW_CENTERING.steps = 5;
+    MEO_JOYSTICK_VIEW_CENTERING.flags = 0;
+
+    for (int i=0;i<MAXJOYAXES;i++)
+    {
+        if (ud.config.JoystickAnalogueAxes[i] == analog_turning)
+        {
+            MEO_JOYSTICK_LOOKXSCALE.variable = &ud.config.JoystickAnalogueScale[i];
+            g_turnAxis = i;
+            break;
+        }
+    }
+
+    for (int i=0;i<MAXJOYAXES;i++)
+    {
+        if (ud.config.JoystickAnalogueAxes[i] == analog_lookingupanddown)
+        {
+            MEO_JOYSTICK_LOOKYSCALE.variable = &ud.config.JoystickAnalogueScale[i];
+            MEO_JOYSTICK_LOOKINVERT.data     = &ud.config.JoystickAnalogueInvert[i];
+            g_lookAxis = i;
+            break;
+        }
+    }
+}
+
 /*
 At present, no true difference is planned between Menu_Pre() and Menu_PreDraw().
 They are separate for purposes of organization.
@@ -3011,17 +3145,21 @@ static void Menu_Pre(MenuID_t cm)
         break;
 
     case MENU_JOYSTICKSETUP:
-        MenuEntry_DisableOnCondition(&ME_JOYSTICK_LOOKXSCALE, !CONTROL_JoyPresent);
-        MenuEntry_DisableOnCondition(&ME_JOYSTICK_LOOKYSCALE, !CONTROL_JoyPresent);
-        MenuEntry_DisableOnCondition(&ME_JOYSTICK_LOOKINVERT, !CONTROL_JoyPresent);
+        RedSplit_SyncControllerSetupMenuData();
+        MenuEntry_HideOnCondition(&ME_CONTROLLER_PLAYER_SELECTOR, !REALITY);
+        MenuEntry_DisableOnCondition(&ME_JOYSTICK_LOOKXSCALE, !REALITY && !CONTROL_JoyPresent);
+        MenuEntry_DisableOnCondition(&ME_JOYSTICK_LOOKYSCALE, !REALITY && !CONTROL_JoyPresent);
+        MenuEntry_DisableOnCondition(&ME_JOYSTICK_LOOKINVERT, !REALITY && !CONTROL_JoyPresent);
         MenuEntry_DisableOnCondition(&ME_JOYSTICK_EDITBUTTONS, !CONTROL_JoyPresent || (joystick.numButtons == 0 && joystick.numHats == 0));
-        MenuEntry_DisableOnCondition(&ME_JOYSTICK_ADV, !CONTROL_JoyPresent);
-        MenuEntry_DisableOnCondition(&ME_JOYSTICK_DEFAULTS, !joystick.isGameController);
+        MenuEntry_DisableOnCondition(&ME_JOYSTICK_ADV, !REALITY && !CONTROL_JoyPresent);
+        MenuEntry_DisableOnCondition(&ME_JOYSTICK_DEFAULTS, !REALITY && !joystick.isGameController);
         break;
 
     case MENU_JOYSTICKADV:
+        RedSplit_SyncControllerSetupMenuData();
+        MenuEntry_HideOnCondition(&ME_CONTROLLER_PLAYER_SELECTOR, !REALITY);
         MenuEntry_DisableOnCondition(&ME_JOYSTICK_EDITAXES, !CONTROL_JoyPresent || joystick.numAxes == 0);
-        MenuEntry_DisableOnCondition(&ME_JOYSTICK_AIM_ASSIST, !ud.config.JoystickViewCentering);
+        MenuEntry_DisableOnCondition(&ME_JOYSTICK_AIM_ASSIST, REALITY ? !g_redSplitViewCentering[RedSplit_ControllerSetupPlayer()] : !ud.config.JoystickViewCentering);
         break;
 
     case MENU_PLAYERINPUT:
@@ -3034,6 +3172,7 @@ static void Menu_Pre(MenuID_t cm)
         MenuEntry_DisableOnCondition(&ME_PLAYERINPUT_JOIN3, !inGame);
         MenuEntry_HideOnCondition(&ME_PLAYERINPUT_JOIN4, playerCount != 3);
         MenuEntry_DisableOnCondition(&ME_PLAYERINPUT_JOIN4, !inGame);
+        MenuEntry_HideOnCondition(&ME_PLAYERINPUT_DISCONNECT1, playerCount < 2);
         MenuEntry_HideOnCondition(&ME_PLAYERINPUT_DISCONNECT2, playerCount < 2);
         MenuEntry_HideOnCondition(&ME_PLAYERINPUT_DISCONNECT3, playerCount < 3);
         MenuEntry_HideOnCondition(&ME_PLAYERINPUT_DISCONNECT4, playerCount < 4);
@@ -4448,7 +4587,26 @@ static void Menu_PreInput(MenuEntry_t *entry)
         break;
 
     case MENU_LEVELREPLAY:
-        if (I_MenuLeft())
+        if (!m_mousecaught && MOUSEACTIVECONDITIONAL(g_mouseClickState == MOUSE_RELEASED) && g_replayLevelCount > 1)
+        {
+            int32_t const entryIndex = clamp<int32_t>(g_replayLevelSelectedIndex, 0, g_replayLevelCount - 1);
+            vec2_t const replayOrigin = { 0, -(5<<16) };
+            ReplayLevelArrowButtons_t const buttons = Menu_GetReplayLevelArrowButtons(replayOrigin, entryIndex);
+            int32_t direction = 0;
+
+            if (buttons.canMoveLeft && Menu_ReplayLevelArrowMouse(buttons.leftX, buttons.y))
+                direction = -1;
+            else if (buttons.canMoveRight && Menu_ReplayLevelArrowMouse(buttons.rightX, buttons.y))
+                direction = 1;
+
+            if (direction != 0)
+            {
+                m_mousecaught = 1;
+                if (Menu_MoveReplayLevelSelection(direction))
+                    S_PlaySound(KICK_HIT);
+            }
+        }
+        else if (I_MenuLeft())
         {
             I_MenuLeftClear();
             if (Menu_MoveReplayLevelSelection(-1))
@@ -5365,12 +5523,12 @@ static int32_t RedSplit_MenuInputSourceConnected(int32_t const inputSource)
 
 static int32_t RedSplit_MenuInputUsedByEarlierPlayer(int32_t const inputSource, int32_t const playerNum)
 {
-    if (inputSource == RN_SPLIT_INPUT_NONE || inputSource == RN_SPLIT_INPUT_KBM)
+    if (inputSource == RN_SPLIT_INPUT_NONE)
         return 0;
 
     for (int32_t i = 0; i < playerNum; ++i)
         if (g_redSplitPlayerInput[i] == inputSource)
-            return 1;
+            return g_redSplitPlayerInputManual[playerNum] ? 0 : 1;
 
     return 0;
 }
@@ -5455,9 +5613,13 @@ static void RedSplit_AssignLastMenuPadForPlayerCount(int32_t const playerCount)
 
     for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
         if (playerNum != targetPlayer && g_redSplitPlayerInput[playerNum] == inputSource)
+        {
             g_redSplitPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
+            g_redSplitPlayerInputManual[playerNum] = 0;
+        }
 
     g_redSplitPlayerInput[targetPlayer] = inputSource;
+    g_redSplitPlayerInputManual[targetPlayer] = 0;
 }
 
 static int32_t RedSplit_MenuFindAvailableInput(int32_t const playerNum)
@@ -5493,6 +5655,7 @@ void RedSplit_AssignInputsForPlayerCount(int32_t playerCount)
             continue;
 
         g_redSplitPlayerInput[playerNum] = RedSplit_MenuFindAvailableInput(playerNum);
+        g_redSplitPlayerInputManual[playerNum] = 0;
     }
 
     RedSplit_ResetInputLatches();
@@ -5752,11 +5915,13 @@ static void RedSplit_TransferDisconnectedPlayerAccess(int32_t const playerNum)
 void RedSplit_DisconnectPlayer(int32_t const playerNum)
 {
     int32_t const playerCount = RedSplit_MenuCurrentPlayerCount();
-    if (playerNum <= 0 || playerNum >= playerCount)
+    if (playerNum < 0 || playerNum >= playerCount || (playerNum == 0 && playerCount < 2))
         return;
 
     int32_t savedPlayerInput[MAXPLAYERS];
     Bmemcpy(savedPlayerInput, g_redSplitPlayerInput, sizeof(savedPlayerInput));
+    int32_t savedPlayerInputManual[MAXPLAYERS];
+    Bmemcpy(savedPlayerInputManual, g_redSplitPlayerInputManual, sizeof(savedPlayerInputManual));
 
     int32_t const lastPlayer = playerCount - 1;
     int32_t spriteToHide = g_player[playerNum].ps != nullptr ? g_player[playerNum].ps->i : -1;
@@ -5769,10 +5934,13 @@ void RedSplit_DisconnectPlayer(int32_t const playerNum)
         DukePlayer_t * const target = g_player[playerNum].ps;
         DukePlayer_t * const source = g_player[lastPlayer].ps;
         int32_t const recycledSprite = target->i;
+        int32_t const savedTargetGm = target->gm;
 
         Bmemcpy(target, source, sizeof(DukePlayer_t));
         target->frag_ps = playerNum;
         target->i = source->i;
+        if (playerNum == 0)
+            target->gm = (target->gm & ~MODE_MENU) | (savedTargetGm & MODE_MENU);
 
         g_player[playerNum].pcolor = g_player[lastPlayer].pcolor;
         g_player[playerNum].pteam = g_player[lastPlayer].pteam;
@@ -5802,6 +5970,12 @@ void RedSplit_DisconnectPlayer(int32_t const playerNum)
     ud.multimode = newPlayerCount;
     RedSplit_RebuildConnectChain(newPlayerCount);
     Bmemcpy(g_redSplitPlayerInput, savedPlayerInput, sizeof(savedPlayerInput));
+    Bmemcpy(g_redSplitPlayerInputManual, savedPlayerInputManual, sizeof(savedPlayerInputManual));
+    if (playerNum == 0)
+    {
+        g_redSplitPlayerInput[0] = savedPlayerInput[lastPlayer];
+        g_redSplitPlayerInputManual[0] = savedPlayerInputManual[lastPlayer];
+    }
     RedSplit_ResetInputLatches();
     RedSplit_ResetInputQueues();
 }
@@ -5914,6 +6088,8 @@ static void Menu_EntryLinkActivate(MenuEntry_t *entry)
             RedSplit_SetPlayerCount(3);
         else if (entry == &ME_PLAYERINPUT_JOIN4 && g_player[myconnectindex].ps != nullptr && (g_player[myconnectindex].ps->gm & MODE_GAME))
             RedSplit_SetPlayerCount(4);
+        else if (entry == &ME_PLAYERINPUT_DISCONNECT1)
+            RedSplit_DisconnectPlayer(0);
         else if (entry == &ME_PLAYERINPUT_DISCONNECT2)
             RedSplit_DisconnectPlayer(1);
         else if (entry == &ME_PLAYERINPUT_DISCONNECT3)
@@ -6262,7 +6438,7 @@ static int32_t Menu_EntryOptionModify(MenuEntry_t *entry, int32_t newOption)
         CONTROL_MapAnalogAxis(M_JOYSTICKAXES.currentEntry, newOption);
     else if (entry == &ME_JOYSTICKAXIS_INVERT)
         CONTROL_SetAnalogAxisInvert(M_JOYSTICKAXES.currentEntry, newOption);
-    else if (entry == &ME_JOYSTICK_LOOKINVERT)
+    else if (entry == &ME_JOYSTICK_LOOKINVERT && !REALITY)
         CONTROL_SetAnalogAxisInvert(g_lookAxis, newOption);
     else if (entry == &ME_NETOPTIONS_EPISODE)
     {
@@ -6347,13 +6523,20 @@ static void Menu_EntryOptionDidModify(MenuEntry_t *entry)
     int domodechange = 0;
 #endif
 
-    if (entry == &ME_PLAYER_SELECTOR)
+    if (entry == &ME_CONTROLLER_PLAYER_SELECTOR)
+        RedSplit_SyncControllerSetupMenuData();
+    else if (entry == &ME_PLAYER_SELECTOR)
         RedSplit_SyncPlayerSetupMenuData();
     else if (entry == &ME_PLAYERINPUT_P1 ||
              entry == &ME_PLAYERINPUT_P2 ||
              entry == &ME_PLAYERINPUT_P3 ||
              entry == &ME_PLAYERINPUT_P4)
+    {
+        int32_t const playerNum = RedSplit_PlayerInputEntryToPlayer(entry);
+        if ((unsigned)playerNum < MAXPLAYERS)
+            g_redSplitPlayerInputManual[playerNum] = g_redSplitPlayerInput[playerNum] != RN_SPLIT_INPUT_NONE;
         CONFIG_WriteSetup(0);
+    }
     else if (entry == &ME_PLAYER_WEAPSWITCH_PICKUP ||
              entry == &ME_PLAYER_COLOR ||
              entry == &ME_PLAYER_TEAM)
@@ -6418,9 +6601,9 @@ static int32_t Menu_EntryRangeInt32Modify(MenuEntry_t *entry, int32_t newValue)
         S_MusicVolume(newValue);
     else if (entry == &ME_JOYSTICKAXIS_SCALE)
         CONTROL_SetAnalogAxisScale(M_JOYSTICKAXES.currentEntry, newValue, controldevice_joystick);
-    else if (entry == &ME_JOYSTICK_LOOKXSCALE)
+    else if (entry == &ME_JOYSTICK_LOOKXSCALE && !REALITY)
         CONTROL_SetAnalogAxisScale(g_turnAxis, newValue, controldevice_joystick);
-    else if (entry == &ME_JOYSTICK_LOOKYSCALE)
+    else if (entry == &ME_JOYSTICK_LOOKYSCALE && !REALITY)
         CONTROL_SetAnalogAxisScale(g_lookAxis, newValue, controldevice_joystick);
     else if (entry == &ME_JOYSTICKAXIS_DEAD)
         JOYSTICK_SetDeadZone(M_JOYSTICKAXES.currentEntry, newValue, *MEO_JOYSTICKAXIS_SATU.variable);
@@ -6622,6 +6805,44 @@ static void Menu_GetCurrentCampaignSecrets(int32_t * const secrets, int32_t * co
         *maxSecrets = maxFound;
 }
 
+static void Menu_GetCurrentCampaignBabes(int32_t * const babes, int32_t * const maxBabes)
+{
+    int32_t saved = 0;
+    int32_t maxSaved = 0;
+    int32_t const playerCount = (REALITY && g_fakeMultiMode > 1) ? clamp<int32_t>(g_fakeMultiMode, 2, 4) : 1;
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        DukePlayer_t const * const pPlayer = g_player[playerNum].ps;
+        if (pPlayer == nullptr)
+            continue;
+
+        saved += pPlayer->dn64_36e;
+        maxSaved = max<int32_t>(maxSaved, pPlayer->dn64_36d);
+    }
+
+    if (maxSaved > 0)
+        saved = min<int32_t>(saved, maxSaved);
+
+    if (Menu_CanUseReplayLevels())
+    {
+        int32_t const progressIndex = ud.volume_number * MAXLEVELS + ud.level_number;
+        if ((unsigned)progressIndex < (unsigned)(MAXVOLUMES * MAXLEVELS))
+        {
+            saved = max<int32_t>(saved, g_replayLevelCampaignBabes[progressIndex]);
+            maxSaved = max<int32_t>(maxSaved, g_replayLevelCampaignMaxBabes[progressIndex]);
+        }
+    }
+
+    if (maxSaved < saved)
+        maxSaved = saved;
+
+    if (babes != nullptr)
+        *babes = saved;
+    if (maxBabes != nullptr)
+        *maxBabes = maxSaved;
+}
+
 static int32_t Menu_ReadReplayProgressMetadataPath(char const * const fn)
 {
     if (fn == nullptr || fn[0] == '\0')
@@ -6646,21 +6867,32 @@ static int32_t Menu_ReadReplayProgressMetadataPath(char const * const fn)
             continue;
         }
 
-        int32_t volumeIndex = 0, levelIndex = 0, played = 0, completed = 0, secrets = 0, maxSecrets = 0, bestTime = 0;
-        int32_t fieldCount = Bsscanf(line, "level %d %d %d %d %d %d %d",
-                                     &volumeIndex, &levelIndex, &played, &completed, &secrets, &maxSecrets, &bestTime);
+        int32_t volumeIndex = 0, levelIndex = 0, played = 0, completed = 0, secrets = 0, maxSecrets = 0, bestTime = 0, babes = 0, maxBabes = 0;
+        int32_t fieldCount = Bsscanf(line, "level %d %d %d %d %d %d %d %d %d",
+                                     &volumeIndex, &levelIndex, &played, &completed, &secrets, &maxSecrets, &bestTime, &babes, &maxBabes);
 
-        if (fieldCount == 6)
+        if (fieldCount == 7)
+        {
+            babes = 0;
+            maxBabes = 0;
+        }
+        else if (fieldCount == 6)
+        {
             bestTime = 0;
+            babes = 0;
+            maxBabes = 0;
+        }
         else if (fieldCount == 5)
         {
             completed = 0;
             bestTime = 0;
+            babes = 0;
+            maxBabes = 0;
             fieldCount = Bsscanf(line, "level %d %d %d %d %d",
                                  &volumeIndex, &levelIndex, &played, &secrets, &maxSecrets);
         }
 
-        if ((fieldCount == 7 || fieldCount == 6 || fieldCount == 5) && played &&
+        if ((fieldCount == 9 || fieldCount == 7 || fieldCount == 6 || fieldCount == 5) && played &&
             (unsigned)volumeIndex < MAXVOLUMES && (unsigned)levelIndex < MAXLEVELS)
         {
             int32_t const progressIndex = volumeIndex * MAXLEVELS + levelIndex;
@@ -6668,11 +6900,17 @@ static int32_t Menu_ReadReplayProgressMetadataPath(char const * const fn)
             int32_t clampedSecrets = max<int32_t>(secrets, 0);
             if (clampedMaxSecrets > 0)
                 clampedSecrets = min<int32_t>(clampedSecrets, clampedMaxSecrets);
+            int32_t const clampedMaxBabes = max<int32_t>(maxBabes, 0);
+            int32_t clampedBabes = max<int32_t>(babes, 0);
+            if (clampedMaxBabes > 0)
+                clampedBabes = min<int32_t>(clampedBabes, clampedMaxBabes);
 
             g_replayLevelPlayed[progressIndex] = 1;
             g_replayLevelCompleted[progressIndex] = completed != 0;
             g_replayLevelCampaignSecrets[progressIndex] = clampedSecrets;
             g_replayLevelCampaignMaxSecrets[progressIndex] = clampedMaxSecrets;
+            g_replayLevelCampaignBabes[progressIndex] = clampedBabes;
+            g_replayLevelCampaignMaxBabes[progressIndex] = clampedMaxBabes;
             g_replayLevelCampaignBestTimes[progressIndex] = max<int32_t>(bestTime, 0);
             g_replayLevelReached[volumeIndex] = max<int32_t>(g_replayLevelReached[volumeIndex], levelIndex);
         }
@@ -6729,10 +6967,15 @@ void M_WriteReplayProgressMetadata(char const *fn)
             int32_t writeSecrets = max<int32_t>(g_replayLevelCampaignSecrets[progressIndex], 0);
             if (writeMaxSecrets > 0)
                 writeSecrets = min<int32_t>(writeSecrets, writeMaxSecrets);
+            int32_t writeMaxBabes = max<int32_t>(g_replayLevelCampaignMaxBabes[progressIndex], 0);
+            int32_t writeBabes = max<int32_t>(g_replayLevelCampaignBabes[progressIndex], 0);
+            if (writeMaxBabes > 0)
+                writeBabes = min<int32_t>(writeBabes, writeMaxBabes);
 
-            Bfprintf(fp, "level %d %d %d %d %d %d %d\n",
+            Bfprintf(fp, "level %d %d %d %d %d %d %d %d %d\n",
                      volumeIndex, levelIndex, 1, g_replayLevelCompleted[progressIndex] != 0,
-                     writeSecrets, writeMaxSecrets, max<int32_t>(g_replayLevelCampaignBestTimes[progressIndex], 0));
+                     writeSecrets, writeMaxSecrets, max<int32_t>(g_replayLevelCampaignBestTimes[progressIndex], 0),
+                     writeBabes, writeMaxBabes);
         }
     }
 
@@ -6751,6 +6994,10 @@ void M_ResetReplayCampaignProgress(void)
         secrets = 0;
     for (auto &maxSecrets : g_replayLevelCampaignMaxSecrets)
         maxSecrets = 0;
+    for (auto &babes : g_replayLevelCampaignBabes)
+        babes = 0;
+    for (auto &maxBabes : g_replayLevelCampaignMaxBabes)
+        maxBabes = 0;
     for (auto &bestTime : g_replayLevelCampaignBestTimes)
         bestTime = 0;
     for (auto &total : g_replayLevelSecretTotalCache)
@@ -6774,7 +7021,8 @@ static int32_t Menu_GetReplayLevelReached(int32_t const volumeIndex)
 }
 
 static void Menu_RecordReplayLevelProgress(int32_t const volumeIndex, int32_t const levelIndex,
-                                           int32_t const secrets, int32_t const maxSecrets)
+                                           int32_t const secrets, int32_t const maxSecrets,
+                                           int32_t const babes, int32_t const maxBabes)
 {
     if ((unsigned)volumeIndex >= MAXVOLUMES || (unsigned)levelIndex >= MAXLEVELS)
         return;
@@ -6784,10 +7032,16 @@ static void Menu_RecordReplayLevelProgress(int32_t const volumeIndex, int32_t co
     int32_t clampedSecrets = max<int32_t>(secrets, 0);
     if (clampedMaxSecrets > 0)
         clampedSecrets = min<int32_t>(clampedSecrets, clampedMaxSecrets);
+    int32_t const clampedMaxBabes = max<int32_t>(maxBabes, 0);
+    int32_t clampedBabes = max<int32_t>(babes, 0);
+    if (clampedMaxBabes > 0)
+        clampedBabes = min<int32_t>(clampedBabes, clampedMaxBabes);
 
     g_replayLevelPlayed[progressIndex] = 1;
     g_replayLevelCampaignSecrets[progressIndex] = max<int32_t>(g_replayLevelCampaignSecrets[progressIndex], clampedSecrets);
     g_replayLevelCampaignMaxSecrets[progressIndex] = max<int32_t>(g_replayLevelCampaignMaxSecrets[progressIndex], clampedMaxSecrets);
+    g_replayLevelCampaignBabes[progressIndex] = max<int32_t>(g_replayLevelCampaignBabes[progressIndex], clampedBabes);
+    g_replayLevelCampaignMaxBabes[progressIndex] = max<int32_t>(g_replayLevelCampaignMaxBabes[progressIndex], clampedMaxBabes);
 
     Menu_RecordReplayLevelReached(volumeIndex, levelIndex);
 }
@@ -6797,9 +7051,10 @@ static void Menu_RecordReplayLevelCompleted(int32_t const volumeIndex, int32_t c
     if ((unsigned)volumeIndex >= MAXVOLUMES || (unsigned)levelIndex >= MAXLEVELS)
         return;
 
-    int32_t secrets = 0, maxSecrets = 0;
+    int32_t secrets = 0, maxSecrets = 0, babes = 0, maxBabes = 0;
     Menu_GetCurrentCampaignSecrets(&secrets, &maxSecrets);
-    Menu_RecordReplayLevelProgress(volumeIndex, levelIndex, secrets, maxSecrets);
+    Menu_GetCurrentCampaignBabes(&babes, &maxBabes);
+    Menu_RecordReplayLevelProgress(volumeIndex, levelIndex, secrets, maxSecrets, babes, maxBabes);
 
     int32_t const progressIndex = volumeIndex * MAXLEVELS + levelIndex;
     g_replayLevelCompleted[progressIndex] = 1;
@@ -6809,12 +7064,18 @@ static void Menu_RecordReplayLevelCompleted(int32_t const volumeIndex, int32_t c
 }
 
 static int32_t Menu_GetReplayLevelProgress(int32_t const volumeIndex, int32_t const levelIndex,
-                                           int32_t * const secrets, int32_t * const maxSecrets, int32_t * const bestTime)
+                                           int32_t * const secrets, int32_t * const maxSecrets,
+                                           int32_t * const babes, int32_t * const maxBabes,
+                                           int32_t * const bestTime)
 {
     if (secrets != nullptr)
         *secrets = 0;
     if (maxSecrets != nullptr)
         *maxSecrets = 0;
+    if (babes != nullptr)
+        *babes = 0;
+    if (maxBabes != nullptr)
+        *maxBabes = 0;
     if (bestTime != nullptr)
         *bestTime = 0;
 
@@ -6826,11 +7087,19 @@ static int32_t Menu_GetReplayLevelProgress(int32_t const volumeIndex, int32_t co
     int32_t storedMaxSecrets = g_replayLevelCampaignMaxSecrets[progressIndex];
     if (storedMaxSecrets > 0)
         storedSecrets = min<int32_t>(storedSecrets, storedMaxSecrets);
+    int32_t storedBabes = g_replayLevelCampaignBabes[progressIndex];
+    int32_t storedMaxBabes = g_replayLevelCampaignMaxBabes[progressIndex];
+    if (storedMaxBabes > 0)
+        storedBabes = min<int32_t>(storedBabes, storedMaxBabes);
 
     if (secrets != nullptr)
         *secrets = storedSecrets;
     if (maxSecrets != nullptr)
         *maxSecrets = storedMaxSecrets;
+    if (babes != nullptr)
+        *babes = storedBabes;
+    if (maxBabes != nullptr)
+        *maxBabes = storedMaxBabes;
     if (bestTime != nullptr)
         *bestTime = g_replayLevelCampaignBestTimes[progressIndex];
 
@@ -6913,9 +7182,10 @@ static void Menu_UpdateCurrentReplayLevelProgress(void)
     if (!Menu_CanUseReplayLevels())
         return;
 
-    int32_t secrets = 0, maxSecrets = 0;
+    int32_t secrets = 0, maxSecrets = 0, babes = 0, maxBabes = 0;
     Menu_GetCurrentCampaignSecrets(&secrets, &maxSecrets);
-    Menu_RecordReplayLevelProgress(ud.volume_number, ud.level_number, secrets, maxSecrets);
+    Menu_GetCurrentCampaignBabes(&babes, &maxBabes);
+    Menu_RecordReplayLevelProgress(ud.volume_number, ud.level_number, secrets, maxSecrets, babes, maxBabes);
 }
 
 static int32_t Menu_GetReplayCampaignSecretTotal(void)
@@ -6946,6 +7216,24 @@ static int32_t Menu_GetReplayCampaignSecretTotal(void)
 void M_RecordReplayCurrentLevelProgress(void)
 {
     Menu_UpdateCurrentReplayLevelProgress();
+}
+
+void M_RecordReplayCurrentLevelBabeSaved(int32_t const count)
+{
+    if (!Menu_CanUseReplayLevels() || count <= 0)
+        return;
+
+    int32_t const progressIndex = ud.volume_number * MAXLEVELS + ud.level_number;
+    if ((unsigned)progressIndex >= (unsigned)(MAXVOLUMES * MAXLEVELS))
+        return;
+
+    int32_t currentBabes = 0, currentMaxBabes = 0;
+    Menu_GetCurrentCampaignBabes(&currentBabes, &currentMaxBabes);
+
+    int32_t const saved = max<int32_t>(currentBabes, g_replayLevelCampaignBabes[progressIndex] + count);
+    int32_t const maxBabes = max<int32_t>(currentMaxBabes, saved);
+
+    Menu_RecordReplayLevelProgress(ud.volume_number, ud.level_number, 0, 0, saved, maxBabes);
 }
 
 void M_RecordReplayCurrentLevelCompleted(void)
@@ -7013,8 +7301,8 @@ static void Menu_PopulateReplayLevelMenu(void)
             if (!Menu_ReplayLevelHasValidInfo(volumeIndex, levelIndex))
                 continue;
 
-            int32_t secrets = 0, maxSecrets = 0, bestTime = 0;
-            Menu_GetReplayLevelProgress(volumeIndex, levelIndex, &secrets, &maxSecrets, &bestTime);
+            int32_t secrets = 0, maxSecrets = 0, babes = 0, maxBabes = 0, bestTime = 0;
+            Menu_GetReplayLevelProgress(volumeIndex, levelIndex, &secrets, &maxSecrets, &babes, &maxBabes, &bestTime);
 
             if (maxSecrets <= 0)
             {
@@ -7025,13 +7313,18 @@ static void Menu_PopulateReplayLevelMenu(void)
 
             if (volumeIndex == ud.volume_number && levelIndex == ud.level_number)
             {
-                int32_t currentSecrets = 0, currentMaxSecrets = 0;
+                int32_t currentSecrets = 0, currentMaxSecrets = 0, currentBabes = 0, currentMaxBabes = 0;
                 Menu_GetCurrentCampaignSecrets(&currentSecrets, &currentMaxSecrets);
+                Menu_GetCurrentCampaignBabes(&currentBabes, &currentMaxBabes);
 
                 secrets = max<int32_t>(secrets, currentSecrets);
                 maxSecrets = max<int32_t>(maxSecrets, currentMaxSecrets);
                 if (maxSecrets > 0)
                     secrets = min<int32_t>(secrets, maxSecrets);
+                babes = max<int32_t>(babes, currentBabes);
+                maxBabes = max<int32_t>(maxBabes, currentMaxBabes);
+                if (maxBabes > 0)
+                    babes = min<int32_t>(babes, maxBabes);
             }
 
             auto const &mapInfo = g_mapInfo[volumeIndex * MAXLEVELS + levelIndex];
@@ -7041,6 +7334,8 @@ static void Menu_PopulateReplayLevelMenu(void)
             g_replayLevelIndices[entryCount] = levelIndex;
             g_replayLevelSecrets[entryCount] = secrets;
             g_replayLevelMaxSecrets[entryCount] = maxSecrets;
+            g_replayLevelBabes[entryCount] = babes;
+            g_replayLevelMaxBabes[entryCount] = maxBabes;
             g_replayLevelBestTimes[entryCount] = bestTime;
 
             if (volumeIndex == ud.volume_number && levelIndex == ud.level_number)
@@ -7055,9 +7350,10 @@ static void Menu_PopulateReplayLevelMenu(void)
         int32_t const currentVolume = clamp<int32_t>(ud.volume_number, 0, max<int32_t>(g_volumeCnt - 1, 0));
         int32_t const currentLevel = clamp<int32_t>(ud.level_number, 0, MAXLEVELS - 1);
         auto const &mapInfo = g_mapInfo[currentVolume * MAXLEVELS + currentLevel];
-        int32_t secrets = 0, maxSecrets = 0;
+        int32_t secrets = 0, maxSecrets = 0, babes = 0, maxBabes = 0;
 
         Menu_GetCurrentCampaignSecrets(&secrets, &maxSecrets);
+        Menu_GetCurrentCampaignBabes(&babes, &maxBabes);
 
         if (mapInfo.name != nullptr && mapInfo.name[0] != '\0')
             Bsnprintf(g_replayLevelNames[0], sizeof(g_replayLevelNames[0]), "%s", mapInfo.name);
@@ -7068,6 +7364,8 @@ static void Menu_PopulateReplayLevelMenu(void)
         g_replayLevelIndices[0] = currentLevel;
         g_replayLevelSecrets[0] = secrets;
         g_replayLevelMaxSecrets[0] = maxSecrets;
+        g_replayLevelBabes[0] = babes;
+        g_replayLevelMaxBabes[0] = maxBabes;
         g_replayLevelBestTimes[0] = 0;
         entryCount = 1;
         selectedEntry = 0;
@@ -7155,26 +7453,54 @@ static void Menu_FormatReplayBestTime(char * const buffer, size_t const bufferSi
 
 static void Menu_DrawReplayLevelPanelBackground(vec2_t const origin)
 {
-    Menu_BlackRectangle(origin.x, origin.y + (74<<16), 320<<16, 80<<16, 1|32);
+    Menu_BlackRectangle(origin.x, origin.y + (74<<16), 320<<16, 88<<16, 1|32);
 }
 
 static int32_t xdim_from_320_16(int32_t x);
 static int32_t ydim_from_200_16(int32_t y);
+static int32_t Menu_MouseOutsideBounds(vec2_t const *pos, int32_t x, int32_t y, int32_t width, int32_t height);
+
+static ReplayLevelArrowButtons_t Menu_GetReplayLevelArrowButtons(vec2_t const origin, int32_t const entryIndex)
+{
+    ReplayLevelArrowButtons_t buttons = {};
+
+    if (g_replayLevelCount <= 1)
+        return buttons;
+
+    int32_t const titleX = origin.x + (160<<16);
+    int32_t const titleY = origin.y + (45<<16);
+    vec2_t const titleSize = G_ScreenTextSize(MF_Redfont.tilenum, titleX, titleY, MF_Redfont.zoom, 0,
+                                              g_replayLevelNames[entryIndex], 2|8|16|ROTATESPRITE_FULL16,
+                                              MF_Redfont.emptychar.x, MF_Redfont.emptychar.y,
+                                              MF_Redfont.between.x, MF_Redfont.between.y,
+                                              MF_Redfont.textflags | TEXT_XCENTER, 0, 0, xdim-1, ydim-1);
+    int32_t const titleHalf = titleSize.x >> 1;
+
+    buttons.leftX = max<int32_t>(origin.x + (24<<16), titleX - titleHalf - (22<<16));
+    buttons.rightX = min<int32_t>(origin.x + (296<<16), titleX + titleHalf + (22<<16));
+    buttons.y = origin.y + (50<<16);
+    buttons.canMoveLeft = entryIndex > 0;
+    buttons.canMoveRight = entryIndex < g_replayLevelCount - 1;
+
+    return buttons;
+}
 
 static void Menu_DrawReplayLevelArrow(int32_t const x, int32_t const y, int32_t const direction)
 {
-    int32_t const z = 49152;
-    int32_t const posx = tilesiz[SELECTDIR].y * z;
-    int32_t const clipWidth = max<int32_t>((posx>>17)<<16, 14<<16);
-    int32_t const clipLeft = x - (clipWidth>>1);
-    int32_t const x1 = xdim_from_320_16(clipLeft);
-    int32_t const y1 = ydim_from_200_16(y - (14<<16));
-    int32_t const x2 = xdim_from_320_16(clipLeft + clipWidth);
-    int32_t const y2 = ydim_from_200_16(y + (14<<16));
-    int32_t const angle = direction < 0 ? 512 : 1536;
-    int32_t const spriteX = direction < 0 ? clipLeft + posx : clipLeft + clipWidth - posx;
+    int32_t const buttonW = 24<<16;
+    int32_t const buttonH = 18<<16;
+    int32_t const buttonX = x - (buttonW >> 1);
+    int32_t const buttonY = y - (buttonH >> 1);
 
-    rotatesprite_(spriteX, y, z, angle, SELECTDIR, Menu_CursorShade(), 0, 2|8|16, 0, 0, x1, y1, x2, y2);
+    Menu_BlackRectangle(buttonX, buttonY, buttonW, buttonH, 1|32);
+
+    if ((unsigned)ARROW < MAXTILES && tilesiz[ARROW].x > 0 && tilesiz[ARROW].y > 0)
+    {
+        rotatesprite_fs(x, y, 49152, direction < 0 ? 1024 : 0, ARROW, -8, 0, 2|8|16);
+        return;
+    }
+
+    creditsminitext(x, y - (3<<16), direction < 0 ? "PREV" : "NEXT", 8);
 }
 
 static void Menu_DrawReplayLevelDetails(vec2_t const origin)
@@ -7192,24 +7518,21 @@ static void Menu_DrawReplayLevelDetails(vec2_t const origin)
 
     Menu_DrawReplayLevelPanelBackground(origin);
 
-    G_ScreenText(MF_Redfont.tilenum, origin.x + (160<<16), origin.y + (45<<16), MF_Redfont.zoom, 0, 0,
+    int32_t const titleX = origin.x + (160<<16);
+    int32_t const titleY = origin.y + (45<<16);
+    G_ScreenText(MF_Redfont.tilenum, titleX, titleY, MF_Redfont.zoom, 0, 0,
                  g_replayLevelNames[entryIndex], 0, MF_ReplayRedfont.pal, 2|8|16|ROTATESPRITE_FULL16, 0,
                  MF_Redfont.emptychar.x, MF_Redfont.emptychar.y, MF_Redfont.between.x, MF_Redfont.between.y,
                  MF_Redfont.textflags | TEXT_XCENTER, 0, 0, xdim-1, ydim-1);
 
     if (g_replayLevelCount > 1)
     {
-        int32_t const leftX = origin.x + (34<<16);
-        int32_t const rightX = origin.x + (286<<16);
-        int32_t const arrowY = origin.y + (50<<16);
-        int32_t const rightArrowY = arrowY + (14<<16);
-        int32_t const canMoveLeft = entryIndex > 0;
-        int32_t const canMoveRight = entryIndex < g_replayLevelCount - 1;
+        ReplayLevelArrowButtons_t const buttons = Menu_GetReplayLevelArrowButtons(origin, entryIndex);
 
-        if (canMoveLeft)
-            Menu_DrawReplayLevelArrow(leftX, arrowY, -1);
-        if (canMoveRight)
-            Menu_DrawReplayLevelArrow(rightX, rightArrowY, 1);
+        if (buttons.canMoveLeft)
+            Menu_DrawReplayLevelArrow(buttons.leftX, buttons.y, -1);
+        if (buttons.canMoveRight)
+            Menu_DrawReplayLevelArrow(buttons.rightX, buttons.y, 1);
     }
 
     int32_t const thumbnailTile = Menu_GetReplayLevelThumbnailTile(entryIndex);
@@ -7233,13 +7556,16 @@ static void Menu_DrawReplayLevelDetails(vec2_t const origin)
     Bsnprintf(tempbuf, sizeof(tempbuf), "Secrets: %d/%d", g_replayLevelSecrets[entryIndex], g_replayLevelMaxSecrets[entryIndex]);
     mgametext(origin.x + (infoX<<16), origin.y + ((infoY + 26)<<16), tempbuf);
 
-    Menu_FormatReplayBestTime(tempbuf, sizeof(tempbuf), g_replayLevelBestTimes[entryIndex]);
+    Bsnprintf(tempbuf, sizeof(tempbuf), "Babes: %d/%d", g_replayLevelBabes[entryIndex], g_replayLevelMaxBabes[entryIndex]);
     mgametext(origin.x + (infoX<<16), origin.y + ((infoY + 39)<<16), tempbuf);
+
+    Menu_FormatReplayBestTime(tempbuf, sizeof(tempbuf), g_replayLevelBestTimes[entryIndex]);
+    mgametext(origin.x + (infoX<<16), origin.y + ((infoY + 52)<<16), tempbuf);
 
     if (!Menu_IsReplayLevelCurrent(entryIndex))
     {
-        mminitext(origin.x + (infoX<<16), origin.y + ((infoY + 56)<<16), "Starting this level", 8);
-        mminitext(origin.x + (infoX<<16), origin.y + ((infoY + 66)<<16), "loses current progress", 8);
+        mminitext(origin.x + (infoX<<16), origin.y + ((infoY + 65)<<16), "Starting this level", 8);
+        mminitext(origin.x + (infoX<<16), origin.y + ((infoY + 74)<<16), "loses current progress", 8);
     }
 }
 
@@ -7475,7 +7801,19 @@ static void Menu_Verify(int32_t input)
 
     case MENU_JOYDEFAULTVERIFY:
         if (input)
-            CONFIG_SetGameControllerDefaults();
+        {
+            if (REALITY)
+            {
+                int32_t const playerNum = RedSplit_ControllerSetupPlayer();
+                g_redSplitLookSensitivityX[playerNum] = 5;
+                g_redSplitLookSensitivityY[playerNum] = 3;
+                g_redSplitInvertAim[playerNum] = 0;
+                g_redSplitViewCentering[playerNum] = 0;
+                RedSplit_SyncControllerSetupMenuData();
+            }
+            else
+                CONFIG_SetGameControllerDefaults();
+        }
         break;
 
     case MENU_QUIT:
@@ -7767,6 +8105,11 @@ static Menu_t* Menu_FindFiltered(MenuID_t query)
 MenuAnimation_t m_animation;
 #if !defined EDUKE32_TOUCH_DEVICES
 static int32_t m_redSplitMouseHoverRefreshTicks;
+static int32_t m_redSplitMouseHasRealActivity;
+static int32_t m_redSplitMouseStartupIgnoreUntil;
+static int32_t m_redSplitMouseConsumeLogoClick;
+static int32_t m_redSplitMouseConsumeLogoClickFrames;
+static int32_t m_redSplitMouseInputThisFrame;
 #endif
 
 void Menu_SuppressMouseHoverFromGamepad(void)
@@ -7776,6 +8119,8 @@ void Menu_SuppressMouseHoverFromGamepad(void)
     m_mousewake_watchpoint = 0;
     m_menuchange_watchpoint = 0;
     m_redSplitMouseHoverRefreshTicks = 0;
+    m_redSplitMouseHasRealActivity = 0;
+    m_redSplitMouseStartupIgnoreUntil = (int32_t)totalclock + RED_SPLIT_MOUSE_STARTUP_IGNORE_TICS;
 #endif
 }
 
@@ -8016,26 +8361,7 @@ static void Menu_AboutToStartDisplaying(Menu_t * m)
         break;
 
     case MENU_JOYSTICKSETUP:
-        for (int i=0;i<MAXJOYAXES;i++)
-        {
-            if (ud.config.JoystickAnalogueAxes[i] == analog_turning)
-            {
-                MEO_JOYSTICK_LOOKXSCALE.variable = &ud.config.JoystickAnalogueScale[i];
-                g_turnAxis = i;
-                break;
-            }
-        }
-
-        for (int i=0;i<MAXJOYAXES;i++)
-        {
-            if (ud.config.JoystickAnalogueAxes[i] == analog_lookingupanddown)
-            {
-                MEO_JOYSTICK_LOOKYSCALE.variable = &ud.config.JoystickAnalogueScale[i];
-                MEO_JOYSTICK_LOOKINVERT.data     = &ud.config.JoystickAnalogueInvert[i];
-                g_lookAxis = i;
-                break;
-            }
-        }
+        RedSplit_SyncControllerSetupMenuData();
         break;
 
     case MENU_JOYSTICKAXES:
@@ -8170,17 +8496,20 @@ int Menu_Change(MenuID_t cm)
     Menu_ChangingTo(m_currentMenu);
 
 #if !defined EDUKE32_TOUCH_DEVICES
-    int32_t const mouseWasActive = MOUSEACTIVECONDITION;
+    int32_t const mouseWasActive = (MOUSEACTIVECONDITION && m_redSplitMouseHasRealActivity) || m_redSplitMouseInputThisFrame;
     m_menuchange_watchpoint = 2;
     if (mouseWasActive)
     {
         m_mouselastactivity = (int32_t)totalclock;
+        m_redSplitMouseHasRealActivity = 1;
         m_redSplitMouseHoverRefreshTicks = 35;
     }
     else
     {
         m_mouselastactivity = -M_MOUSETIMEOUT;
         m_redSplitMouseHoverRefreshTicks = 0;
+        m_redSplitMouseHasRealActivity = 0;
+        m_redSplitMouseStartupIgnoreUntil = (int32_t)totalclock + RED_SPLIT_MOUSE_STARTUP_IGNORE_TICS;
     }
 #endif
 
@@ -8299,26 +8628,76 @@ static inline int32_t Menu_UpdateScreenOK(MenuID_t cm)
     chances are you should scroll up.
 */
 
-int32_t m_mouselastactivity;
+int32_t m_mouselastactivity = -M_MOUSETIMEOUT;
 #if !defined EDUKE32_TOUCH_DEVICES
 int32_t m_mousewake_watchpoint, m_menuchange_watchpoint;
 #endif
 int32_t m_mousecaught;
 static vec2_t m_prevmousepos, m_mousepos, m_mousedownpos;
+static int32_t m_mousepos_initialized;
+
+static int32_t Menu_ReplayLevelArrowMouse(int32_t const centerX, int32_t const centerY)
+{
+    int32_t const buttonW = 28<<16;
+    int32_t const buttonH = 22<<16;
+    int32_t const buttonX = centerX - (buttonW >> 1);
+    int32_t const buttonY = centerY - (buttonH >> 1);
+
+    return !Menu_MouseOutsideBounds(&m_mousepos, buttonX, buttonY, buttonW, buttonH)
+        && !Menu_MouseOutsideBounds(&m_mousedownpos, buttonX, buttonY, buttonW, buttonH);
+}
+
+static void Menu_SkipRealityStartupLogo(void)
+{
+    m_menustarttics = totalclock - RED_SPLIT_REALITY_LOGO_TICS;
+    m_logosoundcnt = 2;
+    m_mousecaught = 1;
+    I_GeneralTriggerClear();
+    I_ReturnTriggerClear();
+    RedSplit_SuppressGameplayFireBriefly();
+
+#if !defined EDUKE32_TOUCH_DEVICES
+    m_mouselastactivity = -M_MOUSETIMEOUT;
+    m_mousewake_watchpoint = 0;
+    m_menuchange_watchpoint = 0;
+    m_redSplitMouseHoverRefreshTicks = 0;
+    m_redSplitMouseHasRealActivity = 0;
+    m_redSplitMouseStartupIgnoreUntil = (int32_t)totalclock + RED_SPLIT_MOUSE_STARTUP_IGNORE_TICS;
+    m_redSplitMouseConsumeLogoClick = 1;
+    m_redSplitMouseConsumeLogoClickFrames = 3;
+#endif
+}
 
 void Menu_Open(uint8_t playerID)
 {
     g_player[playerID].ps->gm |= MODE_MENU;
 
-    mouseReadAbs(&m_prevmousepos, &g_mouseAbs);
+    if (mouseReadAbs(&m_prevmousepos, &g_mouseAbs))
+    {
+        m_mousepos = m_prevmousepos;
+        m_mousedownpos = m_prevmousepos;
+        m_mousepos_initialized = 1;
+    }
+    else
+        m_mousepos_initialized = 0;
     m_mouselastactivity = -M_MOUSETIMEOUT;
 
 #if !defined EDUKE32_TOUCH_DEVICES
     m_mousewake_watchpoint = 0;
+    m_menuchange_watchpoint = 0;
+    m_redSplitMouseHoverRefreshTicks = 0;
+    m_redSplitMouseHasRealActivity = 0;
+    m_redSplitMouseStartupIgnoreUntil = (int32_t)totalclock + RED_SPLIT_MOUSE_STARTUP_IGNORE_TICS;
 #endif
 
     m_menustarttics = totalclock;
     m_logosoundcnt = 0;
+
+    if (REALITY && g_redSplitSkipNextMenuLogo && !(g_player[playerID].ps->gm & MODE_GAME))
+    {
+        g_redSplitSkipNextMenuLogo = 0;
+        Menu_SkipRealityStartupLogo();
+    }
 
     mouseLockToWindow(0);
 }
@@ -8329,6 +8708,7 @@ void Menu_Close(uint8_t playerID)
     {
         g_redSplitPauseMenuInputSuppressUntil = 0;
         CONTROL_ClearUserInputFilter();
+        RedSplit_SuppressGameplayFireBriefly();
     }
 
     if (g_player[playerID].ps->gm & (MODE_GAME|MODE_DEMO))
@@ -10417,10 +10797,21 @@ static void Menu_RunInput(Menu_t *cm)
     }
 
 process_input:
-    if (I_AdvanceTrigger() || I_ReturnTrigger() || I_EscapeTrigger()
+    int32_t const escapeTrigger = I_EscapeTrigger();
+
+    if (REALITY && cm->menuID == MENU_MAIN && !(g_player[myconnectindex].ps->gm & MODE_GAME) && escapeTrigger)
+    {
+        I_EscapeTriggerClear();
+        G_GameQuit();
+    }
+
+    if (!escapeTrigger && (I_AdvanceTrigger() || I_ReturnTrigger()
         || I_MenuUp() || I_MenuDown() || I_MenuLeft() || I_MenuRight()
-        || I_PanelUp() || I_PanelDown())
-        Menu_SuppressMouseHoverFromGamepad();
+        || I_PanelUp() || I_PanelDown()))
+    {
+        if (!m_redSplitMouseInputThisFrame)
+            Menu_SuppressMouseHoverFromGamepad();
+    }
 
     switch (cm->type)
     {
@@ -11210,10 +11601,71 @@ void M_DisplayMenus(void)
         Menu_AnimateChange(MENU_QUIT, MA_Advance);
 
     int32_t mousestatus = mouseReadAbs(&m_mousepos, &g_mouseAbs);
+#if !defined EDUKE32_TOUCH_DEVICES
+    int32_t const mouseStartupIgnore = mousestatus
+        && (int32_t)(m_redSplitMouseStartupIgnoreUntil - (int32_t)totalclock) > 0;
+
+    if (mouseStartupIgnore)
+    {
+        m_prevmousepos = m_mousepos;
+        m_mousedownpos = m_mousepos;
+        m_mousepos_initialized = 1;
+    }
+#else
+    int32_t const mouseStartupIgnore = 0;
+#endif
+    int32_t const mouseMoved = mousestatus && !mouseStartupIgnore && m_mousepos_initialized
+        && (m_mousepos.x != m_prevmousepos.x || m_mousepos.y != m_prevmousepos.y);
+    int32_t const mouseClicked = mousestatus
+        && (g_mouseClickState == MOUSE_PRESSED || g_mouseClickState == MOUSE_HELD || g_mouseClickState == MOUSE_RELEASED || MOUSE_GetButtons() != 0);
+    int32_t suppressMenuInput = 0;
+    m_redSplitMouseInputThisFrame = mouseMoved || mouseClicked;
+
+    if (mousestatus && !m_mousepos_initialized)
+    {
+        m_prevmousepos = m_mousepos;
+        m_mousedownpos = m_mousepos;
+        m_mousepos_initialized = 1;
+    }
+
     if (mousestatus && g_mouseClickState == MOUSE_PRESSED)
         m_mousedownpos = m_mousepos;
 
 #if !defined EDUKE32_TOUCH_DEVICES
+    if (Menu_RealityStartupLogoActive() && (mouseClicked || I_GeneralTrigger()))
+    {
+        Menu_SkipRealityStartupLogo();
+        suppressMenuInput = 1;
+    }
+
+    if (m_redSplitMouseConsumeLogoClick)
+    {
+        suppressMenuInput = 1;
+        m_mousecaught = 1;
+        I_GeneralTriggerClear();
+        I_ReturnTriggerClear();
+
+        if (g_mouseClickState == MOUSE_RELEASED)
+        {
+            g_mouseClickState = MOUSE_IDLE;
+            m_redSplitMouseConsumeLogoClickFrames = max<int32_t>(m_redSplitMouseConsumeLogoClickFrames, 2);
+        }
+        else if (g_mouseClickState == MOUSE_IDLE && MOUSE_GetButtons() == 0 && m_redSplitMouseConsumeLogoClickFrames > 0)
+            --m_redSplitMouseConsumeLogoClickFrames;
+
+        if (g_mouseClickState == MOUSE_IDLE && MOUSE_GetButtons() == 0 && m_redSplitMouseConsumeLogoClickFrames <= 0)
+        {
+            m_redSplitMouseConsumeLogoClick = 0;
+            suppressMenuInput = 0;
+        }
+    }
+
+    if (!suppressMenuInput && (mouseMoved || mouseClicked))
+    {
+        m_redSplitMouseHasRealActivity = 1;
+        m_mouselastactivity = (int32_t)totalclock;
+    }
+
     if (mousestatus && m_redSplitMouseHoverRefreshTicks > 0)
     {
         m_mousewake_watchpoint = 1;
@@ -11222,7 +11674,8 @@ void M_DisplayMenus(void)
     }
 #endif
 
-    Menu_RunInput(m_currentMenu);
+    if (!suppressMenuInput)
+        Menu_RunInput(m_currentMenu);
 
     g_player[myconnectindex].ps->gm &= (0xff-MODE_TYPE);
     // g_player[myconnectindex].ps->fta = 0;
@@ -11287,7 +11740,7 @@ void M_DisplayMenus(void)
             m_mousewake_watchpoint = 1;
 #endif
 
-        if (MOUSEACTIVECONDITIONAL(mouseAdvanceClickState()) || m_mousepos.x != m_prevmousepos.x || m_mousepos.y != m_prevmousepos.y)
+        if (MOUSEACTIVECONDITIONAL(mouseAdvanceClickState()) || mouseMoved || mouseClicked)
         {
             m_prevmousepos = m_mousepos;
             m_mouselastactivity = (int32_t) totalclock;
@@ -11310,7 +11763,7 @@ void M_DisplayMenus(void)
 
 #ifndef EDUKE32_TOUCH_DEVICES
     // Display the mouse cursor, except on touch devices.
-    if (MOUSEACTIVECONDITION)
+    if (m_redSplitMouseHasRealActivity && MOUSEACTIVECONDITION)
     {
         int32_t a = CROSSHAIR;
 

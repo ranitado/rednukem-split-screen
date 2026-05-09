@@ -67,6 +67,7 @@ enum RedSplitInputSource_t
 };
 
 extern int32_t g_redSplitPlayerInput[MAXPLAYERS];
+extern int32_t g_redSplitPlayerInputManual[MAXPLAYERS];
 extern int32_t g_redSplitLookSensitivityX[MAXPLAYERS];
 extern int32_t g_redSplitLookSensitivityY[MAXPLAYERS];
 extern int32_t g_redSplitInvertAim[MAXPLAYERS];
@@ -81,6 +82,8 @@ extern int32_t g_redSplitHudY2;
 extern int32_t g_redSplitQuoteTextDrawing;
 extern int32_t g_redSplitDeferHud;
 extern int32_t g_redSplitSuppressMenuDraw;
+extern int32_t g_redSplitSuppressGameplayFireFrames;
+extern int32_t g_redSplitSkipNextMenuLogo;
 extern int32_t g_redSplitExtraMenuPlayer;
 extern int32_t g_redSplitExtraMenuPage;
 extern int32_t g_redSplitExtraMenuSelection;
@@ -147,6 +150,7 @@ extern int32_t g_redSplitWeaponKickUnarmedOffsetX;
 extern int32_t g_redSplitWeaponAnchor;
 void RedSplit_SetPlayerCount(int32_t playerCount);
 void RedSplit_AssignInputsForPlayerCount(int32_t playerCount);
+void RedSplit_SuppressGameplayFireBriefly(void);
 void RedSplit_DisconnectPlayer(int32_t playerNum);
 void RedSplit_OpenExtraMenu(int32_t playerNum);
 void RedSplit_CloseExtraMenuForPlayer(int32_t playerNum);

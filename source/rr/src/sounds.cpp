@@ -642,6 +642,20 @@ static int32_t S_IsSplitPlayerSprite(int32_t const spriteNum)
     return 0;
 }
 
+static int32_t S_SplitPlayerForSprite(int32_t const spriteNum)
+{
+    if (g_fakeMultiMode < 2 || (unsigned)spriteNum >= MAXSPRITES)
+        return -1;
+
+    int32_t const playerCount = clamp<int32_t>(g_fakeMultiMode, 2, 4);
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+        if (g_player[playerNum].ps != nullptr && g_player[playerNum].ps->i == spriteNum)
+            return playerNum;
+
+    return -1;
+}
+
 static int32_t S_IsSplitPlayerManagedSound(int32_t const soundNum)
 {
     if (REALITY)
@@ -993,6 +1007,21 @@ int S_PlaySound(int num)
 int A_PlaySound(int soundNum, int spriteNum)
 {
     if (EDUKE32_PREDICT_FALSE((unsigned)soundNum > (unsigned)g_highestSoundIdx)) return -1;
+
+    if (REALITY && soundNum == 168)
+    {
+        static int32_t s_redSplitLastPainClock[MAXPLAYERS];
+        int32_t const playerNum = S_SplitPlayerForSprite(spriteNum);
+
+        if (playerNum >= 0)
+        {
+            if (s_redSplitLastPainClock[playerNum] != 0
+                && (int32_t)(totalclock - s_redSplitLastPainClock[playerNum]) < TICRATE * 2)
+                return -1;
+
+            s_redSplitLastPainClock[playerNum] = (int32_t)totalclock;
+        }
+    }
 
     if (g_fakeMultiMode >= 2 && (unsigned)spriteNum < MAXSPRITES && S_IsSplitPlayerSprite(spriteNum))
     {

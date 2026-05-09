@@ -41,6 +41,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # define GAMEEXEC_STATIC static
 #endif
 
+void M_RecordReplayCurrentLevelBabeSaved(int32_t count);
+
 vmstate_t vm;
 
 enum vmflags_t
@@ -70,6 +72,12 @@ double g_actorTotalMs[MAXTILES], g_actorMinMs[MAXTILES], g_actorMaxMs[MAXTILES];
 
 GAMEEXEC_STATIC void VM_Execute(native_t loop);
 GAMEEXEC_STATIC void RT_VM_Execute(native_t loop);
+
+static inline bool VM_RedSplitDeadPlayerManualRespawn(void)
+{
+    return REALITY && g_fakeMultiMode > 1 && vm.pPlayer != nullptr && vm.pSprite != nullptr
+        && vm.spriteNum == vm.pPlayer->i && vm.pPlayer->dead_flag != 0;
+}
 
 # include "gamestructures.cpp"
 
@@ -2482,7 +2490,8 @@ GAMEEXEC_STATIC void VM_Execute(native_t loop)
 
             case CON_RESETPLAYER:
                 insptr++;
-                vm.flags = VM_ResetPlayer(vm.playerNum, vm.flags);
+                if (!VM_RedSplitDeadPlayerManualRespawn())
+                    vm.flags = VM_ResetPlayer(vm.playerNum, vm.flags);
                 continue;
 
             case CON_IFCOOP:
@@ -2781,6 +2790,8 @@ GAMEEXEC_STATIC void VM_Execute(native_t loop)
 
             case CON_PSTOMP:
                 insptr++;
+                if (REALITY && g_fakeMultiMode > 1 && vm.pSprite->picnum == APLAYER)
+                    continue;
                 if (pPlayer->knee_incs == 0 && sprite[pPlayer->i].xrepeat >= (RR ? 9 : 40))
                     if (cansee(vm.pSprite->x, vm.pSprite->y, vm.pSprite->z - ZOFFSET6, vm.pSprite->sectnum, pPlayer->pos.x, pPlayer->pos.y,
                                pPlayer->pos.z + ZOFFSET2, sprite[pPlayer->i].sectnum))
@@ -3581,7 +3592,10 @@ GAMEEXEC_STATIC void RT_VM_Execute(native_t loop)
             case RT_CON_ADDKILLS:
                 insptr++;
                 if (sprite[vm.spriteNum].picnum == DN64TILE3805 || sprite[vm.spriteNum].picnum == DN64TILE3797 || sprite[vm.spriteNum].picnum == DN64TILE3821)
+                {
                     pPlayer->dn64_36e += *insptr;
+                    M_RecordReplayCurrentLevelBabeSaved(*insptr);
+                }
                 else
                     P_AddKills(pPlayer, *insptr);
                 insptr++;
@@ -3781,7 +3795,8 @@ GAMEEXEC_STATIC void RT_VM_Execute(native_t loop)
 
             case RT_CON_RESETPLAYER:
                 insptr++;
-                vm.flags = VM_ResetPlayer(vm.playerNum, vm.flags);
+                if (!VM_RedSplitDeadPlayerManualRespawn())
+                    vm.flags = VM_ResetPlayer(vm.playerNum, vm.flags);
                 continue;
 
             case RT_CON_IFONWATER:
@@ -4005,6 +4020,8 @@ GAMEEXEC_STATIC void RT_VM_Execute(native_t loop)
 
             case RT_CON_PSTOMP:
                 insptr++;
+                if (REALITY && g_fakeMultiMode > 1 && vm.pSprite->picnum == APLAYER)
+                    continue;
                 if (pPlayer->knee_incs == 0 && sprite[pPlayer->i].xrepeat >= 40)
                     if (cansee(vm.pSprite->x, vm.pSprite->y, vm.pSprite->z - ZOFFSET6, vm.pSprite->sectnum, pPlayer->pos.x, pPlayer->pos.y,
                                pPlayer->pos.z + ZOFFSET2, sprite[pPlayer->i].sectnum))

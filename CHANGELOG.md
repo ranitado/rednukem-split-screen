@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8
+
+* Reworks local split-screen death and respawn handling to follow the original single-player behavior more closely, fixing repeated instant deaths, dead-player state mixups, and player-vs-player stomp/squish issues in 3 and 4 player sessions.
+* Improves 3 and 4 player pause behavior, including player 1 pause priority, extra-player simplified menus, multi-menu handling, and short input suppression when opening the main pause menu.
+* Improves input assignment and persistence so disconnected or unassigned controllers/keyboards no longer overwrite configured player inputs automatically.
+* Improves startup/menu input handling, including intro skipping, mouse cursor visibility, accidental click/fire suppression, and Escape-to-quit from the main menu.
+* Restores more Duke Nukem 64 presentation in split-screen, including startup animations, babes, level menu navigation, and saved level progress details.
+* Adds more 2, 3, and 4 player HUD/weapon/menu tuning, including quarter-screen inventory, access card, weapon, kick, and level-result layout fixes.
+* Note: 3 and 4 player split-screen modes are still experimental and need more optimization; that work is planned for upcoming versions.
+
 ## v0.7
 
 * Improves 4 player quarter-screen HUD consistency, including health, armor, ammo, access cards, inventory item icons, item text, and square-aspect protection.

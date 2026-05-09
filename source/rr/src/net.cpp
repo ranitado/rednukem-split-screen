@@ -48,6 +48,7 @@ int32_t g_redSplitPlayerInput[MAXPLAYERS] = {
     RN_SPLIT_INPUT_PAD4,
     RN_SPLIT_INPUT_PAD5,
 };
+int32_t g_redSplitPlayerInputManual[MAXPLAYERS] = {};
 enet_uint16 g_netPort = 23513;
 int32_t g_netDisconnect = 0;
 char g_netPassword[32];
@@ -1953,9 +1954,13 @@ static void RedSplit_AssignInputSourceToPlayer(int32_t const playerNum, int32_t 
 
     for (int32_t i = 0; i < MAXPLAYERS; ++i)
         if (i != playerNum && g_redSplitPlayerInput[i] == inputSource)
+        {
             g_redSplitPlayerInput[i] = RN_SPLIT_INPUT_NONE;
+            g_redSplitPlayerInputManual[i] = 0;
+        }
 
     g_redSplitPlayerInput[playerNum] = inputSource;
+    g_redSplitPlayerInputManual[playerNum] = 0;
 }
 
 static int32_t RedSplit_AssignInputToPlayerNeedingInput(int32_t const inputSource)
@@ -1975,6 +1980,28 @@ static int32_t RedSplit_AssignInputToPlayerNeedingInput(int32_t const inputSourc
     }
 
     return 0;
+}
+
+static void RedSplit_PruneAutomaticDuplicateInputs(void)
+{
+    int32_t const playerCount = RedSplit_CurrentPlayerCount();
+
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+    {
+        int32_t const inputSource = g_redSplitPlayerInput[playerNum];
+        if (inputSource == RN_SPLIT_INPUT_NONE || g_redSplitPlayerInputManual[playerNum])
+            continue;
+
+        for (int32_t previousPlayer = 0; previousPlayer < playerNum; ++previousPlayer)
+        {
+            if (g_redSplitPlayerInput[previousPlayer] != inputSource)
+                continue;
+
+            g_redSplitPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
+            g_redSplitPlayerInputManual[playerNum] = 0;
+            break;
+        }
+    }
 }
 
 static int32_t RedSplit_JoinPlayerWithPad(int32_t const padIndex)
@@ -2030,6 +2057,8 @@ static int32_t RedSplit_PollUnassignedKbmInput(void)
 
 static int32_t RedSplit_PollUnassignedPadJoins(void)
 {
+    RedSplit_PruneAutomaticDuplicateInputs();
+
     int32_t const padCount = min<int32_t>(joyGetConnectedGamepadCount(), (int32_t)ARRAY_SIZE(s_redSplitPrevJoinPadBits));
     int32_t handled = RedSplit_PollUnassignedKbmInput();
 

@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define actors_c_
 
 #include "duke3d.h"
+#include "cmdline.h"
 
 #if KRANDDEBUG
 # define ACTOR_STATIC
@@ -995,6 +996,16 @@ int A_IncurDamage(int const spriteNum)
 
         int const playerNum = P_GetP(pSprite);
 
+        if (REALITY && g_fakeMultiMode > 1)
+        {
+            if ((unsigned)playerNum >= MAXPLAYERS || g_player[playerNum].ps == nullptr || g_player[playerNum].ps->i != spriteNum
+                || g_player[playerNum].ps->dead_flag != 0 || pSprite->extra <= 0)
+            {
+                pActor->extra = -1;
+                return -1;
+            }
+        }
+
         if (pActor->owner >= 0 && (sprite[pActor->owner].picnum == APLAYER))
         {
             if (
@@ -1151,7 +1162,8 @@ ACTOR_STATIC void G_MovePlayers(void)
     {
         int const           nextSprite = nextspritestat[spriteNum];
         spritetype *const   pSprite    = &sprite[spriteNum];
-        DukePlayer_t *const pPlayer    = g_player[P_GetP(pSprite)].ps;
+        int const           playerNum  = P_GetP(pSprite);
+        DukePlayer_t *const pPlayer    = g_player[playerNum].ps;
 
         if (pSprite->owner >= 0)
         {
@@ -1180,23 +1192,23 @@ ACTOR_STATIC void G_MovePlayers(void)
                     pPlayer->on_warping_sector = 1;
 
                     if ((sectorLotag == ST_1_ABOVE_WATER ?
-                        P_Submerge(spriteNum, P_GetP(pSprite), pPlayer, playerSectnum, otherSector) :
-                        P_Emerge(spriteNum, P_GetP(pSprite), pPlayer, playerSectnum, otherSector)) == 1)
+                        P_Submerge(spriteNum, playerNum, pPlayer, playerSectnum, otherSector) :
+                        P_Emerge(spriteNum, playerNum, pPlayer, playerSectnum, otherSector)) == 1)
                         P_FinishWaterChange(spriteNum, pPlayer, sectorLotag, -1, otherSector);
                 }
 #endif
                 if (g_netServer || ud.multimode > 1)
-                    otherp = P_FindOtherPlayer(P_GetP(pSprite), &otherPlayerDist);
+                    otherp = P_FindOtherPlayer(playerNum, &otherPlayerDist);
                 else
                 {
-                    otherp = P_GetP(pSprite);
+                    otherp = playerNum;
                     otherPlayerDist = 0;
                 }
 
                 if (G_HaveActor(sprite[spriteNum].picnum))
-                    A_Execute(spriteNum, P_GetP(pSprite), otherPlayerDist);
+                    A_Execute(spriteNum, playerNum, otherPlayerDist);
 
-                if (g_netServer || ud.multimode > 1)
+                if ((g_netServer || ud.multimode > 1) && !(REALITY && g_fakeMultiMode > 1))
                 {
                     if (sprite[g_player[otherp].ps->i].extra > 0)
                     {
