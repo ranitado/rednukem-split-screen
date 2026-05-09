@@ -256,6 +256,48 @@ static void Menu_DrawSaveInfoLine(vec2_t const origin, int32_t const line, char 
     mgametext(origin.x + (4 << 16), origin.y + ((150 + line * 10) << 16), text);
 }
 
+static int32_t Menu_ReadReplayGameModePath(char const * const fn)
+{
+    if (fn == nullptr || fn[0] == '\0')
+        return -1;
+
+    char progressMeta[BMAX_PATH + 16];
+    Bsnprintf(progressMeta, sizeof(progressMeta), "%s.progress", fn);
+
+    BFILE * const fp = Bfopen(progressMeta, "rb");
+    if (fp == nullptr)
+        return -1;
+
+    int32_t gameMode = -1;
+    char line[160] = {};
+
+    while (Bfgets(line, sizeof(line), fp) != nullptr)
+    {
+        int32_t mode = 0;
+        if (Bsscanf(line, "mode %d", &mode) == 1)
+        {
+            gameMode = mode != 0 ? 1 : 0;
+            break;
+        }
+    }
+
+    Bfclose(fp);
+    return gameMode;
+}
+
+static int32_t Menu_ReadReplayGameMode(char const * const fn)
+{
+    int32_t mode = Menu_ReadReplayGameModePath(fn);
+    if (mode >= 0)
+        return mode;
+
+    char modPath[BMAX_PATH];
+    if (G_ModDirSnprintf(modPath, sizeof(modPath), "%s", fn) == 0)
+        mode = Menu_ReadReplayGameModePath(modPath);
+
+    return mode;
+}
+
 static int32_t Menu_ReadReplayProgressSecretTotalPath(char const * const fn)
 {
     if (fn == nullptr || fn[0] == '\0')
@@ -340,6 +382,12 @@ static void Menu_DrawSaveInfo(vec2_t const origin, int32_t const players, int32_
         Bsnprintf(buf, sizeof(buf), "Players: %d", players);
         Menu_DrawSaveInfoLine(origin, line++, buf);
     }
+
+    int32_t const gameMode = savePath != nullptr && savePath[0] != '\0'
+        ? Menu_ReadReplayGameMode(savePath)
+        : g_redSplitDukeMatchMode;
+    Bsnprintf(buf, sizeof(buf), "Mode: %s", gameMode > 0 ? "Dukematch" : "Campaign");
+    Menu_DrawSaveInfoLine(origin, line++, buf);
 
     Bsnprintf(buf, sizeof(buf), "Level: %s", Menu_SaveInfoLevelName(volumeNum, levelNum));
     Menu_DrawSaveInfoLine(origin, line++, buf);
@@ -6990,7 +7038,7 @@ static void Menu_GetCurrentCampaignBabes(int32_t * const babes, int32_t * const 
         *maxBabes = maxSaved;
 }
 
-static int32_t Menu_ReadReplayProgressMetadataPath(char const * const fn)
+static int32_t Menu_ReadReplayProgressMetadataPath(char const * const fn, int32_t * const gameMode)
 {
     if (fn == nullptr || fn[0] == '\0')
         return -1;
@@ -7007,6 +7055,14 @@ static int32_t Menu_ReadReplayProgressMetadataPath(char const * const fn)
 
     while (Bfgets(line, sizeof(line), fp) != nullptr)
     {
+        int32_t mode = 0;
+        if (Bsscanf(line, "mode %d", &mode) == 1)
+        {
+            if (gameMode != nullptr)
+                *gameMode = mode != 0 ? 1 : 0;
+            continue;
+        }
+
         int32_t addon = 0;
         if (Bsscanf(line, "addon %d", &addon) == 1)
         {
@@ -7077,13 +7133,18 @@ static int32_t Menu_ReadReplayProgressMetadataPath(char const * const fn)
 void M_LoadReplayProgressMetadata(char const *fn)
 {
     M_ResetReplayCampaignProgress();
+    int32_t gameMode = 0;
 
-    if (Menu_ReadReplayProgressMetadataPath(fn) == 0)
+    if (Menu_ReadReplayProgressMetadataPath(fn, &gameMode) == 0)
+    {
+        g_redSplitDukeMatchMode = gameMode;
         return;
+    }
 
     char modPath[BMAX_PATH];
     if (G_ModDirSnprintf(modPath, sizeof(modPath), "%s", fn) == 0)
-        Menu_ReadReplayProgressMetadataPath(modPath);
+        Menu_ReadReplayProgressMetadataPath(modPath, &gameMode);
+    g_redSplitDukeMatchMode = gameMode;
 }
 
 void M_WriteReplayProgressMetadata(char const *fn)
@@ -7101,6 +7162,7 @@ void M_WriteReplayProgressMetadata(char const *fn)
         return;
 
     Bfprintf(fp, "addon %d\n", g_addonNum);
+    Bfprintf(fp, "mode %d\n", g_redSplitDukeMatchMode ? 1 : 0);
 
     for (int32_t volumeIndex = 0; volumeIndex < MAXVOLUMES; ++volumeIndex)
     {
