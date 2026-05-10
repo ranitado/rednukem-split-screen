@@ -1102,6 +1102,29 @@ static void VM_AddWeapon(DukePlayer_t * const pPlayer, int const weaponNum, int 
         P_AddWeapon(pPlayer, weaponNum);
 }
 
+static int32_t VM_GetWeaponForPickupSprite(int32_t const picnum)
+{
+    switch (DYNAMICTILEMAP(picnum))
+    {
+        case FIRSTGUNSPRITE__STATIC:   return PISTOL_WEAPON;
+        case SHOTGUNSPRITE__STATIC:    return SHOTGUN_WEAPON;
+        case CHAINGUNSPRITE__STATIC:   return CHAINGUN_WEAPON;
+        case RPGSPRITE__STATIC:        return RPG_WEAPON;
+        case HEAVYHBOMB__STATIC:       return HANDBOMB_WEAPON;
+        case SHRINKERSPRITE__STATIC:   return SHRINKER_WEAPON;
+        case DEVISTATORSPRITE__STATIC: return DEVISTATOR_WEAPON;
+        case TRIPBOMBSPRITE__STATIC:   return TRIPBOMB_WEAPON;
+        case FREEZESPRITE__STATIC:     return FREEZE_WEAPON;
+        default:                       return -1;
+    }
+}
+
+static int32_t VM_ShouldBlockWeaponStayPickup(DukePlayer_t const * const pPlayer, int32_t const pickupPicnum)
+{
+    int32_t const weaponNum = VM_GetWeaponForPickupSprite(pickupPicnum);
+    return weaponNum < 0 || pPlayer->ammo_amount[weaponNum] > 0;
+}
+
 static void VM_AddAmmo(DukePlayer_t * const pPlayer, int const weaponNum, int const nAmount)
 {
     if (EDUKE32_PREDICT_FALSE((unsigned)weaponNum >= MAX_WEAPONS))
@@ -1796,7 +1819,7 @@ GAMEEXEC_STATIC void VM_Execute(native_t loop)
                             if (pPlayer->weaprecs[j] == vm.pSprite->picnum)
                                 break;
 
-                        VM_CONDITIONAL(j < pPlayer->weapreccnt && vm.pSprite->owner == vm.spriteNum);
+                        VM_CONDITIONAL(j < pPlayer->weapreccnt && vm.pSprite->owner == vm.spriteNum && VM_ShouldBlockWeaponStayPickup(pPlayer, vm.pSprite->picnum));
                         continue;
                     }
                     else if (pPlayer->weapreccnt < MAX_WEAPON_RECS-1)
@@ -3421,7 +3444,7 @@ GAMEEXEC_STATIC void RT_VM_Execute(native_t loop)
                             if (pPlayer->weaprecs[j] == vm.pSprite->picnum)
                                 break;
 
-                        RT_VM_CONDITIONAL(j < pPlayer->weapreccnt && vm.pSprite->owner == vm.spriteNum);
+                        RT_VM_CONDITIONAL(j < pPlayer->weapreccnt && vm.pSprite->owner == vm.spriteNum && VM_ShouldBlockWeaponStayPickup(pPlayer, vm.pSprite->picnum));
                         continue;
                     }
                     else if (pPlayer->weapreccnt < MAX_WEAPON_RECS-1)

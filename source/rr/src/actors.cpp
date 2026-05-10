@@ -6300,14 +6300,16 @@ DETONATEB:
                     {
                         if ((g_gametypeFlags[ud.coop] & GAMETYPE_WEAPSTAY) && (RR || pSprite->owner == spriteNum))
                         {
+                            int32_t const weaponStayRecord = (RR || REALITY) ? spriteNum : pSprite->picnum;
+
                             for (bssize_t j = 0; j < pPlayer->weapreccnt; j++)
                             {
-                                if (pPlayer->weaprecs[j] == (RR ? spriteNum : pSprite->picnum))
+                                if (pPlayer->weaprecs[j] == weaponStayRecord && pPlayer->ammo_amount[HANDBOMB_WEAPON] > 0)
                                     goto next_sprite;
                             }
 
                             if (pPlayer->weapreccnt < MAX_WEAPON_RECS-1)
-                                pPlayer->weaprecs[pPlayer->weapreccnt++] = (RR ? spriteNum : pSprite->picnum);
+                                pPlayer->weaprecs[pPlayer->weapreccnt++] = weaponStayRecord;
                         }
 
                         P_AddAmmo(pPlayer, HANDBOMB_WEAPON, 1);
@@ -6334,7 +6336,8 @@ DETONATEB:
                         if ((RR && actor[pSprite->owner].picnum != HEAVYHBOMB) || (!RR && pSprite->owner != spriteNum)
                             || ud.respawn_items == 0)
                         {
-                            if ((!RR || (pSprite->picnum == HEAVYHBOMB && sprite[pSprite->owner].picnum != APLAYER)) && (RR || pSprite->owner == spriteNum) && (g_gametypeFlags[ud.coop] & GAMETYPE_WEAPSTAY))
+                            if (!(REALITY && g_fakeMultiMode > 1) &&
+                                (!RR || (pSprite->picnum == HEAVYHBOMB && sprite[pSprite->owner].picnum != APLAYER)) && (RR || pSprite->owner == spriteNum) && (g_gametypeFlags[ud.coop] & GAMETYPE_WEAPSTAY))
                                 goto next_sprite;
                             DELETE_SPRITE_AND_CONTINUE(spriteNum);
                         }

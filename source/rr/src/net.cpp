@@ -4332,6 +4332,13 @@ void Net_ReceiveUserMapName(uint8_t *pbuf, int32_t packbufleng)
 
 void Net_SendMessage(void)
 {
+    if (g_fakeMultiMode > 1 && g_netServer == NULL && g_netClient == NULL)
+    {
+        g_player[myconnectindex].ps->gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
+        typebuf[0] = 0;
+        g_chatPlayer = -1;
+        return;
+    }
 
     if (g_player[myconnectindex].ps->gm&MODE_SENDTOWHOM)
     {

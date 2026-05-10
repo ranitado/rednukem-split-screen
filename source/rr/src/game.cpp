@@ -9030,7 +9030,7 @@ void G_HandleLocalKeys(void)
 
     if (!ALT_IS_PRESSED && !SHIFTS_IS_PRESSED && !WIN_IS_PRESSED)
     {
-        if ((g_netServer || ud.multimode > 1) && BUTTON(gamefunc_SendMessage))
+        if ((g_netServer || (ud.multimode > 1 && g_fakeMultiMode <= 1)) && BUTTON(gamefunc_SendMessage))
         {
             KB_FlushKeyboardQueue();
             CONTROL_ClearButton(gamefunc_SendMessage);

@@ -68,7 +68,10 @@ static int32_t P_RedSplitManualRespawnPressed(int32_t const playerNum)
     }
 
     if (g_redSplitRespawnOpenWasDown[playerNum])
+    {
+        g_player[playerNum].inputBits->bits &= ~BIT(SK_OPEN);
         return 0;
+    }
 
     g_redSplitRespawnOpenWasDown[playerNum] = 1;
     g_player[playerNum].inputBits->bits &= ~BIT(SK_OPEN);

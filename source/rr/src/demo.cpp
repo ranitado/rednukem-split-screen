@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "savegame.h"
 #include "input.h"
 #include "screens.h"
+#include "cmdline.h"
 
 char g_firstDemoFile[BMAX_PATH];
 
@@ -1088,7 +1089,7 @@ nextdemo_nomenu:
                 if (ud.recstat != 2)
                     M_DisplayMenus();
 
-                if ((g_netServer || ud.multimode > 1)  && !Menu_IsTextInput(m_currentMenu))
+                if ((g_netServer || (ud.multimode > 1 && g_fakeMultiMode <= 1))  && !Menu_IsTextInput(m_currentMenu))
                 {
                     ControlInfo noshareinfo;
                     CONTROL_GetInput(&noshareinfo);
