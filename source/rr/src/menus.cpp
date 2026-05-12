@@ -5719,6 +5719,19 @@ static int32_t RedSplit_MenuInputUsedByEarlierPlayerStrict(int32_t const inputSo
     return 0;
 }
 
+static int32_t RedSplit_MenuInputUsedByAnyActivePlayer(int32_t const inputSource, int32_t const playerCount)
+{
+    if (inputSource == RN_SPLIT_INPUT_NONE)
+        return 0;
+
+    int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
+    for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
+        if (g_redSplitPlayerInput[playerNum] == inputSource)
+            return 1;
+
+    return 0;
+}
+
 static int32_t RedSplit_MenuKeyboardMouseActive(void)
 {
     return MOUSE_GetButtons() != 0
@@ -5780,16 +5793,8 @@ static void RedSplit_AssignLastMenuPadForPlayerCount(int32_t const playerCount)
 
     int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
 
-    for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
-    {
-        if (g_redSplitPlayerInput[playerNum] == inputSource)
-        {
-            if (inputSource == RN_SPLIT_INPUT_KBM && playerNum != 0)
-                break;
-
-            return;
-        }
-    }
+    if (RedSplit_MenuInputUsedByAnyActivePlayer(inputSource, clampedPlayerCount))
+        return;
 
     int32_t targetPlayer = inputSource == RN_SPLIT_INPUT_KBM ? 0 : -1;
     if (targetPlayer < 0)
@@ -5820,31 +5825,55 @@ static void RedSplit_AssignLastMenuPadForPlayerCount(int32_t const playerCount)
 
 static void RedSplit_ClearUnavailableInputsForCurrentGame(int32_t const playerCount)
 {
-    if (joyGetConnectedGamepadCount() > 0 || g_redSplitPlayerInput[0] != RN_SPLIT_INPUT_KBM)
-        return;
-
     int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
-    for (int32_t playerNum = 1; playerNum < clampedPlayerCount; ++playerNum)
+    for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
     {
+        int32_t const padIndex = RedSplit_MenuInputSourceToPad(g_redSplitPlayerInput[playerNum]);
+        if (padIndex < 0)
+            continue;
+
+        if (RedSplit_MenuInputSourceConnected(g_redSplitPlayerInput[playerNum]))
+            continue;
+
         g_redSplitPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
         g_redSplitPlayerInputManual[playerNum] = 0;
     }
 }
 
-static int32_t RedSplit_MenuFindAvailableInput(int32_t const playerNum)
+static void RedSplit_PruneDuplicateInputsForCurrentGame(int32_t const playerCount)
 {
-    if (playerNum == 0 && !RedSplit_MenuInputUsedByEarlierPlayerStrict(RN_SPLIT_INPUT_KBM, playerNum))
-        return RN_SPLIT_INPUT_KBM;
+    int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
 
-    int32_t const padCount = min<int32_t>(joyGetConnectedGamepadCount(), RN_SPLIT_INPUT_PAD5 - RN_SPLIT_INPUT_PAD1 + 1);
-    for (int32_t padIndex = 0; padIndex < padCount; ++padIndex)
+    for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
     {
-        int32_t const inputSource = RedSplit_MenuPadToInputSource(padIndex);
-        if (!RedSplit_MenuInputUsedByEarlierPlayerStrict(inputSource, playerNum))
-            return inputSource;
-    }
+        int32_t const inputSource = g_redSplitPlayerInput[playerNum];
+        if (inputSource == RN_SPLIT_INPUT_NONE)
+            continue;
 
-    if (!RedSplit_MenuInputUsedByEarlierPlayerStrict(RN_SPLIT_INPUT_KBM, playerNum))
+        for (int32_t otherPlayer = playerNum + 1; otherPlayer < clampedPlayerCount; ++otherPlayer)
+        {
+            if (g_redSplitPlayerInput[otherPlayer] != inputSource)
+                continue;
+
+            if (!g_redSplitPlayerInputManual[playerNum] && g_redSplitPlayerInputManual[otherPlayer])
+            {
+                g_redSplitPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
+                g_redSplitPlayerInputManual[playerNum] = 0;
+                break;
+            }
+
+            if (!g_redSplitPlayerInputManual[otherPlayer])
+            {
+                g_redSplitPlayerInput[otherPlayer] = RN_SPLIT_INPUT_NONE;
+                g_redSplitPlayerInputManual[otherPlayer] = 0;
+            }
+        }
+    }
+}
+
+static int32_t RedSplit_MenuFindAvailableInput(int32_t const playerNum, int32_t const playerCount)
+{
+    if (playerNum == 0 && !RedSplit_MenuInputUsedByAnyActivePlayer(RN_SPLIT_INPUT_KBM, playerCount))
         return RN_SPLIT_INPUT_KBM;
 
     return RN_SPLIT_INPUT_NONE;
@@ -5856,6 +5885,7 @@ void RedSplit_AssignInputsForPlayerCount(int32_t playerCount)
 
     RedSplit_AssignLastMenuPadForPlayerCount(playerCount);
     RedSplit_ClearUnavailableInputsForCurrentGame(playerCount);
+    RedSplit_PruneDuplicateInputsForCurrentGame(playerCount);
 
     for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
     {
@@ -5864,7 +5894,7 @@ void RedSplit_AssignInputsForPlayerCount(int32_t playerCount)
         if (inputSource != RN_SPLIT_INPUT_NONE && !RedSplit_MenuInputUsedByEarlierPlayer(inputSource, playerNum))
             continue;
 
-        g_redSplitPlayerInput[playerNum] = RedSplit_MenuFindAvailableInput(playerNum);
+        g_redSplitPlayerInput[playerNum] = RedSplit_MenuFindAvailableInput(playerNum, playerCount);
         g_redSplitPlayerInputManual[playerNum] = 0;
     }
 
