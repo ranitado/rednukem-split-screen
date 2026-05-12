@@ -825,7 +825,7 @@ static MenuEntry_t ME_NEWGAMEMODE_SINGLE = MAKE_MENUENTRY( "Single Player", &MF_
 static MenuLink_t MEO_NEWGAMEMODE_DUKEMATCH = { MENU_DUKEMATCHSETUP, MA_Advance, };
 static MenuEntry_t ME_NEWGAMEMODE_DUKEMATCH = MAKE_MENUENTRY( "Duke Match", &MF_Redfont, &MEF_CenterMenu, &MEO_NEWGAMEMODE_DUKEMATCH, Link );
 static MenuLink_t MEO_NEWGAMEMODE_COOP = { MENU_COOPPLAYERS, MA_Advance, };
-static MenuEntry_t ME_NEWGAMEMODE_COOP = MAKE_MENUENTRY( "Coop", &MF_Redfont, &MEF_CenterMenu, &MEO_NEWGAMEMODE_COOP, Link );
+static MenuEntry_t ME_NEWGAMEMODE_COOP = MAKE_MENUENTRY( "Cooperative", &MF_Redfont, &MEF_CenterMenu, &MEO_NEWGAMEMODE_COOP, Link );
 static MenuEntry_t *MEL_NEWGAMEMODE[] = {
     &ME_NEWGAMEMODE_SINGLE,
     &ME_NEWGAMEMODE_COOP,
@@ -2089,7 +2089,7 @@ static MenuEntry_t *MEL_DHWEAPON[] = {
 static MenuMenu_t M_MAIN = MAKE_MENUMENU( NoTitle, &MMF_Top_Main, MEL_MAIN );
 static MenuMenu_t M_MAIN_INGAME = MAKE_MENUMENU( NoTitle, &MMF_Top_MainInGame, MEL_MAIN_INGAME );
 static MenuMenu_t M_NEWGAMEMODE = MAKE_MENUMENU( "Select Mode", &MMF_NewGameMode, MEL_NEWGAMEMODE );
-static MenuMenu_t M_COOPPLAYERS = MAKE_MENUMENU( "Coop Players", &MMF_Top_Episode, MEL_COOPPLAYERS );
+static MenuMenu_t M_COOPPLAYERS = MAKE_MENUMENU( "Cooperative Players", &MMF_Top_Episode, MEL_COOPPLAYERS );
 static MenuMenu_t M_DUKEMATCHSETUP = MAKE_MENUMENU( "Dukematch Options", &MMF_DukeMatchOptions, MEL_DUKEMATCHSETUP );
 static MenuMenu_t M_EPISODE = MAKE_MENUMENU( "Select An Episode", &MMF_Top_Episode, MEL_EPISODE );
 static MenuMenu_t M_SKILL = MAKE_MENUMENU( "Select Skill", &MMF_Top_Skill, MEL_SKILL );
@@ -5719,6 +5719,15 @@ static int32_t RedSplit_MenuInputUsedByEarlierPlayerStrict(int32_t const inputSo
     return 0;
 }
 
+static int32_t RedSplit_MenuKeyboardMouseActive(void)
+{
+    return MOUSE_GetButtons() != 0
+        || KB_KeyWaiting()
+        || KB_KeyPressed(sc_Enter)
+        || KB_KeyPressed(sc_kpad_Enter)
+        || KB_KeyPressed(sc_Space);
+}
+
 static void RedSplit_PollGlobalMenuPads(void)
 {
     int32_t const padCount = min<int32_t>(joyGetConnectedGamepadCount(), (int32_t)ARRAY_SIZE(s_redSplitGlobalMenuPadButtons));
@@ -5750,6 +5759,9 @@ static void RedSplit_PollGlobalMenuPads(void)
 
 static int32_t RedSplit_LastMenuPadInputSource(void)
 {
+    if (joyGetConnectedGamepadCount() == 0 || CONTROL_LastSeenInput != LastSeenInput::Joystick || RedSplit_MenuKeyboardMouseActive())
+        return RN_SPLIT_INPUT_KBM;
+
     if (s_redSplitLastMenuPad < 0)
         return RN_SPLIT_INPUT_NONE;
 
@@ -5769,21 +5781,31 @@ static void RedSplit_AssignLastMenuPadForPlayerCount(int32_t const playerCount)
     int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
 
     for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
-        if (g_redSplitPlayerInput[playerNum] == inputSource)
-            return;
-
-    int32_t targetPlayer = -1;
-    for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
     {
-        if (g_redSplitPlayerInput[playerNum] == RN_SPLIT_INPUT_NONE)
+        if (g_redSplitPlayerInput[playerNum] == inputSource)
         {
-            targetPlayer = playerNum;
-            break;
+            if (inputSource == RN_SPLIT_INPUT_KBM && playerNum != 0)
+                break;
+
+            return;
         }
     }
 
+    int32_t targetPlayer = inputSource == RN_SPLIT_INPUT_KBM ? 0 : -1;
     if (targetPlayer < 0)
-        targetPlayer = 0;
+    {
+        for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
+        {
+            if (g_redSplitPlayerInput[playerNum] == RN_SPLIT_INPUT_NONE)
+            {
+                targetPlayer = playerNum;
+                break;
+            }
+        }
+
+        if (targetPlayer < 0)
+            targetPlayer = 0;
+    }
 
     for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
         if (playerNum != targetPlayer && g_redSplitPlayerInput[playerNum] == inputSource)
@@ -5794,6 +5816,19 @@ static void RedSplit_AssignLastMenuPadForPlayerCount(int32_t const playerCount)
 
     g_redSplitPlayerInput[targetPlayer] = inputSource;
     g_redSplitPlayerInputManual[targetPlayer] = 0;
+}
+
+static void RedSplit_ClearUnavailableInputsForCurrentGame(int32_t const playerCount)
+{
+    if (joyGetConnectedGamepadCount() > 0 || g_redSplitPlayerInput[0] != RN_SPLIT_INPUT_KBM)
+        return;
+
+    int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
+    for (int32_t playerNum = 1; playerNum < clampedPlayerCount; ++playerNum)
+    {
+        g_redSplitPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
+        g_redSplitPlayerInputManual[playerNum] = 0;
+    }
 }
 
 static int32_t RedSplit_MenuFindAvailableInput(int32_t const playerNum)
@@ -5820,6 +5855,7 @@ void RedSplit_AssignInputsForPlayerCount(int32_t playerCount)
     playerCount = clamp<int32_t>(playerCount, 1, 4);
 
     RedSplit_AssignLastMenuPadForPlayerCount(playerCount);
+    RedSplit_ClearUnavailableInputsForCurrentGame(playerCount);
 
     for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
     {

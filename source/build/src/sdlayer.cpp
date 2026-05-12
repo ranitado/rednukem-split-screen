@@ -947,6 +947,23 @@ void joyScanDevices()
             if (!openedController)
                 continue;
 
+            SDL_JoystickID const instanceId = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(openedController));
+            int duplicateController = 0;
+            for (int j = 0; j < numGameControllers; ++j)
+            {
+                if (gameControllerInstanceIds[j] != instanceId)
+                    continue;
+
+                duplicateController = 1;
+                break;
+            }
+
+            if (duplicateController)
+            {
+                SDL_GameControllerClose(openedController);
+                continue;
+            }
+
             if (numGameControllers >= MAX_LOCAL_GAMEPADS)
             {
                 SDL_GameControllerClose(openedController);
@@ -954,7 +971,7 @@ void joyScanDevices()
             }
 
             gameControllers[numGameControllers] = openedController;
-            gameControllerInstanceIds[numGameControllers] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(openedController));
+            gameControllerInstanceIds[numGameControllers] = instanceId;
 
 #if SDL_VERSION_ATLEAST(2, 0, 14)
             if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 14))
@@ -2568,7 +2585,7 @@ int32_t handleevents_sdlcommon(SDL_Event *ev)
 #if SDL_MAJOR_VERSION >= 2
         case SDL_CONTROLLERDEVICEADDED:
         case SDL_CONTROLLERDEVICEREMOVED:
-            if (g_controllerHotplugCallback && SDL_NumJoysticks() != numjoysticks)
+            if (g_controllerHotplugCallback)
                 g_controllerHotplugCallback();
             break;
 #endif

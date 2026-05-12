@@ -2306,6 +2306,9 @@ static void RedSplit_BuildGamepadInput(int32_t playerNum, int32_t padIndex, inpu
 {
     Bmemset(out, 0, sizeof(input_t));
 
+    if (padIndex < 0 || padIndex >= joyGetConnectedGamepadCount())
+        return;
+
     gamepadstate_t state;
     if (joyGetGamepadState(padIndex, &state) < 0)
         return;
