@@ -30,6 +30,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "input.h"
 #include "cmdline.h"
 #include "menus.h"
+#include "config.h"
 
 #include "enet.h"
 #include "lz4.h"
@@ -50,6 +51,15 @@ int32_t g_redSplitPlayerInput[MAXPLAYERS] = {
     RN_SPLIT_INPUT_PAD5,
 };
 int32_t g_redSplitPlayerInputManual[MAXPLAYERS] = {};
+int32_t g_redSplitSavedPlayerInput[MAXPLAYERS] = {
+    RN_SPLIT_INPUT_KBM,
+    RN_SPLIT_INPUT_PAD1,
+    RN_SPLIT_INPUT_PAD2,
+    RN_SPLIT_INPUT_PAD3,
+    RN_SPLIT_INPUT_PAD4,
+    RN_SPLIT_INPUT_PAD5,
+};
+int32_t g_redSplitSavedPlayerInputManual[MAXPLAYERS] = {};
 enet_uint16 g_netPort = 23513;
 int32_t g_netDisconnect = 0;
 char g_netPassword[32];
@@ -1873,6 +1883,19 @@ static int32_t RedSplit_PlayerForInputSource(int32_t const inputSource)
     return -1;
 }
 
+static int32_t RedSplit_PlayerForInputSourceInCurrentGame(int32_t const inputSource)
+{
+    if (inputSource == RN_SPLIT_INPUT_NONE)
+        return -1;
+
+    int32_t const playerCount = RedSplit_CurrentPlayerCount();
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+        if (g_redSplitPlayerInput[playerNum] == inputSource)
+            return playerNum;
+
+    return -1;
+}
+
 void RedSplit_ResetInputLatches(void)
 {
     Bmemset(s_redSplitPrevMenuBits, 0, sizeof(s_redSplitPrevMenuBits));
@@ -1957,19 +1980,24 @@ static void RedSplit_AssignInputSourceToPlayer(int32_t const playerNum, int32_t 
         return;
 
     for (int32_t i = 0; i < MAXPLAYERS; ++i)
-        if (i != playerNum && g_redSplitPlayerInput[i] == inputSource)
+        if (i != playerNum && g_redSplitSavedPlayerInput[i] == inputSource)
         {
+            g_redSplitSavedPlayerInput[i] = RN_SPLIT_INPUT_NONE;
+            g_redSplitSavedPlayerInputManual[i] = 0;
             g_redSplitPlayerInput[i] = RN_SPLIT_INPUT_NONE;
             g_redSplitPlayerInputManual[i] = 0;
         }
 
+    g_redSplitSavedPlayerInput[playerNum] = inputSource;
+    g_redSplitSavedPlayerInputManual[playerNum] = 1;
     g_redSplitPlayerInput[playerNum] = inputSource;
-    g_redSplitPlayerInputManual[playerNum] = 0;
+    g_redSplitPlayerInputManual[playerNum] = 1;
+    CONFIG_WriteRedSplitPlayerInput();
 }
 
 static int32_t RedSplit_AssignInputToPlayerNeedingInput(int32_t const inputSource)
 {
-    if (RedSplit_PlayerForInputSource(inputSource) >= 0)
+    if (RedSplit_PlayerForInputSourceInCurrentGame(inputSource) >= 0)
         return 0;
 
     int32_t const playerCount = RedSplit_CurrentPlayerCount();

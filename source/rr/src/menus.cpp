@@ -1273,10 +1273,10 @@ static MenuEntry_t *MEL_CONTROLS[] = {
 static char const *MEOSN_PLAYERINPUT_SOURCE[] = { "None", "KB/Mouse", "Pad 1", "Pad 2", "Pad 3", "Pad 4", "Pad 5" };
 static int32_t MEOSV_PLAYERINPUT_SOURCE[] = { RN_SPLIT_INPUT_NONE, RN_SPLIT_INPUT_KBM, RN_SPLIT_INPUT_PAD1, RN_SPLIT_INPUT_PAD2, RN_SPLIT_INPUT_PAD3, RN_SPLIT_INPUT_PAD4, RN_SPLIT_INPUT_PAD5 };
 static MenuOptionSet_t MEOS_PLAYERINPUT_SOURCE = MAKE_MENUOPTIONSET(MEOSN_PLAYERINPUT_SOURCE, MEOSV_PLAYERINPUT_SOURCE, 0x2);
-static MenuOption_t MEO_PLAYERINPUT_P1 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitPlayerInput[0]);
-static MenuOption_t MEO_PLAYERINPUT_P2 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitPlayerInput[1]);
-static MenuOption_t MEO_PLAYERINPUT_P3 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitPlayerInput[2]);
-static MenuOption_t MEO_PLAYERINPUT_P4 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitPlayerInput[3]);
+static MenuOption_t MEO_PLAYERINPUT_P1 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitSavedPlayerInput[0]);
+static MenuOption_t MEO_PLAYERINPUT_P2 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitSavedPlayerInput[1]);
+static MenuOption_t MEO_PLAYERINPUT_P3 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitSavedPlayerInput[2]);
+static MenuOption_t MEO_PLAYERINPUT_P4 = MAKE_MENUOPTION(&MF_Redfont, &MEOS_PLAYERINPUT_SOURCE, &g_redSplitSavedPlayerInput[3]);
 static MenuEntry_t ME_PLAYERINPUT_P1 = MAKE_MENUENTRY("Player 1:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_PLAYERINPUT_P1, Option);
 static MenuEntry_t ME_PLAYERINPUT_P2 = MAKE_MENUENTRY("Player 2:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_PLAYERINPUT_P2, Option);
 static MenuEntry_t ME_PLAYERINPUT_P3 = MAKE_MENUENTRY("Player 3:", &MF_Redfont, &MEF_BigOptionsRt, &MEO_PLAYERINPUT_P3, Option);
@@ -5732,6 +5732,19 @@ static int32_t RedSplit_MenuInputUsedByAnyActivePlayer(int32_t const inputSource
     return 0;
 }
 
+static int32_t RedSplit_MenuSavedInputUsedByAnyActivePlayer(int32_t const inputSource, int32_t const playerCount)
+{
+    if (inputSource == RN_SPLIT_INPUT_NONE)
+        return 0;
+
+    int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
+    for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
+        if (g_redSplitSavedPlayerInput[playerNum] == inputSource)
+            return 1;
+
+    return 0;
+}
+
 static int32_t RedSplit_MenuKeyboardMouseActive(void)
 {
     return MOUSE_GetButtons() != 0
@@ -5793,34 +5806,37 @@ static void RedSplit_AssignLastMenuPadForPlayerCount(int32_t const playerCount)
 
     int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
 
-    if (RedSplit_MenuInputUsedByAnyActivePlayer(inputSource, clampedPlayerCount))
+    if (RedSplit_MenuSavedInputUsedByAnyActivePlayer(inputSource, clampedPlayerCount))
         return;
 
-    int32_t targetPlayer = inputSource == RN_SPLIT_INPUT_KBM ? 0 : -1;
-    if (targetPlayer < 0)
+    int32_t targetPlayer = -1;
+    for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
     {
-        for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
+        int32_t const savedInput = g_redSplitSavedPlayerInput[playerNum];
+        if (savedInput == RN_SPLIT_INPUT_NONE || !RedSplit_MenuInputSourceConnected(savedInput))
         {
-            if (g_redSplitPlayerInput[playerNum] == RN_SPLIT_INPUT_NONE)
-            {
-                targetPlayer = playerNum;
-                break;
-            }
+            targetPlayer = playerNum;
+            break;
         }
-
-        if (targetPlayer < 0)
-            targetPlayer = 0;
     }
 
+    if (targetPlayer < 0)
+        return;
+
     for (int32_t playerNum = 0; playerNum < MAXPLAYERS; ++playerNum)
-        if (playerNum != targetPlayer && g_redSplitPlayerInput[playerNum] == inputSource)
+        if (playerNum != targetPlayer && g_redSplitSavedPlayerInput[playerNum] == inputSource)
         {
+            g_redSplitSavedPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
+            g_redSplitSavedPlayerInputManual[playerNum] = 0;
             g_redSplitPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
             g_redSplitPlayerInputManual[playerNum] = 0;
         }
 
+    g_redSplitSavedPlayerInput[targetPlayer] = inputSource;
+    g_redSplitSavedPlayerInputManual[targetPlayer] = 1;
     g_redSplitPlayerInput[targetPlayer] = inputSource;
-    g_redSplitPlayerInputManual[targetPlayer] = 0;
+    g_redSplitPlayerInputManual[targetPlayer] = 1;
+    CONFIG_WriteRedSplitPlayerInput();
 }
 
 static void RedSplit_ClearUnavailableInputsForCurrentGame(int32_t const playerCount)
@@ -5828,6 +5844,9 @@ static void RedSplit_ClearUnavailableInputsForCurrentGame(int32_t const playerCo
     int32_t const clampedPlayerCount = clamp<int32_t>(playerCount, 1, 4);
     for (int32_t playerNum = 0; playerNum < clampedPlayerCount; ++playerNum)
     {
+        if (g_redSplitPlayerInputManual[playerNum])
+            continue;
+
         int32_t const padIndex = RedSplit_MenuInputSourceToPad(g_redSplitPlayerInput[playerNum]);
         if (padIndex < 0)
             continue;
@@ -5879,10 +5898,17 @@ static int32_t RedSplit_MenuFindAvailableInput(int32_t const playerNum, int32_t 
     return RN_SPLIT_INPUT_NONE;
 }
 
+static void RedSplit_ResetRuntimeInputsFromSaved(void)
+{
+    Bmemcpy(g_redSplitPlayerInput, g_redSplitSavedPlayerInput, sizeof(g_redSplitPlayerInput));
+    Bmemcpy(g_redSplitPlayerInputManual, g_redSplitSavedPlayerInputManual, sizeof(g_redSplitPlayerInputManual));
+}
+
 void RedSplit_AssignInputsForPlayerCount(int32_t playerCount)
 {
     playerCount = clamp<int32_t>(playerCount, 1, 4);
 
+    RedSplit_ResetRuntimeInputsFromSaved();
     RedSplit_AssignLastMenuPadForPlayerCount(playerCount);
     RedSplit_ClearUnavailableInputsForCurrentGame(playerCount);
     RedSplit_PruneDuplicateInputsForCurrentGame(playerCount);
@@ -6795,8 +6821,11 @@ static void Menu_EntryOptionDidModify(MenuEntry_t *entry)
     {
         int32_t const playerNum = RedSplit_PlayerInputEntryToPlayer(entry);
         if ((unsigned)playerNum < MAXPLAYERS)
-            g_redSplitPlayerInputManual[playerNum] = g_redSplitPlayerInput[playerNum] != RN_SPLIT_INPUT_NONE;
-        CONFIG_WriteSetup(0);
+        {
+            g_redSplitSavedPlayerInputManual[playerNum] = g_redSplitSavedPlayerInput[playerNum] != RN_SPLIT_INPUT_NONE;
+            RedSplit_ResetRuntimeInputsFromSaved();
+        }
+        CONFIG_WriteRedSplitPlayerInput();
     }
     else if (entry == &ME_PLAYER_WEAPSWITCH_PICKUP ||
              entry == &ME_PLAYER_COLOR ||
@@ -7938,6 +7967,8 @@ static void Menu_EntryStringCancel(/*MenuEntry_t *entry*/)
 /*
 This is polled when the menu code is populating the screen but for some reason doesn't have the data.
 */
+static int32_t Menu_FindOptionBinarySearch(MenuOption_t *object, int32_t query, uint16_t searchstart, uint16_t searchend);
+
 static int32_t Menu_EntryOptionSource(MenuEntry_t *entry, int32_t currentValue)
 {
     if (entry == &ME_GAMESETUP_WEAPSWITCH_PICKUP)
@@ -7955,6 +7986,22 @@ static int32_t Menu_EntryOptionSource(MenuEntry_t *entry, int32_t currentValue)
         return (ud.m_monsters_off ? g_skillCnt : ud.m_player_skill);
 
     return currentValue;
+}
+
+static int32_t Menu_SyncEntryOptionCurrentOption(MenuEntry_t *entry, MenuOption_t *object)
+{
+    if (object == nullptr || object->options == nullptr || object->options->numOptions <= 0)
+        return -1;
+
+    int32_t const source = object->data == nullptr
+        ? Menu_EntryOptionSource(entry, object->currentOption)
+        : *((int32_t *)object->data);
+
+    int32_t const currentOption = Menu_FindOptionBinarySearch(object, source, 0, object->options->numOptions - 1);
+    if (currentOption >= 0)
+        object->currentOption = currentOption;
+
+    return currentOption;
 }
 
 static void Menu_Verify(int32_t input)
@@ -8577,6 +8624,31 @@ static void Menu_CheckHiddenSelection(Menu_t* m)
     }
 }
 
+static int32_t Menu_IsUnsafeInitialPauseEntry(MenuEntry_t const * const entry)
+{
+    return entry == &ME_MAIN_QUITTOTITLE || entry == &ME_MAIN_QUITGAME || entry == &ME_MAIN_QUIT;
+}
+
+static void Menu_ResetUnsafePauseSelection(MenuMenu_t * const menu)
+{
+    if (menu == nullptr || menu->currentEntry < 0 || menu->currentEntry >= menu->numEntries)
+        return;
+
+    if (!Menu_IsUnsafeInitialPauseEntry(menu->entrylist[menu->currentEntry]))
+        return;
+
+    for (int32_t i = 0; i < menu->numEntries; ++i)
+    {
+        MenuEntry_t * const entry = menu->entrylist[i];
+        if (entry == nullptr || (entry->flags & MEF_Hidden) || entry->type == Spacer || Menu_IsUnsafeInitialPauseEntry(entry))
+            continue;
+
+        menu->currentEntry = i;
+        Menu_AdjustForCurrentEntryAssignmentBlind(menu);
+        return;
+    }
+}
+
 static void Menu_AboutToStartDisplaying(Menu_t * m)
 {
     switch (m->menuID)
@@ -8587,6 +8659,9 @@ static void Menu_AboutToStartDisplaying(Menu_t * m)
         break;
 
     case MENU_MAIN_INGAME:
+        if (REALITY && m->type == Menu)
+            Menu_ResetUnsafePauseSelection((MenuMenu_t *)m->object);
+
         if (DEER)
         {
             if (ud.level_number < 4)
@@ -9440,10 +9515,7 @@ static int32_t M_RunMenu_Menu(Menu_t *cm, MenuMenu_t *menu, MenuEntry_t *current
                     case Option:
                     {
                         auto *object = (MenuOption_t*)entry->entry;
-                        int32_t currentOption = Menu_FindOptionBinarySearch(object, object->data == NULL ? Menu_EntryOptionSource(entry, object->currentOption) : *object->data, 0, object->options->numOptions);
-
-                        if (currentOption >= 0)
-                            object->currentOption = currentOption;
+                        int32_t const currentOption = Menu_SyncEntryOptionCurrentOption(entry, object);
 
                         int32_t optiontextx = origin.x + x;
                         const int32_t optiontexty = origin.y + y_upper + y - menu->scrollPos;
@@ -10695,6 +10767,7 @@ static int32_t Menu_RunInput_EntryOption_Modify(MenuEntry_t *entry, MenuOption_t
 
 static int32_t Menu_RunInput_EntryOption_Movement(MenuEntry_t *entry, MenuOption_t *object, MenuMovement_t direction)
 {
+    Menu_SyncEntryOptionCurrentOption(entry, object);
     int32_t newValueIndex = object->currentOption;
 
     switch (direction)
@@ -10726,6 +10799,8 @@ static int32_t Menu_RunInput_EntryOption_Movement(MenuEntry_t *entry, MenuOption
 
 static int32_t Menu_RunInput_EntryOption_Activate(MenuEntry_t *entry, MenuOption_t *object)
 {
+    Menu_SyncEntryOptionCurrentOption(entry, object);
+
     if (object->options->features & 2)
         return Menu_RunInput_EntryOption_Movement(entry, object, MM_Right);
     else

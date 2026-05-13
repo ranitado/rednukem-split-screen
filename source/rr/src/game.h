@@ -68,6 +68,8 @@ enum RedSplitInputSource_t
 
 extern int32_t g_redSplitPlayerInput[MAXPLAYERS];
 extern int32_t g_redSplitPlayerInputManual[MAXPLAYERS];
+extern int32_t g_redSplitSavedPlayerInput[MAXPLAYERS];
+extern int32_t g_redSplitSavedPlayerInputManual[MAXPLAYERS];
 extern int32_t g_redSplitLookSensitivityX[MAXPLAYERS];
 extern int32_t g_redSplitLookSensitivityY[MAXPLAYERS];
 extern int32_t g_redSplitInvertAim[MAXPLAYERS];

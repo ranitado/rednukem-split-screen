@@ -1311,7 +1311,8 @@ void RT_P_ProcessWeapon(int playerNum)
                 pPlayer->ammo_amount[GROW_WEAPON]--;
 
                 A_Shoot(pPlayer->i, GROWSPARK);
-                P_StopWeaponChargeSounds(pPlayer, GROW_WEAPON);
+                // Sound 253 is a one-shot DN64 sample. Stopping it here cuts off the red alien weapon
+                // almost immediately; weapon changes still stop it through P_CheckWeapon/P_AddWeapon.
 
                 pPlayer->dn64_370 = (RT_KRand2()&1) * 2 - 1;
                 pPlayer->visibility = 0;

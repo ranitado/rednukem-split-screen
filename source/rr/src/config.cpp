@@ -871,29 +871,18 @@ int32_t CONFIG_ReadSetup(void)
         char splitInputKey[32];
 
         Bsprintf(splitInputKey, "PlayerInput%d", dummy + 1);
-        if (!SCRIPT_GetNumber(ud.config.scripthandle, "Split Screen", splitInputKey, &inputSource))
+        int32_t const hasPlayerInput = !SCRIPT_GetNumber(ud.config.scripthandle, "Split Screen", splitInputKey, &inputSource);
+        if (hasPlayerInput)
             g_redSplitPlayerInput[dummy] = clamp<int32_t>(inputSource, RN_SPLIT_INPUT_NONE, RN_SPLIT_INPUT_PAD5);
+
+        g_redSplitPlayerInputManual[dummy] = hasPlayerInput && g_redSplitPlayerInput[dummy] != RN_SPLIT_INPUT_NONE;
 
         Bsprintf(splitInputKey, "PlayerInputManual%d", dummy + 1);
         if (!SCRIPT_GetNumber(ud.config.scripthandle, "Split Screen", splitInputKey, &inputSource))
-            g_redSplitPlayerInputManual[dummy] = inputSource != 0;
-        else
-            g_redSplitPlayerInputManual[dummy] = 0;
-    }
+            g_redSplitPlayerInputManual[dummy] = g_redSplitPlayerInputManual[dummy] || inputSource != 0;
 
-    for (dummy = 0; dummy < MAXPLAYERS; ++dummy)
-    {
-        if (g_redSplitPlayerInput[dummy] == RN_SPLIT_INPUT_NONE || g_redSplitPlayerInputManual[dummy])
-            continue;
-
-        for (int32_t previousPlayer = 0; previousPlayer < dummy; ++previousPlayer)
-        {
-            if (g_redSplitPlayerInput[previousPlayer] != g_redSplitPlayerInput[dummy])
-                continue;
-
-            g_redSplitPlayerInput[dummy] = RN_SPLIT_INPUT_NONE;
-            break;
-        }
+        g_redSplitSavedPlayerInput[dummy] = g_redSplitPlayerInput[dummy];
+        g_redSplitSavedPlayerInputManual[dummy] = g_redSplitPlayerInputManual[dummy];
     }
 #endif
 
@@ -963,6 +952,32 @@ void CONFIG_WriteSettings(void) // save binds and aliases to <cfgname>_settings.
     Xfree(ptr);
 }
 
+void CONFIG_WriteRedSplitPlayerInput(void)
+{
+#ifndef EDUKE32_TOUCH_DEVICES
+    if (!ud.config.setupread)
+        return;
+
+    if (ud.config.scripthandle < 0)
+        ud.config.scripthandle = SCRIPT_Init(g_setupFileName);
+
+    for (int32_t dummy = 0; dummy < MAXPLAYERS; ++dummy)
+    {
+        char buf[32];
+        int32_t const inputSource = g_redSplitSavedPlayerInputManual[dummy]
+            ? clamp<int32_t>(g_redSplitSavedPlayerInput[dummy], RN_SPLIT_INPUT_NONE, RN_SPLIT_INPUT_PAD5)
+            : RN_SPLIT_INPUT_NONE;
+
+        Bsprintf(buf, "PlayerInput%d", dummy + 1);
+        SCRIPT_PutNumber(ud.config.scripthandle, "Split Screen", buf, inputSource, FALSE, FALSE);
+        Bsprintf(buf, "PlayerInputManual%d", dummy + 1);
+        SCRIPT_PutNumber(ud.config.scripthandle, "Split Screen", buf, inputSource != RN_SPLIT_INPUT_NONE, FALSE, FALSE);
+    }
+
+    SCRIPT_Save(ud.config.scripthandle, g_setupFileName);
+#endif
+}
+
 void CONFIG_WriteSetup(uint32_t flags)
 {
     int32_t dummy;
@@ -1012,18 +1027,6 @@ void CONFIG_WriteSetup(uint32_t flags)
 
     SCRIPT_PutNumber(ud.config.scripthandle, "Screen Setup", "Out",ud.lockout,FALSE,FALSE);
     SCRIPT_PutString(ud.config.scripthandle, "Screen Setup", "Password",ud.pwlockout);
-
-#ifndef EDUKE32_TOUCH_DEVICES
-    for (dummy = 0; dummy < MAXPLAYERS; ++dummy)
-    {
-        Bsprintf(buf, "PlayerInput%d", dummy + 1);
-        SCRIPT_PutNumber(ud.config.scripthandle, "Split Screen", buf,
-                         clamp<int32_t>(g_redSplitPlayerInput[dummy], RN_SPLIT_INPUT_NONE, RN_SPLIT_INPUT_PAD5), FALSE, FALSE);
-        Bsprintf(buf, "PlayerInputManual%d", dummy + 1);
-        SCRIPT_PutNumber(ud.config.scripthandle, "Split Screen", buf,
-                         g_redSplitPlayerInputManual[dummy] != 0, FALSE, FALSE);
-    }
-#endif
 
 #ifdef _WIN32
     SCRIPT_PutNumber(ud.config.scripthandle, "Updates", "CheckForUpdates", ud.config.CheckForUpdates, FALSE, FALSE);
