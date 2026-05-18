@@ -16,7 +16,7 @@ Current release: `v0.9`
 ## Installing
 
 1. Extract the release ZIP to a new folder.
-2. Copy your legally owned Duke Nukem 64 ROM into the same folder.
+2. Copy your legally owned Duke Nukem 64 ROM (`.z64`, `.n64`, or `.v64`) into the same folder.
 3. Run `rednukem-split-screen.exe`.
 
 Do not redistribute the Duke Nukem 64 ROM or any commercial game data with this port.

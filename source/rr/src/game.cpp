@@ -33,6 +33,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "savegame.h"
 #include "anim.h"
 #include "demo.h"
+#include "grpscan.h"
 #include "input.h"
 #include "colmatch.h"
 #include "cheats.h"
@@ -3956,6 +3957,27 @@ static void RedSplit_ApplyDirectStartupDefaults(void)
         ud.setup.xdim = 1280;
         ud.setup.ydim = 720;
     }
+}
+
+static void RedSplit_SelectDuke64RomOrExit(void)
+{
+    if (g_selectedGrp != nullptr && g_selectedGrp->type != nullptr && (g_selectedGrp->type->game & GAMEFLAG_REALITY))
+        return;
+
+    for (grpfile_t const *grp = foundgrps; grp != nullptr; grp = grp->next)
+    {
+        if (grp->type == nullptr || (grp->type->game & GAMEFLAG_REALITY) == 0)
+            continue;
+
+        g_selectedGrp = grp;
+        initprintf("Using \"%s\" as Duke Nukem 64 ROM.\n", grp->filename);
+        return;
+    }
+
+    G_GameExit("Duke Nukem 64 ROM not found.\n\n"
+               "Extract the release ZIP to a new folder and copy your legally owned Duke Nukem 64 ROM file "
+               "(.z64, .n64, or .v64) into that same folder.\n\n"
+               "DUKE3D.GRP is not enough for this mod.");
 }
 
 void G_DumpDebugInfo(void)
@@ -10672,6 +10694,7 @@ int app_main(int argc, char const * const * argv)
         initprintf("Using config file \"%s\".\n",g_setupFileName);
 
     G_ScanGroups();
+    RedSplit_SelectDuke64RomOrExit();
 
 #ifdef STARTUP_SETUP_WINDOW
     if (!g_noSetup && (readSetup < 0 || ud.configversion != BYTEVERSION_EDUKE32 || ud.setup.forcesetup || g_commandSetup))

@@ -5939,6 +5939,78 @@ static void RedSplit_RebuildConnectChain(int32_t const playerCount)
         connectpoint2[playerNum] = playerNum + 1;
 }
 
+static int32_t RedSplit_RuntimeInputHasSavedOwner(int32_t const inputSource, int32_t const playerNum, int32_t const playerCount)
+{
+    if (inputSource == RN_SPLIT_INPUT_NONE || playerNum < 0 || playerNum >= playerCount)
+        return 0;
+
+    return g_redSplitSavedPlayerInputManual[playerNum] && g_redSplitSavedPlayerInput[playerNum] == inputSource;
+}
+
+static int32_t RedSplit_RuntimeInputSavedOwnerCount(int32_t const inputSource, int32_t const playerCount)
+{
+    if (inputSource == RN_SPLIT_INPUT_NONE)
+        return 0;
+
+    int32_t ownerCount = 0;
+    for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+        if (RedSplit_RuntimeInputHasSavedOwner(inputSource, playerNum, playerCount))
+            ++ownerCount;
+
+    return ownerCount;
+}
+
+static void RedSplit_ReconcileRuntimeInputsWithSaved(int32_t playerCount)
+{
+    playerCount = clamp<int32_t>(playerCount, 1, MAXPLAYERS);
+
+    for (int32_t playerNum = playerCount; playerNum < MAXPLAYERS; ++playerNum)
+    {
+        g_redSplitPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
+        g_redSplitPlayerInputManual[playerNum] = 0;
+    }
+
+    for (int32_t inputSource = RN_SPLIT_INPUT_KBM; inputSource <= RN_SPLIT_INPUT_PAD5; ++inputSource)
+    {
+        int32_t const savedOwnerCount = RedSplit_RuntimeInputSavedOwnerCount(inputSource, playerCount);
+
+        if (savedOwnerCount > 0)
+        {
+            for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+            {
+                if (RedSplit_RuntimeInputHasSavedOwner(inputSource, playerNum, playerCount))
+                {
+                    g_redSplitPlayerInput[playerNum] = inputSource;
+                    g_redSplitPlayerInputManual[playerNum] = 1;
+                }
+                else if (g_redSplitPlayerInput[playerNum] == inputSource)
+                {
+                    g_redSplitPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
+                    g_redSplitPlayerInputManual[playerNum] = 0;
+                }
+            }
+        }
+        else
+        {
+            int32_t firstPlayer = -1;
+            for (int32_t playerNum = 0; playerNum < playerCount; ++playerNum)
+            {
+                if (g_redSplitPlayerInput[playerNum] != inputSource)
+                    continue;
+
+                if (firstPlayer < 0)
+                {
+                    firstPlayer = playerNum;
+                    continue;
+                }
+
+                g_redSplitPlayerInput[playerNum] = RN_SPLIT_INPUT_NONE;
+                g_redSplitPlayerInputManual[playerNum] = 0;
+            }
+        }
+    }
+}
+
 static void RedSplit_HidePlayerSprite(int32_t const playerNum)
 {
     if ((unsigned)playerNum >= MAXPLAYERS || g_player[playerNum].ps == nullptr)
@@ -6137,6 +6209,7 @@ void RedSplit_SetPlayerCount(int32_t const playerCount)
     }
 
     RedSplit_RebuildConnectChain(clampedPlayerCount);
+    RedSplit_ReconcileRuntimeInputsWithSaved(clampedPlayerCount);
     RedSplit_ResetInputQueues();
 
     if (inGame)
@@ -6237,11 +6310,12 @@ void RedSplit_DisconnectPlayer(int32_t const playerNum)
     RedSplit_RebuildConnectChain(newPlayerCount);
     Bmemcpy(g_redSplitPlayerInput, savedPlayerInput, sizeof(savedPlayerInput));
     Bmemcpy(g_redSplitPlayerInputManual, savedPlayerInputManual, sizeof(savedPlayerInputManual));
-    if (playerNum == 0)
+    if (playerNum != lastPlayer)
     {
-        g_redSplitPlayerInput[0] = savedPlayerInput[lastPlayer];
-        g_redSplitPlayerInputManual[0] = savedPlayerInputManual[lastPlayer];
+        g_redSplitPlayerInput[playerNum] = savedPlayerInput[lastPlayer];
+        g_redSplitPlayerInputManual[playerNum] = savedPlayerInputManual[lastPlayer];
     }
+    RedSplit_ReconcileRuntimeInputsWithSaved(newPlayerCount);
     RedSplit_ResetInputLatches();
     RedSplit_ResetInputQueues();
 }
